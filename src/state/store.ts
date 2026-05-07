@@ -24,7 +24,18 @@ export type ModalState =
   | { type: "removeSkill"; name: string }
   | { type: "removeProject"; path: string }
   | { type: "rollback"; name: string }
-  | { type: "deleteStack"; stackId: string };
+  | { type: "deleteStack"; stackId: string }
+  | {
+      // Generic in-app confirm dialog. Replaces window.confirm() so the
+      // popup honors the app theme and modal corner-radius.
+      type: "confirm";
+      title: string;
+      body: string;
+      confirmLabel?: string;
+      cancelLabel?: string;
+      destructive?: boolean;
+      onConfirm: () => void | Promise<void>;
+    };
 
 /**
  * Full-pane "screens" that take over the right-pane (the LeftRail stays
@@ -246,7 +257,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   updateSettings: async (partial) => {
     try {
       const settings = await window.api.setSettings(partial);
-      set({ settings });
+      // When the user changes the default library layout from Settings, also
+      // flip the live library layout — otherwise the dropdown is a hollow
+      // gesture (config persists, current view doesn't change). Same for
+      // theme/deploy mode could go here if we add similar live syncs later.
+      const next: Partial<AppState> = { settings };
+      if (
+        partial.default_layout !== undefined &&
+        settings.default_layout !== get().libraryLayout
+      ) {
+        next.libraryLayout = settings.default_layout;
+      }
+      set(next);
     } catch (err) {
       set({ lastError: err instanceof Error ? err.message : String(err) });
     }

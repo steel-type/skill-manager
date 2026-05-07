@@ -16,6 +16,7 @@ import { RollbackFlow } from "./flows/RollbackFlow";
 import { SkillDetailFlow } from "./flows/SkillDetailFlow";
 import { CreateStackFlow } from "./flows/CreateStackFlow";
 import { DeleteStackFlow } from "./flows/DeleteStackFlow";
+import { ConfirmModal } from "./components/ConfirmModal";
 import { StackDetailFlow } from "./flows/StackDetailFlow";
 import { useAppStore } from "./state/store";
 
@@ -166,6 +167,7 @@ export default function App() {
       {modal?.type === "deleteStack" && (
         <DeleteStackFlow stackId={modal.stackId} />
       )}
+      {modal?.type === "confirm" && <ConfirmModal />}
 
       <CommandOverlay
         open={overlayOpen}

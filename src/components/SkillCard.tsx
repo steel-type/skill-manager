@@ -128,6 +128,7 @@ export function SkillCard({
       <div
         style={{
           display: "flex",
+          flexWrap: "wrap",
           gap: 4,
           marginTop: "auto",
           alignItems: "center",

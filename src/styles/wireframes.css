@@ -395,3 +395,12 @@ body { background: #e8e4d8; margin: 0; font-family: var(--read); color: var(--in
    / --on-good / --on-warn token contract above. The .sk-tag and .sk-btn
    rules consume those tokens directly, so the dark-mode swap happens
    automatically without per-class overrides. */
+
+/* When a card's overflow menu is open, lift the card above its grid
+   siblings so the popup isn't clipped by neighboring cards' stacking
+   contexts. Modern Chromium (Electron) supports :has() so this is a
+   zero-JS lift. (StackCard reuses the .skill-card class.) */
+.skill-card:has(button[aria-expanded="true"]) {
+  position: relative;
+  z-index: 100;
+}

@@ -936,15 +936,21 @@ function ModeToggle({
   mode: DeployMode;
   onChange: (m: DeployMode) => void;
 }) {
+  // Segmented pill: outer track has fully-rounded ends, the active option
+  // gets its own fully-rounded fill that hugs the track's inner padding so
+  // both ends of the highlight read as a clean pill (not chopped at the
+  // midline). Inactive options stay transparent.
   return (
     <div
       role="radiogroup"
       aria-label="Deploy mode"
       style={{
         display: "inline-flex",
+        gap: 2,
+        padding: 2,
         border: "1.5px solid var(--line)",
-        borderRadius: 14,
-        overflow: "hidden",
+        borderRadius: 999,
+        background: "var(--paper-2)",
       }}
     >
       <ModeButton
@@ -977,14 +983,16 @@ function ModeButton({
       aria-checked={active}
       onClick={onClick}
       style={{
-        padding: "5px 12px",
+        padding: "4px 14px",
         fontSize: 12,
         fontWeight: active ? 700 : 500,
         fontFamily: "var(--read)",
         background: active ? "var(--accent)" : "transparent",
         color: active ? "var(--on-accent)" : "var(--ink-soft)",
         border: "none",
+        borderRadius: 999,
         cursor: "pointer",
+        transition: "background 0.15s",
       }}
     >
       {label}
@@ -1011,6 +1019,7 @@ function ActiveDeploymentsLedger({
   const refreshSkills = useAppStore((s) => s.refreshSkills);
   const refreshProjects = useAppStore((s) => s.refreshProjects);
   const setError = useAppStore((s) => s.setError);
+  const openModal = useAppStore((s) => s.openModal);
   const [expandedStacks, setExpandedStacks] = useState<Set<string>>(new Set());
 
   const stacksById = useMemo(
@@ -1108,31 +1117,33 @@ function ActiveDeploymentsLedger({
     });
   };
 
-  const removeStack = async (
+  const removeStack = (
     stackId: string,
     projectPath: string,
     agentId: string,
   ) => {
-    if (
-      !window.confirm(
-        `Remove the ${stackId} stack deployment from ${tildify(projectPath)}?\n\nThe meta-skill SKILL.md will be deleted from the project; member skill files stay on disk.`,
-      )
-    ) {
-      return;
-    }
-    try {
-      await window.api.removeStackDeployment(
-        stackId,
-        projectPath,
-        agentId,
-        true,
-      );
-      await loadStackDeployments();
-      await refreshSkills();
-      await refreshProjects();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
+    openModal({
+      type: "confirm",
+      title: `Remove ${stackId}?`,
+      body: `Remove the ${stackId} stack deployment from ${tildify(projectPath)}?\n\nThe meta-skill SKILL.md will be deleted from the project; member skill files stay on disk.`,
+      confirmLabel: "Remove",
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await window.api.removeStackDeployment(
+            stackId,
+            projectPath,
+            agentId,
+            true,
+          );
+          await loadStackDeployments();
+          await refreshSkills();
+          await refreshProjects();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      },
+    });
   };
 
   if (projectPaths.length === 0) {
