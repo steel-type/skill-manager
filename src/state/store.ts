@@ -106,6 +106,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   default_layout: "cards",
   update_history_retention: 2,
   theme: "light",
+  default_deploy_mode: "copy",
 };
 
 export const useAppStore = create<AppState>((set, get) => ({

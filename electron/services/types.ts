@@ -7,12 +7,30 @@ export interface HistorySnapshot {
   archived_at: string; // ISO timestamp the snapshot was taken
 }
 
+export type DeployMode = "copy" | "symlink";
+
+export interface Deployment {
+  projectPath: string;
+  /** Agent id from electron/services/agents.ts. Defaults to "claude" for
+   *  records migrated from the legacy `projects: string[]` shape. */
+  agentId: string;
+  deployMode: DeployMode;
+  deployedAt: string;
+}
+
 export interface SkillRecord {
   url: string | null;
   commit: string | null;
   installed_at: string;
   updated_at: string | null;
+  /** Legacy projection: list of project paths this skill is deployed to.
+   *  Kept populated for backward read-compat; the source of truth for new
+   *  code is `deployments[]`. */
   projects: string[];
+  /** Per-deployment metadata (agent + mode + timestamp). Optional only on
+   *  the wire — loadConfig synthesizes entries from `projects` when this is
+   *  missing so the rest of the app can rely on it. */
+  deployments?: Deployment[];
   history?: HistorySnapshot[];
 }
 
@@ -36,6 +54,10 @@ export interface AppSettings {
   // "undo my last bad update" case without doubling disk cost.
   update_history_retention: HistoryRetention;
   theme: Theme;
+  /** Default mode for the Deploy modal. "copy" replicates files into the
+   *  target project; "symlink" points the target at the library copy so
+   *  edits/updates are picked up without a re-cascade. */
+  default_deploy_mode: DeployMode;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -46,6 +68,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   default_layout: "cards",
   update_history_retention: 2,
   theme: "light",
+  default_deploy_mode: "copy",
 };
 
 export interface SkillManagerConfig {

@@ -18,6 +18,7 @@ const baseConfig: SkillManagerConfig = {
     default_layout: "cards",
     update_history_retention: 2,
     theme: "light",
+    default_deploy_mode: "copy",
   } as const,
 };
 

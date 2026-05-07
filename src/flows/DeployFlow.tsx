@@ -28,9 +28,17 @@ export function DeployFlow({ skillName }: DeployFlowProps) {
     [skills, skillName],
   );
 
+  const settings = useAppStore((s) => s.settings);
   const [selectedPath, setSelectedPath] = useState<string>("");
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
+  // Mode defaults to the user's saved preference but can be flipped per
+  // deploy. Symlink falls back to copy (with a warning) for agents that
+  // don't support links — surfaced in `warning` after the deploy returns.
+  const [deployMode, setDeployMode] = useState<"copy" | "symlink">(
+    settings.default_deploy_mode,
+  );
+  const [warning, setWarning] = useState<string | null>(null);
 
   // Pre-fill with the last-used project if it exists; otherwise leave empty
   // and force the user to Browse.
@@ -56,8 +64,12 @@ export function DeployFlow({ skillName }: DeployFlowProps) {
   const performDeploy = async () => {
     if (!selectedPath || !skill) return;
     setRunning(true);
+    setWarning(null);
     try {
-      await window.api.deploySkill(skill.name, selectedPath);
+      const result = await window.api.deploySkill(skill.name, selectedPath, {
+        deployMode,
+      });
+      if (result.warning) setWarning(result.warning);
       await refreshSkills();
       await refreshProjects();
       setDone(true);
@@ -133,6 +145,32 @@ export function DeployFlow({ skillName }: DeployFlowProps) {
               </button>
             </div>
 
+            <div className="rail-section" style={{ padding: 0 }}>
+              Mode
+            </div>
+            <div
+              role="radiogroup"
+              aria-label="Deploy mode"
+              style={{
+                display: "flex",
+                gap: 6,
+                fontSize: 12,
+              }}
+            >
+              <ModeOption
+                label="Copy"
+                hint="replicate files into the project"
+                active={deployMode === "copy"}
+                onClick={() => setDeployMode("copy")}
+              />
+              <ModeOption
+                label="Symlink"
+                hint="point at the library copy — updates flow through"
+                active={deployMode === "symlink"}
+                onClick={() => setDeployMode("symlink")}
+              />
+            </div>
+
             {recentProjects.length > 0 && (
               <>
                 <div className="rail-section" style={{ padding: 0 }}>
@@ -197,11 +235,25 @@ export function DeployFlow({ skillName }: DeployFlowProps) {
               </span>
             </div>
             <div className="hand" style={{ color: "var(--good)", fontSize: 15 }}>
-              ✓ {skill.displayName} is now in{" "}
+              ✓ {skill.displayName}{" "}
+              {deployMode === "symlink"
+                ? "is now linked into"
+                : "is now copied into"}{" "}
               <span style={{ fontFamily: "var(--mono)", fontSize: 11 }}>
                 .claude/skills/
               </span>
             </div>
+            {warning && (
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "var(--warn)",
+                  fontFamily: "var(--read)",
+                }}
+              >
+                {warning}
+              </div>
+            )}
           </>
         )}
 
@@ -235,5 +287,41 @@ export function DeployFlow({ skillName }: DeployFlowProps) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+function ModeOption({
+  label,
+  hint,
+  active,
+  onClick,
+}: {
+  label: string;
+  hint: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      onClick={onClick}
+      className="sk-btn"
+      style={{
+        flex: 1,
+        textAlign: "left",
+        padding: "8px 10px",
+        background: active ? "var(--card-selected-bg)" : "transparent",
+        borderColor: active ? "var(--accent)" : undefined,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        gap: 2,
+      }}
+    >
+      <span style={{ fontWeight: 700, fontSize: 12 }}>{label}</span>
+      <span style={{ fontSize: 10.5, color: "var(--ink-faint)" }}>{hint}</span>
+    </button>
   );
 }

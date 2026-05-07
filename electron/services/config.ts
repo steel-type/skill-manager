@@ -4,6 +4,7 @@ import { CONFIG_PATH, LIBRARY_PATH } from "./paths";
 import {
   DEFAULT_SETTINGS,
   type AppSettings,
+  type Deployment,
   type SkillManagerConfig,
   type SkillRecord,
 } from "./types";
@@ -35,6 +36,37 @@ interface RawConfig {
 
 function withDefaults(partial?: Partial<AppSettings>): AppSettings {
   return { ...DEFAULT_SETTINGS, ...(partial ?? {}) };
+}
+
+/**
+ * Backfill `record.deployments` from the legacy `record.projects` list when
+ * an older config (or one written by the previous TS app version) only has
+ * the string-array form. Each synthesized entry defaults to claude/copy —
+ * the safest interpretation, since that's what the app did before agents
+ * and symlinks existed. The original projects array is left intact so any
+ * downgrade path still reads the same.
+ */
+function migrateDeployments(
+  skills: Record<string, SkillRecord>,
+): Record<string, SkillRecord> {
+  for (const record of Object.values(skills)) {
+    if (record.deployments && record.deployments.length > 0) continue;
+    if (!record.projects || record.projects.length === 0) {
+      record.deployments = record.deployments ?? [];
+      continue;
+    }
+    const synthesized: Deployment[] = record.projects.map((projectPath) => ({
+      projectPath,
+      agentId: "claude",
+      deployMode: "copy",
+      // Use the install/update time as the deploy timestamp — closer to
+      // truth than nowIso() since we have no record of the actual deploy.
+      deployedAt:
+        record.updated_at ?? record.installed_at ?? nowIso(),
+    }));
+    record.deployments = synthesized;
+  }
+  return skills;
 }
 
 /**
@@ -97,7 +129,7 @@ export async function loadConfig(): Promise<SkillManagerConfig> {
   if (raw.skills) {
     return {
       last_project: raw.last_project ?? "",
-      skills: raw.skills,
+      skills: migrateDeployments(raw.skills),
       settings: withDefaults(raw.settings),
     };
   }
@@ -186,6 +218,11 @@ export async function reconcileConfig(
         }
       }
       record.projects = alive;
+      if (record.deployments) {
+        record.deployments = record.deployments.filter((d) =>
+          alive.includes(d.projectPath),
+        );
+      }
     }
 
     const next: SkillManagerConfig = {

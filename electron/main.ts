@@ -326,8 +326,19 @@ ipcMain.handle(
 
 ipcMain.handle(
   "deploy-skill",
-  (_e, args: { name: string; projectPath: string }) =>
-    deploySkill(args.name, args.projectPath),
+  (
+    _e,
+    args: {
+      name: string;
+      projectPath: string;
+      agentId?: string;
+      deployMode?: "copy" | "symlink";
+    },
+  ) =>
+    deploySkill(args.name, args.projectPath, {
+      agentId: args.agentId,
+      deployMode: args.deployMode,
+    }),
 );
 
 ipcMain.handle(

@@ -37,7 +37,13 @@ export interface OpOptions {
   onLog?: LogHandler;
   signal?: AbortSignal;
 }
-import { copyToProject, cascadeToProjects } from "./services/deploy";
+import {
+  cascadeToDeployments,
+  cascadeToProjects,
+  copyToProject,
+  deployToProject,
+} from "./services/deploy";
+import type { Deployment, DeployMode } from "./services/types";
 import {
   exportSkillJson,
   exportSkillList,
@@ -265,11 +271,14 @@ export async function updateSkill(
   let updated: string[] = [];
   let failed: string[] = [];
   if (config.settings.cascade_updates) {
-    onLog?.(`Cascading update to ${record.projects.length} project(s)…`);
-    const cascade = await cascadeToProjects(name, record.projects);
+    const deployments = record.deployments ?? [];
+    onLog?.(`Cascading update to ${deployments.length} deployment(s)…`);
+    const cascade = await cascadeToDeployments(name, deployments);
     updated = cascade.updated;
     failed = cascade.failed;
     for (const p of updated) onLog?.(`  ✓ ${p}`);
+    for (const p of cascade.skipped)
+      onLog?.(`  ⤵ ${p} (symlink — picks up update via library)`);
     for (const p of failed) onLog?.(`  ✗ ${p} (skipped)`);
   } else {
     onLog?.(`Cascade disabled in settings — projects not re-deployed`);
@@ -336,11 +345,14 @@ export async function rollbackSkill(
   let updated: string[] = [];
   let failed: string[] = [];
   if (opts.cascade) {
-    onLog?.(`Cascading rollback to ${record.projects.length} project(s)…`);
-    const cascade = await cascadeToProjects(name, record.projects);
+    const deployments = record.deployments ?? [];
+    onLog?.(`Cascading rollback to ${deployments.length} deployment(s)…`);
+    const cascade = await cascadeToDeployments(name, deployments);
     updated = cascade.updated;
     failed = cascade.failed;
     for (const p of updated) onLog?.(`  ✓ ${p}`);
+    for (const p of cascade.skipped)
+      onLog?.(`  ⤵ ${p} (symlink — already on rolled-back version)`);
     for (const p of failed) onLog?.(`  ✗ ${p} (skipped)`);
   }
 
@@ -358,22 +370,62 @@ export async function rollbackSkill(
   return { name, commit, cascadedTo: updated, failedProjects: failed };
 }
 
+export interface DeploySkillOptions {
+  agentId?: string;
+  deployMode?: DeployMode;
+}
+
+export interface DeploySkillResult {
+  agentId: string;
+  deployMode: DeployMode;
+  warning: string | null;
+}
+
 export async function deploySkill(
   rawName: string,
   rawProjectPath: string,
-): Promise<void> {
+  opts: DeploySkillOptions = {},
+): Promise<DeploySkillResult> {
   const name = validateSkillName(rawName);
   const projectPath = validateProjectPath(rawProjectPath);
-  await copyToProject(name, projectPath);
+  const agentId = opts.agentId ?? "claude";
+  const requestedMode: DeployMode = opts.deployMode ?? "copy";
+
+  const result = await deployToProject(name, projectPath, {
+    agentId,
+    deployMode: requestedMode,
+  });
+
   await withConfigLock(async () => {
     const config = await loadConfig();
     const record = config.skills[name];
-    if (record && !record.projects.includes(projectPath)) {
-      record.projects.push(projectPath);
+    if (record) {
+      if (!record.projects.includes(projectPath)) {
+        record.projects.push(projectPath);
+      }
+      const deployments = record.deployments ?? [];
+      const existing = deployments.findIndex(
+        (d) => d.projectPath === projectPath && d.agentId === agentId,
+      );
+      const entry: Deployment = {
+        projectPath,
+        agentId,
+        deployMode: result.deployMode,
+        deployedAt: nowIso(),
+      };
+      if (existing >= 0) deployments[existing] = entry;
+      else deployments.push(entry);
+      record.deployments = deployments;
     }
     config.last_project = projectPath;
     await saveConfig(config);
   });
+
+  return {
+    agentId,
+    deployMode: result.deployMode,
+    warning: result.warning,
+  };
 }
 
 export async function removeSkill(
@@ -461,6 +513,11 @@ export async function removeProjectTracking(
       if (record.projects.includes(projectPath)) {
         record.projects = record.projects.filter((p) => p !== projectPath);
         if (opts.cleanFiles) collected.push(name);
+      }
+      if (record.deployments) {
+        record.deployments = record.deployments.filter(
+          (d) => d.projectPath !== projectPath,
+        );
       }
     }
     if (config.last_project === projectPath) config.last_project = "";

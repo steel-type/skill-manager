@@ -80,8 +80,21 @@ const api = {
       ipcRenderer.invoke("update-skill", { name, streamId }),
     ),
 
-  deploySkill: (name: string, projectPath: string): Promise<void> =>
-    ipcRenderer.invoke("deploy-skill", { name, projectPath }),
+  deploySkill: (
+    name: string,
+    projectPath: string,
+    opts?: { agentId?: string; deployMode?: "copy" | "symlink" },
+  ): Promise<{
+    agentId: string;
+    deployMode: "copy" | "symlink";
+    warning: string | null;
+  }> =>
+    ipcRenderer.invoke("deploy-skill", {
+      name,
+      projectPath,
+      agentId: opts?.agentId,
+      deployMode: opts?.deployMode,
+    }),
 
   removeSkill: (
     name: string,

@@ -195,6 +195,20 @@ export function SettingsView() {
         ]}
       />
       <SegmentedRow
+        label="Default deploy mode"
+        hint="copy duplicates files; symlink points the project at the library copy"
+        value={settings.default_deploy_mode}
+        onChange={(v) =>
+          updateSettings({
+            default_deploy_mode: v as AppSettings["default_deploy_mode"],
+          })
+        }
+        options={[
+          { value: "copy", label: "Copy" },
+          { value: "symlink", label: "Symlink" },
+        ]}
+      />
+      <SegmentedRow
         label="Snapshot retention"
         hint={
           historyBytes !== null && historyBytes > 0
