@@ -248,6 +248,43 @@ describe("deployToProject (agent + mode)", () => {
     }
   });
 
+  it("throws when the target project path does not exist (no silent create)", async () => {
+    await writeSkill("any", { "SKILL.md": "a" });
+    const ghostProject = join(
+      tmpdir(),
+      `nonexistent-project-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    await expect(
+      deployToProject("any", ghostProject, {
+        agentId: "claude",
+        deployMode: "copy",
+      }),
+    ).rejects.toThrow(/does not exist/);
+    // The deploy must NOT have created the project tree as a side effect.
+    await expect(fs.stat(ghostProject)).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it("throws when the target project path resolves to a regular file", async () => {
+    await writeSkill("any2", { "SKILL.md": "a" });
+    const filePath = join(
+      tmpdir(),
+      `not-a-dir-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    await fs.writeFile(filePath, "i am a file");
+    try {
+      await expect(
+        deployToProject("any2", filePath, {
+          agentId: "claude",
+          deployMode: "copy",
+        }),
+      ).rejects.toThrow(/not a directory/);
+    } finally {
+      await fs.rm(filePath, { force: true });
+    }
+  });
+
   it("throws on an unknown agent id", async () => {
     await writeSkill("any", { "SKILL.md": "a" });
     const project = await makeProject();

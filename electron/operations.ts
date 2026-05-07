@@ -153,6 +153,89 @@ export async function listSkills(): Promise<Skill[]> {
   return await listSkillsFromDisk();
 }
 
+/**
+ * Install a skill from a local source directory (no git clone). Used by
+ * the importer for codex skill-config entries that reference paths the
+ * user already has on disk, and by any future "install from folder" flow.
+ *
+ * Copies the source into ~/.claude/skills/<name>/ (filtering out symlinks
+ * and noisy build artifacts the same way cloneToLibrary does), then
+ * registers a config record with `url: null` so the skill shows up in the
+ * library as "local" — it has no remote to update from.
+ */
+export async function installLocalSkill(
+  rawName: string,
+  rawSourcePath: string,
+): Promise<InstallResult> {
+  const name = validateSkillName(rawName);
+  // Reuse the same path validator URLs / project paths use — must be
+  // absolute, no null bytes, sane length. Local skill sources live in the
+  // user's filesystem; we don't need a separate abuse path.
+  const sourcePath = validateProjectPath(rawSourcePath);
+
+  let stat: Awaited<ReturnType<typeof fs.stat>>;
+  try {
+    stat = await fs.stat(sourcePath);
+  } catch {
+    throw new Error(`Source path does not exist: ${sourcePath}`);
+  }
+  if (!stat.isDirectory()) {
+    throw new Error(`Source path is not a directory: ${sourcePath}`);
+  }
+
+  await ensureLibraryDir();
+  const dest = join(LIBRARY_PATH, name);
+  await fs.rm(dest, { recursive: true, force: true });
+  // Same filter rules as cloneToLibrary's post-clone copy: skip .git /
+  // node_modules / __pycache__ noise and refuse to follow symlinks (a
+  // malicious source could otherwise smuggle /etc/passwd into the library).
+  await fs.cp(sourcePath, dest, {
+    recursive: true,
+    verbatimSymlinks: false,
+    filter: async (source) => {
+      const segments = source.split("/");
+      if (
+        segments.some((seg) =>
+          [".git", "node_modules", "__pycache__"].includes(seg),
+        )
+      ) {
+        return false;
+      }
+      try {
+        const lst = await fs.lstat(source);
+        if (lst.isSymbolicLink()) return false;
+      } catch {
+        return false;
+      }
+      return true;
+    },
+  });
+
+  await withConfigLock(async () => {
+    const config = await loadConfig();
+    const existing = config.skills[name];
+    config.skills[name] = {
+      url: null,
+      commit: null,
+      installed_at: existing?.installed_at ?? nowIso(),
+      updated_at: nowIso(),
+      projects: existing?.projects ?? [],
+      deployments: existing?.deployments ?? [],
+      history: existing?.history,
+    };
+    await saveConfig(config);
+  });
+
+  const skills = await listSkillsFromDisk();
+  const me = skills.find((s) => s.name === name);
+  return {
+    name,
+    commit: null,
+    isBundle: me?.isBundle ?? false,
+    bundleSize: me?.bundleSize ?? 0,
+  };
+}
+
 export async function installFromUrl(
   rawUrl: string,
   options: OpOptions = {},
@@ -604,18 +687,27 @@ export interface ParsedImportEntry extends SkillJsonEntry {
   alreadyInstalled: boolean;
 }
 
+export interface ParsedLocalEntry {
+  name: string;
+  /** Absolute path to the local skill source. */
+  localPath: string;
+  /** Mirrors the codex `enabled` flag when present — UI defaults disabled
+   *  entries to off in the install batch. */
+  enabled?: boolean;
+  alreadyInstalled: boolean;
+}
+
 export interface ParsedImportSummary {
   entries: ParsedImportEntry[];
+  /** Local-path entries (e.g. codex `path` references). Have no URL so they
+   *  go through installLocalSkill rather than the URL clone path. */
+  localEntries: ParsedLocalEntry[];
   doc: SkillJsonDoc | null;
   /** Which input shape was detected — surfaced so the importer UI can show
    *  "Detected: codex config — converted 3 paths" style status. */
   detectedFormat: ImportParseResult["detectedFormat"];
   /** Count of malformed entries dropped during parsing. */
   skipped: number;
-  /** Count of local-only entries (e.g. codex `path` references) that the
-   *  installer can't pull because they have no URL. Surfaced separately so
-   *  the user understands they were intentionally skipped, not malformed. */
-  localOnlySkipped: number;
 }
 
 /**
@@ -637,11 +729,20 @@ export async function parseImportJson(
   const flexible = parseFlexibleImport(text);
   const config = await loadConfig();
   const installed = new Set(Object.keys(config.skills));
-  let localOnlySkipped = 0;
   const entries: ParsedImportEntry[] = [];
+  const localEntries: ParsedLocalEntry[] = [];
   for (const entry of flexible.skills) {
+    if (!entry.url && entry.localPath) {
+      localEntries.push({
+        name: entry.name,
+        localPath: entry.localPath,
+        enabled: entry.enabled,
+        alreadyInstalled: installed.has(entry.name),
+      });
+      continue;
+    }
     if (!entry.url) {
-      localOnlySkipped += 1;
+      // Pure malformed — counted via flexible.skipped already.
       continue;
     }
     const tagged: ParsedImportEntry = {
@@ -675,10 +776,10 @@ export async function parseImportJson(
 
   return {
     entries,
+    localEntries,
     doc,
     detectedFormat: flexible.detectedFormat,
     skipped: flexible.skipped,
-    localOnlySkipped,
   };
 }
 

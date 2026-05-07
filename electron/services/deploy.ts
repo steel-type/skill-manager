@@ -55,6 +55,31 @@ export async function deployToProject(
   const agent = AGENTS[opts.agentId];
   if (!agent) throw new Error(`Unknown agent: ${opts.agentId}`);
 
+  // The project root must already exist as a directory. Without this
+  // check, fs.mkdir(parent, recursive:true) silently materializes the
+  // whole tree (e.g. `<typo>/.claude/skills/foo`), making the deploy
+  // appear to succeed at a path that's not actually a project.
+  try {
+    const stat = await fs.stat(projectPath);
+    if (!stat.isDirectory()) {
+      throw new Error(
+        `Project path is not a directory: ${projectPath}`,
+      );
+    }
+  } catch (err: unknown) {
+    if (
+      err &&
+      typeof err === "object" &&
+      "code" in err &&
+      (err as NodeJS.ErrnoException).code === "ENOENT"
+    ) {
+      throw new Error(
+        `Project does not exist: ${projectPath}. Create the directory first or pick a different path.`,
+      );
+    }
+    throw err;
+  }
+
   const resolved = resolveAgentPaths(opts.agentId, skillName, projectPath);
   if (!resolved.projectPath) {
     throw new Error(

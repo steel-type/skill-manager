@@ -19,6 +19,7 @@ import {
   bootstrap,
   listSkills,
   installFromUrl,
+  installLocalSkill,
   checkUpdates,
   updateSkill,
   deploySkill,
@@ -317,6 +318,12 @@ ipcMain.handle(
       clearCancellable(args.streamId);
     }
   },
+);
+
+ipcMain.handle(
+  "install-local-skill",
+  (_e, args: { name: string; sourcePath: string }) =>
+    installLocalSkill(args.name, args.sourcePath),
 );
 
 ipcMain.handle("check-updates", () => checkUpdates());

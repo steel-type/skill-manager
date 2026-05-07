@@ -78,6 +78,9 @@ const api = {
       ipcRenderer.invoke("install-from-url", { url, streamId }),
     ),
 
+  installLocalSkill: (name: string, sourcePath: string): Promise<InstallResult> =>
+    ipcRenderer.invoke("install-local-skill", { name, sourcePath }),
+
   checkUpdates: () =>
     ipcRenderer.invoke("check-updates") as Promise<Record<string, UpdateInfo>>,
 
@@ -140,6 +143,14 @@ const api = {
         description?: string;
         alreadyInstalled: boolean;
       }[];
+      /** Codex-style local-path entries — installed via installLocalSkill,
+       *  not the URL clone path, so the review screen never sees them. */
+      localEntries: {
+        name: string;
+        localPath: string;
+        enabled?: boolean;
+        alreadyInstalled: boolean;
+      }[];
       doc: { version: 1; exported_at: string } | null;
       /** Which input shape the parser recognised. */
       detectedFormat:
@@ -152,8 +163,6 @@ const api = {
         | "unknown";
       /** Malformed JSON entries that were dropped. */
       skipped: number;
-      /** Local-path entries (codex) that have no URL and can't be installed. */
-      localOnlySkipped: number;
     }>,
 
   validateSkillUrl: (url: string) =>

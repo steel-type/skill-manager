@@ -53,16 +53,55 @@ export function LeftRail() {
       });
       if (!file) return;
       const result = await window.api.parseImportJson(file.content);
+
+      // Codex skill-config entries (local paths, no URL) install directly
+      // via installLocalSkill — there's no URL to validate or clone, so
+      // they'd just clutter the review screen. enabled:false from codex
+      // means the user explicitly turned them off, so we respect that.
+      // Already-installed entries are skipped to avoid surprise overwrites.
+      const localToInstall = result.localEntries.filter(
+        (e) => e.enabled !== false && !e.alreadyInstalled,
+      );
+      let localInstalled = 0;
+      let localFailed = 0;
+      let localSkippedDisabled = result.localEntries.length - localToInstall.length;
+      for (const local of localToInstall) {
+        try {
+          await window.api.installLocalSkill(local.name, local.localPath);
+          localInstalled += 1;
+        } catch {
+          localFailed += 1;
+        }
+      }
+      if (localInstalled > 0) {
+        await useAppStore.getState().refreshSkills();
+      }
+
       if (result.entries.length === 0) {
-        const detail =
-          result.localOnlySkipped > 0
-            ? ` (${result.localOnlySkipped} local-only ${result.localOnlySkipped === 1 ? "entry was" : "entries were"} skipped — they have no URL to install from.)`
-            : result.skipped > 0
+        // No URL entries → nothing to route into the review screen. Report
+        // whatever we did with the local-only entries instead.
+        if (localInstalled > 0) {
+          setError(
+            `Imported ${localInstalled} local skill${localInstalled === 1 ? "" : "s"}${
+              localFailed > 0 ? ` · ${localFailed} failed` : ""
+            }${
+              localSkippedDisabled > 0
+                ? ` · ${localSkippedDisabled} skipped (disabled / already installed)`
+                : ""
+            }`,
+          );
+        } else {
+          const detail =
+            result.skipped > 0
               ? ` (${result.skipped} malformed ${result.skipped === 1 ? "entry was" : "entries were"} skipped.)`
-              : "";
-        setError(`No installable skills found in that file.${detail}`);
+              : localFailed > 0
+                ? ` (${localFailed} local install${localFailed === 1 ? "" : "s"} failed.)`
+                : "";
+          setError(`No installable skills found in that file.${detail}`);
+        }
         return;
       }
+
       // Surface non-fatal info via the toast — the user sees what was
       // recognised and whether anything was dropped before they hit the
       // review screen.
@@ -70,14 +109,18 @@ export function LeftRail() {
       if (result.detectedFormat !== "native") {
         tail.push(`format: ${formatLabel(result.detectedFormat)}`);
       }
-      if (result.skipped > 0) tail.push(`${result.skipped} malformed skipped`);
-      if (result.localOnlySkipped > 0) {
-        tail.push(
-          `${result.localOnlySkipped} local-only skipped (no URL to install)`,
-        );
+      if (localInstalled > 0) {
+        tail.push(`${localInstalled} local installed`);
       }
+      if (localFailed > 0) tail.push(`${localFailed} local failed`);
+      if (localSkippedDisabled > 0) {
+        tail.push(`${localSkippedDisabled} local skipped`);
+      }
+      if (result.skipped > 0) tail.push(`${result.skipped} malformed skipped`);
       if (tail.length > 0) {
-        setError(`Imported ${result.entries.length} — ${tail.join(", ")}`);
+        setError(
+          `${result.entries.length} URL ${result.entries.length === 1 ? "entry" : "entries"} ready — ${tail.join(", ")}`,
+        );
       }
       setScreen({
         kind: "import",
