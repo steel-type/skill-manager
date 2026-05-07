@@ -42,6 +42,15 @@ import {
   clearAllHistory,
   getSkillTree,
 } from "./operations";
+import {
+  createStack,
+  deleteStack,
+  deployStack,
+  getStackDeployments,
+  listStacks,
+  updateStackComposition,
+} from "./services/stacks";
+import type { DeployMode } from "./services/types";
 
 // ESM doesn't expose __dirname; reconstruct it from import.meta.url so the
 // preload-script and built-renderer paths resolve from dist-electron/main.js.
@@ -545,3 +554,47 @@ ipcMain.handle("open-external", (_e, url: string) => {
   if (typeof url !== "string" || !/^https?:\/\//i.test(url)) return;
   void shell.openExternal(url);
 });
+
+// ── Stacks ──────────────────────────────────────────────────────────────────
+
+ipcMain.handle("list-stacks", () => listStacks());
+
+ipcMain.handle(
+  "create-stack",
+  (
+    _e,
+    args: { name: string; description: string; skillIds: string[] },
+  ) => createStack(args.name, args.description, args.skillIds),
+);
+
+ipcMain.handle(
+  "update-stack-composition",
+  (_e, args: { stackId: string; skillIds: string[] }) =>
+    updateStackComposition(args.stackId, args.skillIds),
+);
+
+ipcMain.handle(
+  "delete-stack",
+  (_e, args: { stackId: string; cleanup: boolean }) =>
+    deleteStack(args.stackId, args.cleanup),
+);
+
+ipcMain.handle(
+  "deploy-stack",
+  (
+    _e,
+    args: {
+      stackId: string;
+      projectPath: string;
+      agentId: string;
+      deployMode: DeployMode;
+    },
+  ) =>
+    deployStack(args.stackId, args.projectPath, args.agentId, args.deployMode),
+);
+
+ipcMain.handle(
+  "get-stack-deployments",
+  (_e, args: { stackId?: string } = {}) =>
+    getStackDeployments(args.stackId),
+);

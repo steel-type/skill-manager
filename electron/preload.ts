@@ -1,12 +1,15 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
   AppSettings,
+  DeployMode,
   ExportPayload,
   HistoryEntry,
   ImportSummary,
   InstallResult,
   RollbackResult,
   Skill,
+  SkillStack,
+  StackDeployment,
   TrackedProject,
   TreeNode,
   UpdateInfo,
@@ -249,6 +252,65 @@ const api = {
 
   getSkillTree: (name: string) =>
     ipcRenderer.invoke("get-skill-tree", name) as Promise<TreeNode | null>,
+
+  // ── Stacks ────────────────────────────────────────────────────────────────
+
+  listStacks: () =>
+    ipcRenderer.invoke("list-stacks") as Promise<SkillStack[]>,
+
+  createStack: (name: string, description: string, skillIds: string[]) =>
+    ipcRenderer.invoke("create-stack", {
+      name,
+      description,
+      skillIds,
+    }) as Promise<SkillStack>,
+
+  updateStackComposition: (stackId: string, skillIds: string[]) =>
+    ipcRenderer.invoke("update-stack-composition", {
+      stackId,
+      skillIds,
+    }) as Promise<{
+      stack: SkillStack;
+      added: string[];
+      removed: string[];
+      pushed: {
+        projectPath: string;
+        agentId: string;
+        addedDeployed: string[];
+        addFailed: { skillId: string; error: string }[];
+        metaSkillPath: string;
+      }[];
+    }>,
+
+  deleteStack: (stackId: string, cleanup: boolean) =>
+    ipcRenderer.invoke("delete-stack", { stackId, cleanup }) as Promise<void>,
+
+  deployStack: (
+    stackId: string,
+    projectPath: string,
+    agentId: string,
+    deployMode: DeployMode,
+  ) =>
+    ipcRenderer.invoke("deploy-stack", {
+      stackId,
+      projectPath,
+      agentId,
+      deployMode,
+    }) as Promise<{
+      stackId: string;
+      projectPath: string;
+      agentId: string;
+      deployMode: DeployMode;
+      deployed: string[];
+      failed: { skillId: string; error: string }[];
+      metaSkillPath: string;
+      warning: string | null;
+    }>,
+
+  getStackDeployments: (stackId?: string) =>
+    ipcRenderer.invoke("get-stack-deployments", { stackId }) as Promise<
+      StackDeployment[]
+    >,
 };
 
 contextBridge.exposeInMainWorld("api", api);
