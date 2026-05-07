@@ -90,14 +90,16 @@ export function InstallFlow({ prefillUrl }: InstallFlowProps) {
 
   const title =
     phase === "done"
-      ? "Install Skill — done"
+      ? result?.name
+        ? `Installed ${result.name}`
+        : "Install complete"
       : phase === "error"
-        ? "Install Skill — error"
+        ? "Install failed"
         : phase === "cancelled"
-          ? "Install Skill — cancelled"
+          ? "Install cancelled"
           : phase === "cloning"
-            ? "Install Skill — installing…"
-            : "Install Skill";
+            ? "Cloning…"
+            : "Install from GitHub";
 
   return (
     <Modal
@@ -110,7 +112,7 @@ export function InstallFlow({ prefillUrl }: InstallFlowProps) {
     >
       <div
         style={{
-          padding: 18,
+          padding: 14,
           display: "flex",
           flexDirection: "column",
           gap: 12,
@@ -120,13 +122,7 @@ export function InstallFlow({ prefillUrl }: InstallFlowProps) {
       >
         {phase === "input" && (
           <>
-            <div className="rail-section" style={{ padding: 0 }}>
-              source
-            </div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>
-              Install from GitHub
-            </div>
-            <div className="hand" style={{ color: "var(--ink-faint)" }}>
+            <div className="hand" style={{ color: "var(--ink-faint)", fontSize: 13 }}>
               shallow clone, captures commit SHA, copies into your library
             </div>
             <input
@@ -152,20 +148,6 @@ export function InstallFlow({ prefillUrl }: InstallFlowProps) {
           phase === "error" ||
           phase === "cancelled") && (
           <>
-            <div className="rail-section" style={{ padding: 0 }}>
-              {phase === "cloning"
-                ? "cloning"
-                : phase === "done"
-                  ? "complete"
-                  : phase === "cancelled"
-                    ? "cancelled"
-                    : "failed"}
-            </div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>
-              {phase === "done"
-                ? `Installed ${result?.name}`
-                : `Installing from GitHub`}
-            </div>
             <div
               style={{
                 fontFamily: "var(--mono)",

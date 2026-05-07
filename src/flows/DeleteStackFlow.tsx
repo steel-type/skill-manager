@@ -48,14 +48,14 @@ export function DeleteStackFlow({ stackId }: DeleteStackFlowProps) {
   return (
     <Modal
       open
-      title="Delete stack — confirm"
+      title={`Delete ${stack.name}?`}
       width={400}
       onClose={running ? () => {} : closeModal}
       closeOnBackdrop={!running}
     >
       <div
         style={{
-          padding: 18,
+          padding: 14,
           display: "flex",
           flexDirection: "column",
           gap: 12,
@@ -64,14 +64,7 @@ export function DeleteStackFlow({ stackId }: DeleteStackFlowProps) {
           overflow: "auto",
         }}
       >
-        <div style={{ fontSize: 18, fontWeight: 700 }}>
-          Delete stack{" "}
-          <span style={{ fontFamily: "var(--mono)", fontSize: 15 }}>
-            {stack.name}
-          </span>
-          ?
-        </div>
-        <div className="hand" style={{ color: "var(--ink-soft)", fontSize: 15 }}>
+        <div className="hand" style={{ color: "var(--ink-soft)", fontSize: 14 }}>
           {deployments.length === 0
             ? "no projects host this stack right now"
             : `currently deployed to ${deployments.length} project${deployments.length === 1 ? "" : "s"}`}

@@ -44,14 +44,14 @@ export function RemoveProjectFlow({ path }: RemoveProjectFlowProps) {
   return (
     <Modal
       open
-      title="Remove project — confirm"
+      title={`Remove ${path.replace(/^\/Users\/[^/]+/, "~")}?`}
       width={440}
       onClose={running ? () => {} : closeModal}
       closeOnBackdrop={!running}
     >
       <div
         style={{
-          padding: 18,
+          padding: 14,
           display: "flex",
           flexDirection: "column",
           gap: 12,
@@ -60,14 +60,7 @@ export function RemoveProjectFlow({ path }: RemoveProjectFlowProps) {
           overflow: "auto",
         }}
       >
-        <div style={{ fontSize: 18, fontWeight: 700 }}>
-          Remove{" "}
-          <span style={{ fontFamily: "var(--mono)", fontSize: 14 }}>
-            {path.replace(/^\/Users\/[^/]+/, "~")}
-          </span>{" "}
-          from tracking?
-        </div>
-        <div className="hand" style={{ color: "var(--ink-soft)", fontSize: 15 }}>
+        <div className="hand" style={{ color: "var(--ink-soft)", fontSize: 14 }}>
           stops cascading updates. doesn't touch the project itself unless you
           ask.
         </div>

@@ -142,14 +142,14 @@ export function RollbackFlow({ name }: RollbackFlowProps) {
 
   const title =
     phase === "running"
-      ? "Rolling back…"
+      ? `Rolling back ${skill.displayName}…`
       : phase === "done"
-        ? "Rollback complete"
+        ? `Rolled back ${skill.displayName}`
         : phase === "cancelled"
           ? "Rollback cancelled"
           : phase === "error"
             ? "Rollback failed"
-            : "Roll back skill";
+            : `Roll back ${skill.displayName}`;
 
   return (
     <Modal
@@ -162,21 +162,15 @@ export function RollbackFlow({ name }: RollbackFlowProps) {
     >
       <div
         style={{
-          padding: 18,
+          padding: 14,
           display: "flex",
           flexDirection: "column",
-          gap: 12,
+          gap: 10,
           flex: 1,
           minHeight: 0,
           overflow: "auto",
         }}
       >
-        <div style={{ fontSize: 18, fontWeight: 700 }}>
-          Roll back{" "}
-          <span style={{ fontFamily: "var(--mono)", fontSize: 15 }}>
-            {skill.displayName}
-          </span>
-        </div>
         <div className="hand" style={{ color: "var(--ink-soft)", fontSize: 14 }}>
           current version{" "}
           <span style={{ fontFamily: "var(--mono)", fontSize: 11 }}>

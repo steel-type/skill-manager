@@ -43,30 +43,23 @@ export function RemoveSkillFlow({ name }: RemoveSkillFlowProps) {
   return (
     <Modal
       open
-      title="Remove skill — confirm"
+      title={`Remove ${skill.displayName}?`}
       width={400}
       onClose={running ? () => {} : closeModal}
       closeOnBackdrop={!running}
     >
       <div
         style={{
-          padding: 18,
+          padding: 14,
           display: "flex",
           flexDirection: "column",
-          gap: 12,
+          gap: 10,
           flex: 1,
           minHeight: 0,
           overflow: "auto",
         }}
       >
-        <div style={{ fontSize: 18, fontWeight: 700 }}>
-          Remove{" "}
-          <span style={{ fontFamily: "var(--mono)", fontSize: 15 }}>
-            {skill.displayName}
-          </span>{" "}
-          from your library?
-        </div>
-        <div className="hand" style={{ color: "var(--ink-soft)", fontSize: 15 }}>
+        <div className="hand" style={{ color: "var(--ink-soft)", fontSize: 14 }}>
           deletes the library copy at{" "}
           <span style={{ fontFamily: "var(--mono)", fontSize: 11 }}>
             ~/.claude/skills/{skill.name}

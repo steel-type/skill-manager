@@ -201,13 +201,13 @@ body { background: #e8e4d8; margin: 0; font-family: var(--read); color: var(--in
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
+  padding: 5px 12px;
   border-bottom: 1.5px solid var(--line);
   background: var(--paper-2);
-  /* Match the macOS native title-bar height so the repositioned traffic
-     lights sit centered against our drawn band, and the title font has
-     room to breathe without clipping descenders. */
-  height: 36px;
+  /* Tighter than the macOS native title-bar height. Traffic-light dots
+     stay centered and the title font (12px) has enough room without
+     descender clipping. Saves ~6px of vertical chrome on every popup. */
+  height: 30px;
   flex-shrink: 0;
   -webkit-app-region: drag;
   /* Without this, hovering the title shows the I-beam (text cursor) and
