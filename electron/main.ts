@@ -48,6 +48,7 @@ import {
   deployStack,
   getStackDeployments,
   listStacks,
+  removeStackDeployment,
   updateStackComposition,
 } from "./services/stacks";
 import type { DeployMode } from "./services/types";
@@ -597,4 +598,23 @@ ipcMain.handle(
   "get-stack-deployments",
   (_e, args: { stackId?: string } = {}) =>
     getStackDeployments(args.stackId),
+);
+
+ipcMain.handle(
+  "remove-stack-deployment",
+  (
+    _e,
+    args: {
+      stackId: string;
+      projectPath: string;
+      agentId: string;
+      cleanup: boolean;
+    },
+  ) =>
+    removeStackDeployment(
+      args.stackId,
+      args.projectPath,
+      args.agentId,
+      args.cleanup,
+    ),
 );

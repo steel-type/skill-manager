@@ -311,6 +311,19 @@ const api = {
     ipcRenderer.invoke("get-stack-deployments", { stackId }) as Promise<
       StackDeployment[]
     >,
+
+  removeStackDeployment: (
+    stackId: string,
+    projectPath: string,
+    agentId: string,
+    cleanup: boolean,
+  ) =>
+    ipcRenderer.invoke("remove-stack-deployment", {
+      stackId,
+      projectPath,
+      agentId,
+      cleanup,
+    }) as Promise<void>,
 };
 
 contextBridge.exposeInMainWorld("api", api);

@@ -391,6 +391,41 @@ export interface DeployStackResult {
   warning: string | null;
 }
 
+/** Drop a single (stack, project, agent) deployment. Mirrors
+ *  {@link deleteStack} with `cleanup`, but scoped to one row — used by
+ *  the Deploy tab's per-row Remove. */
+export async function removeStackDeployment(
+  rawStackId: string,
+  rawProjectPath: string,
+  rawAgentId: string,
+  cleanup: boolean,
+): Promise<void> {
+  const stackId = validateStackName(rawStackId);
+  const projectPath = validateProjectPath(rawProjectPath);
+  if (!AGENTS[rawAgentId]) throw new Error(`Unknown agent: ${rawAgentId}`);
+
+  if (cleanup) {
+    try {
+      await removeMetaSkillFromProject(stackId, projectPath, rawAgentId);
+    } catch {
+      // Best-effort cleanup — same rationale as deleteStack.
+    }
+  }
+
+  await withConfigLock(async () => {
+    const fresh = await loadConfig();
+    fresh.stackDeployments = fresh.stackDeployments.filter(
+      (d) =>
+        !(
+          d.stackId === stackId &&
+          d.projectPath === projectPath &&
+          d.agentId === rawAgentId
+        ),
+    );
+    await saveConfig(fresh);
+  });
+}
+
 export async function deployStack(
   rawStackId: string,
   rawProjectPath: string,
