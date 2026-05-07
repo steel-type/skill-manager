@@ -34,11 +34,8 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
   const updateStackComposition = useAppStore(
     (s) => s.updateStackComposition,
   );
-  const updateStackMeta = useAppStore.getState; // not directly — see below
   const setError = useAppStore((s) => s.setError);
   const loadStacks = useAppStore((s) => s.loadStacks);
-
-  void updateStackMeta; // composition update covers what we need today
 
   const isEdit = !!editingStackId;
   const editing = useMemo(
@@ -253,16 +250,19 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
                     <span style={{ flex: 1, minWidth: 0 }}>{skillName}</span>
                     <ReorderButton
                       label="↑"
+                      ariaLabel={`Move ${skillName} up`}
                       disabled={i === 0}
                       onClick={() => move(skillName, -1)}
                     />
                     <ReorderButton
                       label="↓"
+                      ariaLabel={`Move ${skillName} down`}
                       disabled={i === selected.length - 1}
                       onClick={() => move(skillName, 1)}
                     />
                     <ReorderButton
                       label="✕"
+                      ariaLabel={`Remove ${skillName} from stack`}
                       onClick={() => toggleSkill(skillName)}
                     />
                   </div>
@@ -436,16 +436,19 @@ function Label({ children }: { children: React.ReactNode }) {
 
 function ReorderButton({
   label,
+  ariaLabel,
   disabled,
   onClick,
 }: {
   label: string;
+  ariaLabel?: string;
   disabled?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
+      aria-label={ariaLabel ?? label}
       onClick={onClick}
       disabled={disabled}
       style={{
