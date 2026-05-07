@@ -41,30 +41,82 @@ export function LeftRail() {
     }
   };
 
-  // Read a JSON share, parse + tag installed entries, then route into the
-  // ImportFlow review screen where validation happens per-row.
+  // Read a skill share file (JSON in any supported shape, or plain text
+  // with one URL per line), parse + tag installed entries, then route into
+  // the ImportFlow review screen where per-row validation happens.
   const onImport = async () => {
     try {
       const file = await window.api.readTextFile({
         filterName: "Skill share",
-        extensions: ["json"],
+        // Accept .txt / .md too so plain-URL-per-line lists are usable.
+        extensions: ["json", "txt", "md"],
       });
       if (!file) return;
-      const { entries, doc } = await window.api.parseImportJson(file.content);
-      if (entries.length === 0) {
-        setError("No skills found in that file.");
+      const result = await window.api.parseImportJson(file.content);
+      if (result.entries.length === 0) {
+        const detail =
+          result.localOnlySkipped > 0
+            ? ` (${result.localOnlySkipped} local-only ${result.localOnlySkipped === 1 ? "entry was" : "entries were"} skipped — they have no URL to install from.)`
+            : result.skipped > 0
+              ? ` (${result.skipped} malformed ${result.skipped === 1 ? "entry was" : "entries were"} skipped.)`
+              : "";
+        setError(`No installable skills found in that file.${detail}`);
         return;
+      }
+      // Surface non-fatal info via the toast — the user sees what was
+      // recognised and whether anything was dropped before they hit the
+      // review screen.
+      const tail: string[] = [];
+      if (result.detectedFormat !== "native") {
+        tail.push(`format: ${formatLabel(result.detectedFormat)}`);
+      }
+      if (result.skipped > 0) tail.push(`${result.skipped} malformed skipped`);
+      if (result.localOnlySkipped > 0) {
+        tail.push(
+          `${result.localOnlySkipped} local-only skipped (no URL to install)`,
+        );
+      }
+      if (tail.length > 0) {
+        setError(`Imported ${result.entries.length} — ${tail.join(", ")}`);
       }
       setScreen({
         kind: "import",
-        entries,
+        entries: result.entries,
         sourcePath: file.path,
-        exportedAt: doc?.exported_at ?? null,
+        exportedAt: result.doc?.exported_at ?? null,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
   };
+
+  function formatLabel(
+    f:
+      | "native"
+      | "bare-array"
+      | "codex-config"
+      | "skills-array"
+      | "url-map"
+      | "url-lines"
+      | "unknown",
+  ): string {
+    switch (f) {
+      case "bare-array":
+        return "bare JSON array";
+      case "codex-config":
+        return "codex skill config";
+      case "skills-array":
+        return "skills-array JSON";
+      case "url-map":
+        return "URL map";
+      case "url-lines":
+        return "plain text URLs";
+      case "native":
+        return "native skill share";
+      case "unknown":
+        return "unknown";
+    }
+  }
 
   return (
     <aside

@@ -141,6 +141,19 @@ const api = {
         alreadyInstalled: boolean;
       }[];
       doc: { version: 1; exported_at: string } | null;
+      /** Which input shape the parser recognised. */
+      detectedFormat:
+        | "native"
+        | "bare-array"
+        | "codex-config"
+        | "skills-array"
+        | "url-map"
+        | "url-lines"
+        | "unknown";
+      /** Malformed JSON entries that were dropped. */
+      skipped: number;
+      /** Local-path entries (codex) that have no URL and can't be installed. */
+      localOnlySkipped: number;
     }>,
 
   validateSkillUrl: (url: string) =>

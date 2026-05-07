@@ -47,8 +47,9 @@ import type { Deployment, DeployMode } from "./services/types";
 import {
   exportSkillJson,
   exportSkillList,
-  parseSkillJson,
+  parseFlexibleImport,
   parseSkillList,
+  type ImportParseResult,
   type SkillJsonDoc,
   type SkillJsonEntry,
 } from "./services/exportImport";
@@ -603,39 +604,82 @@ export interface ParsedImportEntry extends SkillJsonEntry {
   alreadyInstalled: boolean;
 }
 
+export interface ParsedImportSummary {
+  entries: ParsedImportEntry[];
+  doc: SkillJsonDoc | null;
+  /** Which input shape was detected — surfaced so the importer UI can show
+   *  "Detected: codex config — converted 3 paths" style status. */
+  detectedFormat: ImportParseResult["detectedFormat"];
+  /** Count of malformed entries dropped during parsing. */
+  skipped: number;
+  /** Count of local-only entries (e.g. codex `path` references) that the
+   *  installer can't pull because they have no URL. Surfaced separately so
+   *  the user understands they were intentionally skipped, not malformed. */
+  localOnlySkipped: number;
+}
+
 /**
- * Parse a JSON share document and tag entries the user already has installed
- * so the import-review UI can default those checkboxes to off.
+ * Parse any of the supported import shapes (native v1 / bare array / codex
+ * skill config / generic skills array / url-map / line-delimited URLs) and
+ * tag entries the user already has installed so the import-review UI can
+ * default those checkboxes to off.
+ *
+ * Local-only entries (codex paths with no URL) are dropped from the
+ * installable list — the import flow only handles URL-sourced installs —
+ * but their count is reported separately so the UI can mention them.
  */
 export async function parseImportJson(
   text: string,
-): Promise<{ entries: ParsedImportEntry[]; doc: SkillJsonDoc | null }> {
+): Promise<ParsedImportSummary> {
   if (typeof text !== "string") throw new Error("Body must be a string");
   if (text.length > 1_000_000) throw new Error("Import body too large (>1 MB)");
-  const entries = parseSkillJson(text);
+
+  const flexible = parseFlexibleImport(text);
   const config = await loadConfig();
   const installed = new Set(Object.keys(config.skills));
-  const tagged = entries.map((e) => ({
-    ...e,
-    alreadyInstalled: installed.has(e.name),
-  }));
-  // Best-effort: also parse the wrapper out so callers can show metadata
-  // (export date) without re-parsing. parseSkillJson already validated shape.
-  let doc: SkillJsonDoc | null = null;
-  try {
-    const raw = JSON.parse(text);
-    if (
-      raw &&
-      typeof raw === "object" &&
-      raw.version === 1 &&
-      Array.isArray(raw.skills)
-    ) {
-      doc = raw as SkillJsonDoc;
+  let localOnlySkipped = 0;
+  const entries: ParsedImportEntry[] = [];
+  for (const entry of flexible.skills) {
+    if (!entry.url) {
+      localOnlySkipped += 1;
+      continue;
     }
-  } catch {
-    // ignore — entries already populated
+    const tagged: ParsedImportEntry = {
+      name: entry.name,
+      url: entry.url,
+      alreadyInstalled: installed.has(entry.name),
+    };
+    if (entry.commit) tagged.commit = entry.commit;
+    if (entry.description) tagged.description = entry.description;
+    entries.push(tagged);
   }
-  return { entries: tagged, doc };
+
+  // Best-effort: also parse the wrapper out so callers can show metadata
+  // (export date) without re-parsing. Only the native v1 shape carries it.
+  let doc: SkillJsonDoc | null = null;
+  if (flexible.detectedFormat === "native") {
+    try {
+      const raw = JSON.parse(text);
+      if (
+        raw &&
+        typeof raw === "object" &&
+        raw.version === 1 &&
+        Array.isArray(raw.skills)
+      ) {
+        doc = raw as SkillJsonDoc;
+      }
+    } catch {
+      // ignore — entries already populated
+    }
+  }
+
+  return {
+    entries,
+    doc,
+    detectedFormat: flexible.detectedFormat,
+    skipped: flexible.skipped,
+    localOnlySkipped,
+  };
 }
 
 export interface SkillUrlValidation {
