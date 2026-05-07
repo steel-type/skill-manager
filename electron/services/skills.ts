@@ -314,6 +314,11 @@ export function extractSkillName(url: string): string {
 export async function listSkills(): Promise<Skill[]> {
   const config = await loadConfig();
   const skills: Skill[] = [];
+  // Stack meta-skills live alongside regular skills in LIBRARY_PATH so they
+  // can be deployed via the standard skill code path. Filter them out here
+  // so the Library view doesn't surface them as installable skills — the
+  // Stacks tab is the only place they should appear.
+  const stackIds = new Set(config.stacks.map((s) => s.id));
 
   let entries: import("node:fs").Dirent[];
   try {
@@ -332,6 +337,7 @@ export async function listSkills(): Promise<Skill[]> {
 
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+    if (stackIds.has(entry.name)) continue;
     const dir = join(LIBRARY_PATH, entry.name);
     const detection = await detectSkillType(dir);
     const frontmatter = await getSkillInfo(dir);

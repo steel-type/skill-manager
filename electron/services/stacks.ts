@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { AGENTS, resolveAgentPaths } from "./agents";
 import { loadConfig, nowIso, saveConfig, withConfigLock } from "./config";
 import { deployToProject } from "./deploy";
+import { LIBRARY_PATH } from "./paths";
 import { listSkills } from "./skills";
 import {
   validateProjectPath,
@@ -107,6 +108,34 @@ function metaSkillDestination(
   };
 }
 
+/**
+ * Stage the generated meta-skill SKILL.md inside the library at
+ * `<LIBRARY_PATH>/<stackId>/SKILL.md`. This makes stack meta-skills first-class
+ * library citizens: symlink deployments resolve back here so composition
+ * changes propagate automatically, and migration logic treats stacks
+ * uniformly with regular skills (no special regeneration step).
+ *
+ * Idempotent — overwrites any existing file. Safe to call from createStack,
+ * updateStackComposition, deployStack, and a bootstrap backfill.
+ */
+export async function writeMetaSkillToLibrary(
+  stackId: string,
+  content: string,
+): Promise<string> {
+  const dir = join(LIBRARY_PATH, stackId);
+  await fs.mkdir(dir, { recursive: true });
+  const path = join(dir, "SKILL.md");
+  await fs.writeFile(path, content, "utf8");
+  return path;
+}
+
+/** Remove the staged meta-skill from the library. Best-effort. */
+export async function removeMetaSkillFromLibrary(
+  stackId: string,
+): Promise<void> {
+  await fs.rm(join(LIBRARY_PATH, stackId), { recursive: true, force: true });
+}
+
 export async function writeMetaSkillToProject(
   stackId: string,
   content: string,
@@ -174,10 +203,17 @@ export async function createStack(
   const id = validateStackName(makeStackId(rawName));
   const skillIds = rawSkillIds.map((s) => validateSkillName(s));
 
-  return await withConfigLock(async () => {
+  const stack = await withConfigLock(async () => {
     const config = await loadConfig();
     if (config.stacks.some((s) => s.id === id)) {
       throw new Error(`A stack with id '${id}' already exists`);
+    }
+    // Stack ids share a namespace with skill names in the library — refuse
+    // collisions so writeMetaSkillToLibrary can never clobber a real skill.
+    if (config.skills[id]) {
+      throw new Error(
+        `Cannot create stack '${id}': a skill with that name already exists in the library`,
+      );
     }
     // Make sure each member skill is in the library — otherwise we'd happily
     // create a stack that fails to deploy the moment the user tries.
@@ -187,7 +223,7 @@ export async function createStack(
       }
     }
     const now = nowIso();
-    const stack: SkillStack = {
+    const newStack: SkillStack = {
       id,
       name: rawName.trim(),
       description: description.trim(),
@@ -195,10 +231,19 @@ export async function createStack(
       createdAt: now,
       updatedAt: now,
     };
-    config.stacks = [...config.stacks, stack];
+    config.stacks = [...config.stacks, newStack];
     await saveConfig(config);
-    return stack;
+    return newStack;
   });
+
+  // Stage the meta-skill in the library so symlink deploys resolve back here
+  // and composition changes propagate. Done outside the lock — file IO is
+  // slow and the config is already authoritative.
+  const members = await loadStackMembers(stack.skillIds);
+  const content = generateMetaSkill(stack, members);
+  await writeMetaSkillToLibrary(stack.id, content);
+
+  return stack;
 }
 
 export interface UpdateStackCompositionResult {
@@ -265,6 +310,10 @@ export async function updateStackComposition(
 
   const members = await loadStackMembers(newSkillIds);
   const metaContent = generateMetaSkill(updatedStack, members);
+  // Refresh the library copy first. Symlink deployments resolve back here
+  // so they pick up the change automatically; copy deployments still need a
+  // re-deploy below to refresh their on-disk file.
+  await writeMetaSkillToLibrary(stackId, metaContent);
 
   const pushed: UpdateStackCompositionResult["pushed"] = [];
   for (const dep of deployments) {
@@ -284,12 +333,25 @@ export async function updateStackComposition(
         });
       }
     }
-    const metaSkillPath = await writeMetaSkillToProject(
-      stackId,
-      metaContent,
-      dep.projectPath,
-      dep.agentId,
-    );
+    // For copy deployments we re-deploy the meta-skill from the freshly
+    // staged library file. Symlink deployments already point at the library
+    // and don't need a touch — but we still resolve the canonical path for
+    // the result summary.
+    const agent = AGENTS[dep.agentId];
+    const isSingleFile = agent ? /{name}/.test(agent.entryFile) : false;
+    let metaSkillPath: string;
+    if (dep.deployMode === "symlink") {
+      const resolved = resolveAgentPaths(dep.agentId, stackId, dep.projectPath);
+      metaSkillPath = isSingleFile
+        ? join(resolved.projectPath ?? "", resolved.entryFile)
+        : join(resolved.projectPath ?? "", "SKILL.md");
+    } else {
+      const r = await deployToProject(stackId, dep.projectPath, {
+        agentId: dep.agentId,
+        deployMode: dep.deployMode,
+      });
+      metaSkillPath = isSingleFile ? r.destPath : join(r.destPath, "SKILL.md");
+    }
     pushed.push({
       projectPath: dep.projectPath,
       agentId: dep.agentId,
@@ -367,6 +429,13 @@ export async function deleteStack(
         // Best-effort cleanup — a project that's been moved or deleted
         // shouldn't block removing the stack from config.
       }
+    }
+    // Also remove the library staging directory so the stack is fully gone
+    // from disk and won't show up under reconcile/listSkills filtering.
+    try {
+      await removeMetaSkillFromLibrary(stackId);
+    } catch {
+      // Best-effort.
     }
   }
 
@@ -467,14 +536,29 @@ export async function deployStack(
     }
   }
 
+  // Refresh the library copy so it reflects current member descriptions,
+  // then deploy through the standard skill path. This makes symlink mode
+  // work for stacks (the project symlink resolves back to the library file)
+  // and unifies the deploy code path with regular skills.
   const members = await loadStackMembers(stack.skillIds);
   const metaContent = generateMetaSkill(stack, members);
-  const metaSkillPath = await writeMetaSkillToProject(
-    stackId,
-    metaContent,
-    projectPath,
+  await writeMetaSkillToLibrary(stackId, metaContent);
+  const metaResult = await deployToProject(stackId, projectPath, {
     agentId,
-  );
+    deployMode: requestedMode,
+  });
+  // deployToProject returns the directory for directory-style agents and
+  // the entry file for single-file agents. metaSkillPath is documented as
+  // the path to the SKILL.md (or .mdc) file — normalize accordingly.
+  const isSingleFile = /{name}/.test(AGENTS[agentId].entryFile);
+  const metaSkillPath = isSingleFile
+    ? metaResult.destPath
+    : join(metaResult.destPath, "SKILL.md");
+  // The meta-skill's mode wins over the member modes for the recorded
+  // StackDeployment row — it's the canonical entry point and any agent
+  // capability fallback (e.g. cursor → copy) is reflected here.
+  actualMode = metaResult.deployMode;
+  if (metaResult.warning && warning === null) warning = metaResult.warning;
 
   await withConfigLock(async () => {
     const fresh = await loadConfig();
@@ -539,7 +623,7 @@ export async function deployStack(
  *  reflects what the user actually sees in the Library. Skills not present
  *  in the library fall back to {@link META_NO_DESCRIPTION} via
  *  {@link generateMetaSkill}. */
-async function loadStackMembers(skillIds: string[]): Promise<StackMember[]> {
+export async function loadStackMembers(skillIds: string[]): Promise<StackMember[]> {
   const skills = await listSkills();
   const byName = new Map(skills.map((s) => [s.name, s] as const));
   return skillIds.map((id) => {

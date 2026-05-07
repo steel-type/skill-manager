@@ -190,11 +190,20 @@ export async function reconcileConfig(
   return await withConfigLock(async () => {
     const skills = { ...config.skills };
 
+    // Stack meta-skills are staged in LIBRARY_PATH for symlink support, but
+    // they are not regular skills — exclude them from the config.skills set.
+    const stackIds = new Set((config.stacks ?? []).map((s) => s.id));
+
     let dirEntries: string[] = [];
     try {
       const entries = await fs.readdir(LIBRARY_PATH, { withFileTypes: true });
       dirEntries = entries
-        .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+        .filter(
+          (e) =>
+            e.isDirectory() &&
+            !e.name.startsWith(".") &&
+            !stackIds.has(e.name),
+        )
         .map((e) => e.name);
     } catch (err: unknown) {
       if (

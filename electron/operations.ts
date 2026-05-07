@@ -88,6 +88,36 @@ export async function bootstrap(): Promise<void> {
   const config = await loadConfig();
   const reconciled = await reconcileConfig(config);
 
+  // Backfill stack meta-skills into the library. Stacks created before this
+  // model existed have no library SKILL.md, so symlink deploys would fail
+  // and migration logic would skip them. Idempotent: skips stacks whose
+  // file already exists. Best-effort — failures don't block bootstrap.
+  try {
+    const { generateMetaSkill, loadStackMembers, writeMetaSkillToLibrary } =
+      await import("./services/stacks");
+    for (const stack of reconciled.stacks) {
+      const path = join(LIBRARY_PATH, stack.id, "SKILL.md");
+      try {
+        await fs.access(path);
+        continue;
+      } catch {
+        // Missing — fall through to backfill.
+      }
+      try {
+        const members = await loadStackMembers(stack.skillIds);
+        const content = generateMetaSkill(stack, members);
+        await writeMetaSkillToLibrary(stack.id, content);
+      } catch (err) {
+        console.warn(
+          `[skill-manager] backfill failed for stack '${stack.id}':`,
+          err,
+        );
+      }
+    }
+  } catch (err) {
+    console.warn("[skill-manager] stack backfill failed:", err);
+  }
+
   // Drop snapshot directories that no skill in config references — these
   // accumulate when a skill is uninstalled outside the app or when retention
   // changes from N→0 mid-flight. Best-effort; never blocks bootstrap.

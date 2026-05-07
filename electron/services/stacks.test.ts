@@ -21,15 +21,17 @@ vi.mock("./paths", async () => {
 
 import { CONFIG_PATH, LIBRARY_PATH } from "./paths";
 import { loadConfig, saveConfig } from "./config";
-import { parseSkillFrontmatter } from "./skills";
+import { listSkills, parseSkillFrontmatter } from "./skills";
 import {
   createStack,
   deleteStack,
   deployStack,
   generateMetaSkill,
   listStacks,
+  removeMetaSkillFromLibrary,
   removeMetaSkillFromProject,
   updateStackComposition,
+  writeMetaSkillToLibrary,
   writeMetaSkillToProject,
 } from "./stacks";
 import { DEFAULT_SETTINGS, type SkillStack } from "./types";
@@ -595,5 +597,221 @@ describe("deleteStack", () => {
     } finally {
       await fs.rm(project, { recursive: true, force: true });
     }
+  });
+});
+
+// ── Phase 0A: stack meta-skills staged in the library ──────────────────────
+
+describe("writeMetaSkillToLibrary / removeMetaSkillFromLibrary", () => {
+  it("writes <LIBRARY>/<stackId>/SKILL.md and is idempotent", async () => {
+    const path = await writeMetaSkillToLibrary("foo-stack", "first");
+    expect(path).toBe(join(LIBRARY_PATH, "foo-stack", "SKILL.md"));
+    expect(await fs.readFile(path, "utf8")).toBe("first");
+    // Overwrite with new content — same path, fresh body.
+    await writeMetaSkillToLibrary("foo-stack", "second");
+    expect(await fs.readFile(path, "utf8")).toBe("second");
+  });
+
+  it("removes the library staging directory", async () => {
+    const path = await writeMetaSkillToLibrary("gone-stack", "body");
+    expect(await fs.readFile(path, "utf8")).toBe("body");
+    await removeMetaSkillFromLibrary("gone-stack");
+    await expect(fs.access(path)).rejects.toThrow();
+  });
+});
+
+describe("createStack — library staging", () => {
+  beforeEach(async () => {
+    await writeSkill("alpha", { "SKILL.md": "alpha body" });
+    await saveConfig({
+      last_project: "",
+      skills: {
+        alpha: {
+          url: null,
+          commit: null,
+          installed_at: "2026-01-01T00:00:00Z",
+          updated_at: null,
+          projects: [],
+        },
+      },
+      settings: DEFAULT_SETTINGS,
+      stacks: [],
+      stackDeployments: [],
+    });
+  });
+
+  it("stages a generated SKILL.md in the library on create", async () => {
+    const stack = await createStack("Phase Zero", "Triggers when user says zero", [
+      "alpha",
+    ]);
+    const libPath = join(LIBRARY_PATH, stack.id, "SKILL.md");
+    const content = await fs.readFile(libPath, "utf8");
+    expect(content).toMatch(/^---\nname: phase-zero/);
+    expect(content).toContain("Triggers when user says zero");
+    expect(content).toContain("- alpha");
+  });
+
+  it("rejects creating a stack whose id collides with an existing skill", async () => {
+    await expect(
+      createStack("Alpha", "Triggers when user mentions alpha", ["alpha"]),
+    ).rejects.toThrow(/already exists in the library/);
+  });
+});
+
+describe("deployStack — symlink mode", () => {
+  it("deploys the stack meta-skill as a symlink resolving to the library", async () => {
+    await writeSkill("alpha", { "SKILL.md": "alpha body" });
+    await writeSkill("beta", { "SKILL.md": "beta body" });
+    await saveConfig({
+      last_project: "",
+      skills: {
+        alpha: {
+          url: null,
+          commit: null,
+          installed_at: "2026-01-01T00:00:00Z",
+          updated_at: null,
+          projects: [],
+        },
+        beta: {
+          url: null,
+          commit: null,
+          installed_at: "2026-01-01T00:00:00Z",
+          updated_at: null,
+          projects: [],
+        },
+      },
+      settings: DEFAULT_SETTINGS,
+      stacks: [
+        {
+          id: "demo",
+          name: "Demo",
+          description: "Triggers when user says demo",
+          skillIds: ["alpha", "beta"],
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-01T00:00:00Z",
+        },
+      ],
+      stackDeployments: [],
+    });
+    // Pre-stage the library file (createStack would normally do this; this
+    // test seeded the stack via saveConfig so we need to mimic).
+    await writeMetaSkillToLibrary(
+      "demo",
+      "---\nname: demo\ndescription: stub\n---\n",
+    );
+
+    const project = await makeProject();
+    try {
+      const result = await deployStack("demo", project, "claude", "symlink");
+      expect(result.deployMode).toBe("symlink");
+      const stackDir = join(project, ".claude", "skills", "demo");
+      const lstat = await fs.lstat(stackDir);
+      expect(lstat.isSymbolicLink()).toBe(true);
+      const target = await fs.realpath(stackDir);
+      expect(target).toBe(await fs.realpath(join(LIBRARY_PATH, "demo")));
+    } finally {
+      await fs.rm(project, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("deleteStack — library cleanup", () => {
+  it("with cleanup, removes the library staging directory", async () => {
+    await writeSkill("alpha", { "SKILL.md": "alpha body" });
+    await saveConfig({
+      last_project: "",
+      skills: {
+        alpha: {
+          url: null,
+          commit: null,
+          installed_at: "2026-01-01T00:00:00Z",
+          updated_at: null,
+          projects: [],
+        },
+      },
+      settings: DEFAULT_SETTINGS,
+      stacks: [],
+      stackDeployments: [],
+    });
+    const stack = await createStack("Demo", "Triggers when user says demo", [
+      "alpha",
+    ]);
+    expect(
+      await fs.readFile(join(LIBRARY_PATH, stack.id, "SKILL.md"), "utf8"),
+    ).toContain(stack.id);
+    await deleteStack(stack.id, true);
+    await expect(
+      fs.access(join(LIBRARY_PATH, stack.id, "SKILL.md")),
+    ).rejects.toThrow();
+  });
+});
+
+describe("listSkills excludes stack ids (Phase 0A)", () => {
+  it("does not return stack meta-skills as library skills", async () => {
+    await writeSkill("alpha", { "SKILL.md": "alpha body" });
+    await saveConfig({
+      last_project: "",
+      skills: {
+        alpha: {
+          url: null,
+          commit: null,
+          installed_at: "2026-01-01T00:00:00Z",
+          updated_at: null,
+          projects: [],
+        },
+      },
+      settings: DEFAULT_SETTINGS,
+      stacks: [],
+      stackDeployments: [],
+    });
+    const stack = await createStack(
+      "Phase Zero",
+      "Triggers when user says zero",
+      ["alpha"],
+    );
+    // Library now contains both alpha (regular skill) and the stack staging dir.
+    const skills = await listSkills();
+    const names = skills.map((s) => s.name);
+    expect(names).toContain("alpha");
+    expect(names).not.toContain(stack.id);
+  });
+});
+
+describe("updateStackComposition — library refresh", () => {
+  it("regenerates the library SKILL.md when the membership changes", async () => {
+    await writeSkill("alpha", { "SKILL.md": "alpha body" });
+    await writeSkill("beta", { "SKILL.md": "beta body" });
+    await saveConfig({
+      last_project: "",
+      skills: {
+        alpha: {
+          url: null,
+          commit: null,
+          installed_at: "2026-01-01T00:00:00Z",
+          updated_at: null,
+          projects: [],
+        },
+        beta: {
+          url: null,
+          commit: null,
+          installed_at: "2026-01-01T00:00:00Z",
+          updated_at: null,
+          projects: [],
+        },
+      },
+      settings: DEFAULT_SETTINGS,
+      stacks: [],
+      stackDeployments: [],
+    });
+    const stack = await createStack("Demo", "Triggers when user says demo", [
+      "alpha",
+    ]);
+    const libPath = join(LIBRARY_PATH, stack.id, "SKILL.md");
+    expect(await fs.readFile(libPath, "utf8")).toMatch(/- alpha/);
+    expect(await fs.readFile(libPath, "utf8")).not.toMatch(/- beta/);
+
+    await updateStackComposition(stack.id, ["alpha", "beta"]);
+    const after = await fs.readFile(libPath, "utf8");
+    expect(after).toMatch(/- alpha\n- beta/);
   });
 });
