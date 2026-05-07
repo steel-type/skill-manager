@@ -699,7 +699,9 @@ function RunRowDisplay({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: "white",
+          // Same readability rule as UpdateFlow: dark ink on the bright
+          // accent/good fills, white only on the warn (red) state.
+          color: state === "failed" ? "white" : "#0a0a0a",
           fontSize: 11,
           flexShrink: 0,
         }}

@@ -369,3 +369,15 @@ body { background: #e8e4d8; margin: 0; font-family: var(--read); color: var(--in
 :root[data-theme="dark"] {
   --icon-update-bg: rgba(62, 224, 122, 0.22);
 }
+
+/* In dark mode the green --accent/--good fill is bright enough that white
+   text fails contrast. Force a dark ink on the green-filled tag and accent
+   button so "UPDATE" / "good" / accent CTAs stay readable. The light theme
+   uses terracotta (--accent) and olive (--good) where white reads fine, so
+   it stays on the default. Mirrors the same #0a0a0a treatment used on the
+   UpdateFlow row check icon. */
+:root[data-theme="dark"] .sk-tag.update,
+:root[data-theme="dark"] .sk-tag.good,
+:root[data-theme="dark"] .sk-btn.accent {
+  color: #0a0a0a;
+}

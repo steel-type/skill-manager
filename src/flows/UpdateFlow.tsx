@@ -558,7 +558,10 @@ function Step({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: "white",
+          // Dark ink on the bright accent/good fills (green in dark theme,
+          // terracotta/olive in light) keeps the symbol readable; warn keeps
+          // white because red-orange has enough contrast either way.
+          color: state === "failed" ? "white" : "#0a0a0a",
           fontSize: 11,
           flexShrink: 0,
         }}
