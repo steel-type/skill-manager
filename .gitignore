@@ -21,6 +21,7 @@ dist/
 
 # Build artifacts
 skill-manager.app/
+Old-Skill-Manager.zip
 
 # Node / Electron / Vite
 node_modules/
