@@ -16,6 +16,7 @@ import { DeployFlow } from "./flows/DeployFlow";
 import { SkillDetailFlow } from "./flows/SkillDetailFlow";
 import { CreateStackFlow } from "./flows/CreateStackFlow";
 import { DeleteStackFlow } from "./flows/DeleteStackFlow";
+import { StackDetailFlow } from "./flows/StackDetailFlow";
 import { useAppStore } from "./state/store";
 
 const TITLES: Record<string, string> = {
@@ -130,10 +131,7 @@ export default function App() {
         ) : screen.kind === "detail" ? (
           <SkillDetailFlow name={screen.name} />
         ) : screen.kind === "stackDetail" ? (
-          <PlaceholderView
-            title={`Stack: ${screen.stackId}`}
-            hint="Stack detail screen lands in the next step. Use Edit or Delete from the Stacks tab for now."
-          />
+          <StackDetailFlow stackId={screen.stackId} />
         ) : screen.kind === "import" ? (
           <ImportFlow
             entries={screen.entries}
