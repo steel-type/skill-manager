@@ -37,13 +37,31 @@
   "build": {
     "appId": "com.kendall.skill-manager",
     "productName": "Skill Manager",
+    "asar": true,
+    "electronLanguages": ["en"],
+    "afterPack": "scripts/afterPack.cjs",
     "directories": {
       "output": "release",
       "buildResources": "assets"
     },
     "files": [
       "dist/**/*",
-      "dist-electron/**/*"
+      "dist-electron/**/*",
+      "!**/node_modules/**/test/**",
+      "!**/node_modules/**/tests/**",
+      "!**/node_modules/**/__tests__/**",
+      "!**/node_modules/**/docs/**",
+      "!**/node_modules/**/example/**",
+      "!**/node_modules/**/examples/**",
+      "!**/node_modules/**/*.md",
+      "!**/node_modules/**/*.markdown",
+      "!**/node_modules/**/LICENSE*",
+      "!**/node_modules/**/license*",
+      "!**/node_modules/**/CHANGELOG*",
+      "!**/node_modules/**/changelog*",
+      "!**/node_modules/**/*.map",
+      "!**/node_modules/**/*.ts",
+      "!**/node_modules/**/.github/**"
     ],
     "mac": {
       "target": "dmg",
