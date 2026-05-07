@@ -24,13 +24,14 @@ const tabs: { id: Tab; label: string; icon: JSX.Element }[] = [
     id: "deploy",
     label: "Deploy",
     // V-shape diverging arrows: two legs originate at the centre-bottom and
-    // travel outward to the upper corners, each capped with an arrowhead at
-    // the tip. Reads as "splitting up / sending out" — one source, many
+    // travel outward to the upper corners, each capped with an arrowhead
+    // whose strokes splay symmetrically along the back-of-shaft direction
+    // (~±35°). Reads as "splitting up / sending out" — one source, many
     // destinations — with the tips spaced wide so the arrows feel distinct
     // from a decorative chevron.
     icon: (
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M7 12 L1.5 2 M7 12 L12.5 2 M1.5 2 L4.5 2 M1.5 2 L1.5 5 M12.5 2 L9.5 2 M12.5 2 L12.5 5" />
+        <path d="M7 12 L1.5 2 M7 12 L12.5 2 M1.5 2 L1.4 5.5 M1.5 2 L4.5 3.8 M12.5 2 L12.6 5.5 M12.5 2 L9.5 3.8" />
       </svg>
     ),
   },

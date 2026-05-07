@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   exportSkillJson,
   exportSkillList,
+  parseFlexibleImport,
   parseSkillJson,
   parseSkillList,
 } from "./exportImport";
@@ -321,5 +322,176 @@ describe("parseSkillJson", () => {
     expect(parsed).toEqual([
       { name: "a", url: "https://example.com/a", commit: "abc" },
     ]);
+  });
+});
+
+describe("parseFlexibleImport", () => {
+  it("parses the native v1 export format", () => {
+    const result = parseFlexibleImport(
+      JSON.stringify({
+        version: 1,
+        exported_at: "2025-01-01T00:00:00Z",
+        skills: [
+          { name: "alpha", url: "https://github.com/x/alpha" },
+          { name: "beta", url: "https://github.com/x/beta", commit: "abc" },
+        ],
+      }),
+    );
+    expect(result.detectedFormat).toBe("native");
+    expect(result.skills).toHaveLength(2);
+    expect(result.skills[1].commit).toBe("abc");
+    expect(result.skipped).toBe(0);
+  });
+
+  it("parses a bare array of {name, url} entries", () => {
+    const result = parseFlexibleImport(
+      JSON.stringify([
+        { name: "alpha", url: "https://github.com/x/alpha" },
+        { name: "beta", url: "https://github.com/x/beta" },
+      ]),
+    );
+    expect(result.detectedFormat).toBe("bare-array");
+    expect(result.skills).toHaveLength(2);
+  });
+
+  it("parses the codex skill config shape and treats paths as local refs", () => {
+    const result = parseFlexibleImport(
+      JSON.stringify({
+        skills: {
+          config: [
+            { path: "/Users/me/skills/pdf-tools", enabled: true },
+            { path: "/Users/me/skills/docs", enabled: false },
+          ],
+        },
+      }),
+    );
+    expect(result.detectedFormat).toBe("codex-config");
+    expect(result.skills).toEqual([
+      {
+        name: "pdf-tools",
+        url: null,
+        localPath: "/Users/me/skills/pdf-tools",
+        enabled: true,
+      },
+      {
+        name: "docs",
+        url: null,
+        localPath: "/Users/me/skills/docs",
+        enabled: false,
+      },
+    ]);
+  });
+
+  it("parses an object whose values are URL strings into skill entries keyed by name", () => {
+    const result = parseFlexibleImport(
+      JSON.stringify({
+        "pdf-tools": "https://github.com/anthropic/pdf-tools",
+        "docx-helper": "https://github.com/x/docx-helper",
+      }),
+    );
+    expect(result.detectedFormat).toBe("url-map");
+    expect(result.skills).toHaveLength(2);
+    expect(result.skills.find((s) => s.name === "pdf-tools")?.url).toBe(
+      "https://github.com/anthropic/pdf-tools",
+    );
+  });
+
+  it("parses a nested skills array preserving description / agent / tags", () => {
+    const result = parseFlexibleImport(
+      JSON.stringify({
+        skills: [
+          {
+            name: "alpha",
+            url: "https://github.com/x/alpha",
+            description: "alpha doc",
+            agent: "claude",
+            tags: ["a", "b"],
+          },
+        ],
+      }),
+    );
+    expect(result.detectedFormat).toBe("skills-array");
+    expect(result.skills[0]).toMatchObject({
+      name: "alpha",
+      url: "https://github.com/x/alpha",
+      description: "alpha doc",
+      agent: "claude",
+      tags: ["a", "b"],
+    });
+  });
+
+  it("parses line-delimited URLs when input is not valid JSON", () => {
+    const result = parseFlexibleImport(
+      [
+        "https://github.com/x/alpha",
+        "https://github.com/x/beta.git",
+        "",
+        "https://github.com/x/gamma",
+      ].join("\n"),
+    );
+    expect(result.detectedFormat).toBe("url-lines");
+    expect(result.skills.map((s) => s.name)).toEqual([
+      "alpha",
+      "beta",
+      "gamma",
+    ]);
+    expect(result.skipped).toBe(0);
+  });
+
+  it("counts non-URL lines as skipped when mixed with valid URLs", () => {
+    const result = parseFlexibleImport(
+      [
+        "https://github.com/x/alpha",
+        "this is a note",
+        "another line that is not a url",
+        "https://github.com/x/beta",
+      ].join("\n"),
+    );
+    expect(result.detectedFormat).toBe("url-lines");
+    expect(result.skills).toHaveLength(2);
+    expect(result.skipped).toBe(2);
+  });
+
+  it("throws on empty input rather than silently returning an empty list", () => {
+    expect(() => parseFlexibleImport("")).toThrow(/Empty input/);
+    expect(() => parseFlexibleImport("   \n\n")).toThrow(/Empty input/);
+  });
+
+  it("throws on JSON that doesn't match any recognised shape", () => {
+    expect(() => parseFlexibleImport(JSON.stringify({ random: "thing" }))).toThrow(
+      /Unrecognised JSON shape/,
+    );
+  });
+
+  it("throws on plain text with zero detectable URLs", () => {
+    expect(() => parseFlexibleImport("hello\nworld\n")).toThrow(
+      /No GitHub URLs detected/,
+    );
+  });
+
+  it("error messages list every supported format", () => {
+    try {
+      parseFlexibleImport("");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      expect(msg).toContain("native");
+      expect(msg).toContain("codex");
+      expect(msg).toContain("url");
+      expect(msg).toContain("plain text");
+    }
+  });
+
+  it("counts entries missing a url as skipped in the skills-array format", () => {
+    const result = parseFlexibleImport(
+      JSON.stringify({
+        skills: [
+          { name: "alpha", url: "https://github.com/x/alpha" },
+          { name: "noUrl" }, // missing required url
+          { url: "https://github.com/x/anon" }, // missing required name
+        ],
+      }),
+    );
+    expect(result.skills).toHaveLength(1);
+    expect(result.skipped).toBe(2);
   });
 });

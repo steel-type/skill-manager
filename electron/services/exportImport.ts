@@ -1,5 +1,39 @@
 import type { Skill, SkillManagerConfig } from "./types";
 
+/** Result type for the flexible importer. Some shapes carry only a URL,
+ *  others (codex skill config) carry only a local path. Callers decide
+ *  what to do with each kind. */
+export interface ImportedSkill {
+  name: string;
+  /** Source URL when known. Null for local-path-only entries. */
+  url: string | null;
+  /** Filesystem path when the source was a local-skill config (codex). */
+  localPath?: string;
+  description?: string;
+  commit?: string | null;
+  /** Optional agent hint preserved from the source if present. */
+  agent?: string;
+  tags?: string[];
+  enabled?: boolean;
+}
+
+export interface ImportParseResult {
+  skills: ImportedSkill[];
+  /** Lines (for plain-text input) or entries (for malformed JSON shapes)
+   *  that were skipped, so the UI can report "imported X, skipped Y". */
+  skipped: number;
+  /** Which detection branch matched — handy for telling the user what was
+   *  recognised when a paste doesn't import as expected. */
+  detectedFormat:
+    | "native"
+    | "bare-array"
+    | "codex-config"
+    | "skills-array"
+    | "url-map"
+    | "url-lines"
+    | "unknown";
+}
+
 export interface SkillJsonEntry {
   name: string;
   url: string;
@@ -129,4 +163,244 @@ export function parseSkillList(
     if (url) results.push({ name, url });
   }
   return results;
+}
+
+const SUPPORTED_FORMATS_HELP = [
+  "supported import shapes:",
+  "  • native: { version: 1, skills: [{ name, url }, ...] }",
+  "  • bare array: [{ name, url }, ...]",
+  "  • codex config: { skills: { config: [{ path, enabled }, ...] } }",
+  "  • skills array w/ metadata: { skills: [{ name, url, description, agent, tags }, ...] }",
+  "  • url map: { \"skill-name\": \"https://github.com/...\", ... }",
+  "  • plain text: one GitHub URL per line",
+].join("\n");
+
+const URL_LINE_RE = /^https?:\/\/\S+$/;
+
+function nameFromUrl(url: string): string {
+  // Strip query/fragment, then take the last meaningful path segment with
+  // any .git suffix removed. Falls back to the URL itself for weird inputs.
+  const cleaned = url.split(/[?#]/)[0].replace(/\/+$/, "");
+  const segments = cleaned.split("/");
+  const last = segments[segments.length - 1] ?? "";
+  return last.replace(/\.git$/i, "") || url;
+}
+
+function nameFromPath(path: string): string {
+  const cleaned = path.replace(/\/+$/, "");
+  const segments = cleaned.split("/");
+  return segments[segments.length - 1] || path;
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === "object" && !Array.isArray(v);
+}
+
+function pickString(obj: Record<string, unknown>, key: string): string | undefined {
+  const v = obj[key];
+  return typeof v === "string" && v.trim() ? v.trim() : undefined;
+}
+
+function pickStringArray(
+  obj: Record<string, unknown>,
+  key: string,
+): string[] | undefined {
+  const v = obj[key];
+  if (!Array.isArray(v)) return undefined;
+  const out = v.filter((x): x is string => typeof x === "string");
+  return out.length > 0 ? out : undefined;
+}
+
+function fromGenericSkillEntry(item: unknown): ImportedSkill | null {
+  if (!isPlainObject(item)) return null;
+  const name = pickString(item, "name");
+  const url = pickString(item, "url");
+  // Both are required for installable entries — we drop entries that have
+  // neither rather than fabricate placeholder names.
+  if (!name || !url) return null;
+  const out: ImportedSkill = { name, url };
+  const description = pickString(item, "description");
+  if (description) out.description = description;
+  const commit = pickString(item, "commit");
+  if (commit) out.commit = commit;
+  const agent = pickString(item, "agent");
+  if (agent) out.agent = agent;
+  const tags = pickStringArray(item, "tags");
+  if (tags) out.tags = tags;
+  if (typeof item.enabled === "boolean") out.enabled = item.enabled;
+  return out;
+}
+
+function fromUrlMap(
+  obj: Record<string, unknown>,
+): { skills: ImportedSkill[]; skipped: number } {
+  const skills: ImportedSkill[] = [];
+  let skipped = 0;
+  for (const [key, value] of Object.entries(obj)) {
+    if (typeof value !== "string" || !URL_LINE_RE.test(value.trim())) {
+      skipped += 1;
+      continue;
+    }
+    const trimmedKey = key.trim();
+    skills.push({
+      name: trimmedKey || nameFromUrl(value.trim()),
+      url: value.trim(),
+    });
+  }
+  return { skills, skipped };
+}
+
+function fromCodexConfig(items: unknown[]): {
+  skills: ImportedSkill[];
+  skipped: number;
+} {
+  const skills: ImportedSkill[] = [];
+  let skipped = 0;
+  for (const raw of items) {
+    if (!isPlainObject(raw)) {
+      skipped += 1;
+      continue;
+    }
+    const path = pickString(raw, "path");
+    if (!path) {
+      skipped += 1;
+      continue;
+    }
+    const out: ImportedSkill = {
+      name: nameFromPath(path),
+      url: null,
+      localPath: path,
+    };
+    if (typeof raw.enabled === "boolean") out.enabled = raw.enabled;
+    skills.push(out);
+  }
+  return { skills, skipped };
+}
+
+function isUrlMap(obj: Record<string, unknown>): boolean {
+  // Treat as a URL map when every value is a string that looks like a URL.
+  // Empty objects don't count — they're ambiguous and we want a clearer
+  // error when the user pastes nothing useful.
+  const values = Object.values(obj);
+  if (values.length === 0) return false;
+  return values.every(
+    (v) => typeof v === "string" && URL_LINE_RE.test(v.trim()),
+  );
+}
+
+/**
+ * Detect the shape of `raw` (a string the user pasted into the importer)
+ * and extract installable skill entries. Returns the detected format plus
+ * a count of skipped/malformed entries so the UI can report
+ * "imported X, skipped Y".
+ *
+ * Recognised shapes (in detection order):
+ *   1. JSON.parse succeeds:
+ *      a. bare array              → "bare-array"
+ *      b. { version, skills[] }   → "native"
+ *      c. { skills: { config[] } } → "codex-config"
+ *      d. { skills: [...] }        → "skills-array"
+ *      e. { "name": "url", ... }   → "url-map"
+ *   2. JSON.parse fails: each non-empty line that starts with http(s)://
+ *      is taken as a plain URL → "url-lines"
+ *   3. Nothing matches            → throws with a help string
+ */
+export function parseFlexibleImport(raw: string): ImportParseResult {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new Error(`Empty input.\n${SUPPORTED_FORMATS_HELP}`);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    parsed = undefined;
+  }
+
+  if (parsed !== undefined) {
+    // Bare array of {name, url} entries.
+    if (Array.isArray(parsed)) {
+      const skills: ImportedSkill[] = [];
+      let skipped = 0;
+      for (const item of parsed) {
+        const entry = fromGenericSkillEntry(item);
+        if (entry) skills.push(entry);
+        else skipped += 1;
+      }
+      return { skills, skipped, detectedFormat: "bare-array" };
+    }
+
+    if (isPlainObject(parsed)) {
+      // Native v1 export: { version, skills: [...] }
+      if (
+        parsed.version === 1 &&
+        Array.isArray(parsed.skills)
+      ) {
+        const skills: ImportedSkill[] = [];
+        let skipped = 0;
+        for (const item of parsed.skills) {
+          const entry = fromGenericSkillEntry(item);
+          if (entry) skills.push(entry);
+          else skipped += 1;
+        }
+        return { skills, skipped, detectedFormat: "native" };
+      }
+
+      // Codex skill config: { skills: { config: [{ path, enabled }] } }
+      const skillsField = parsed.skills;
+      if (isPlainObject(skillsField) && Array.isArray(skillsField.config)) {
+        const result = fromCodexConfig(skillsField.config);
+        return { ...result, detectedFormat: "codex-config" };
+      }
+
+      // Generic { skills: [...] } with metadata fields.
+      if (Array.isArray(skillsField)) {
+        const skills: ImportedSkill[] = [];
+        let skipped = 0;
+        for (const item of skillsField) {
+          const entry = fromGenericSkillEntry(item);
+          if (entry) skills.push(entry);
+          else skipped += 1;
+        }
+        return { skills, skipped, detectedFormat: "skills-array" };
+      }
+
+      // URL map: every value is a URL string.
+      if (isUrlMap(parsed)) {
+        const result = fromUrlMap(parsed);
+        return { ...result, detectedFormat: "url-map" };
+      }
+    }
+
+    // JSON parsed but didn't match any known shape — fall through to the
+    // unknown-format error so the user sees the supported list.
+    throw new Error(
+      `Unrecognised JSON shape.\n${SUPPORTED_FORMATS_HELP}`,
+    );
+  }
+
+  // Plain text fallback: one URL per line. Mixed valid/invalid lines are
+  // tolerated — invalid lines counted as `skipped`.
+  const lines = trimmed.split(/\r?\n/);
+  const skills: ImportedSkill[] = [];
+  let skipped = 0;
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (!URL_LINE_RE.test(line)) {
+      skipped += 1;
+      continue;
+    }
+    skills.push({
+      name: nameFromUrl(line),
+      url: line,
+    });
+  }
+  if (skills.length === 0) {
+    throw new Error(
+      `No GitHub URLs detected. Paste valid JSON or one URL per line.\n${SUPPORTED_FORMATS_HELP}`,
+    );
+  }
+  return { skills, skipped, detectedFormat: "url-lines" };
 }
