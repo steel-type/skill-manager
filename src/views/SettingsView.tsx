@@ -28,6 +28,18 @@ export function SettingsView() {
 
   const [env, setEnv] = useState<EnvInfo | null>(null);
   const [historyBytes, setHistoryBytes] = useState<number | null>(null);
+  // Two-step confirmation for destructive actions, replacing the previous
+  // window.confirm() popups. First click arms the button, second click
+  // executes; the armed state self-clears after a few seconds. The Remove
+  // Skill flow keeps its dedicated Modal because it has more to confirm
+  // (cascade options, per-deployment toggles).
+  const [armed, setArmed] = useState<"reset" | "clear" | null>(null);
+  const armFor = (kind: "reset" | "clear") => {
+    setArmed(kind);
+    window.setTimeout(() => {
+      setArmed((prev) => (prev === kind ? null : prev));
+    }, 4000);
+  };
 
   useEffect(() => {
     window.api.envInfo().then(setEnv);
@@ -49,13 +61,11 @@ export function SettingsView() {
   };
 
   const onResetConfig = async () => {
-    if (
-      !window.confirm(
-        "Reset config to defaults?\n\nThis clears the active project and resets behaviour toggles. Your library and deployments are not touched.",
-      )
-    ) {
+    if (armed !== "reset") {
+      armFor("reset");
       return;
     }
+    setArmed(null);
     try {
       await window.api.resetConfig();
       await loadSettings();
@@ -76,15 +86,11 @@ export function SettingsView() {
   };
 
   const onClearSnapshots = async () => {
-    const sizeText =
-      historyBytes && historyBytes > 0 ? formatBytes(historyBytes) : "0 B";
-    if (
-      !window.confirm(
-        `Clear all rollback snapshots?\n\nThis frees ${sizeText} and removes every previous-version backup. Updates done after this point will start fresh history per the current retention setting. This action cannot be undone.`,
-      )
-    ) {
+    if (armed !== "clear") {
+      armFor("clear");
       return;
     }
+    setArmed(null);
     try {
       await window.api.clearAllHistory();
       refreshHistorySize();
@@ -244,22 +250,43 @@ export function SettingsView() {
           className="sk-btn ghost"
           onClick={onClearSnapshots}
           disabled={!historyBytes || historyBytes === 0}
-          style={{ color: "var(--warn)" }}
+          style={{
+            background: armed === "clear" ? "var(--warn)" : undefined,
+            color: armed === "clear" ? "#0a0a0a" : "var(--warn)",
+            borderColor: armed === "clear" ? "var(--warn)" : undefined,
+          }}
           title={
-            historyBytes && historyBytes > 0
-              ? `wipe all snapshots (${formatBytes(historyBytes)})`
-              : "no snapshots to clear"
+            armed === "clear"
+              ? "click again within 4s to confirm"
+              : historyBytes && historyBytes > 0
+                ? `wipe all snapshots (${formatBytes(historyBytes)})`
+                : "no snapshots to clear"
           }
         >
-          Clear snapshots
+          {armed === "clear"
+            ? `Confirm — wipe ${
+                historyBytes && historyBytes > 0
+                  ? formatBytes(historyBytes)
+                  : "snapshots"
+              }`
+            : "Clear snapshots"}
         </button>
         <div style={{ flex: 1 }} />
         <button
           className="sk-btn ghost"
           onClick={onResetConfig}
-          style={{ color: "var(--warn)" }}
+          style={{
+            background: armed === "reset" ? "var(--warn)" : undefined,
+            color: armed === "reset" ? "#0a0a0a" : "var(--warn)",
+            borderColor: armed === "reset" ? "var(--warn)" : undefined,
+          }}
+          title={
+            armed === "reset"
+              ? "click again within 4s to confirm"
+              : "reset config to defaults"
+          }
         >
-          Reset config
+          {armed === "reset" ? "Confirm — reset config" : "Reset config"}
         </button>
       </div>
     </div>

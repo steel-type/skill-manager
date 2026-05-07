@@ -24,7 +24,11 @@ interface RollbackFlowProps {
 }
 
 function relativeTime(iso: string): string {
-  const t = new Date(iso).getTime();
+  // Append Z if missing — timestamps written by older nowIso() output (and
+  // any Python-era config carryover) lack the trailing Z, so JS parses them
+  // as local time, which made every snapshot read as "just now".
+  const safe = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
+  const t = new Date(safe).getTime();
   if (isNaN(t)) return iso;
   const diff = Date.now() - t;
   const min = Math.floor(diff / 60000);

@@ -9,7 +9,11 @@ import {
 } from "./types";
 
 export function nowIso(): string {
-  return new Date().toISOString().replace(/\.\d+Z$/, "");
+  // Drop milliseconds for compactness but KEEP the trailing Z. Without the
+  // Z, JavaScript's Date parser treats the string as local time (per ECMA),
+  // which made every snapshot's relative time read as "just now" because
+  // a UTC stamp parsed-as-local lands in the future relative to Date.now().
+  return new Date().toISOString().replace(/\.\d+Z$/, "Z");
 }
 
 function emptyRecord(): SkillRecord {

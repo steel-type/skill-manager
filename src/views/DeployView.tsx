@@ -7,7 +7,10 @@ import type { TrackedProject } from "../../electron/services/types";
 
 function relativeTime(iso: string | null): string {
   if (!iso) return "never";
-  const t = new Date(iso).getTime();
+  // See CommandPalette.formatRelative — append Z so timestamps without a
+  // timezone marker are parsed as UTC, not local.
+  const safe = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
+  const t = new Date(safe).getTime();
   if (isNaN(t)) return "never";
   const diff = Date.now() - t;
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));

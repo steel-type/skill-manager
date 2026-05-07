@@ -146,7 +146,11 @@ export function LibraryView() {
       <InstallBar />
 
       {layout === "palette" ? (
-        <CommandPalette skills={visible} updateInfo={updateInfo} />
+        // Pass the full skills list, not `visible`. The palette is power-user
+        // territory — actions like rollback/update need to find a skill even
+        // when the active filter (e.g. "Updates") wouldn't include it. The
+        // card grid still respects the filter; only the palette ignores it.
+        <CommandPalette skills={skills} updateInfo={updateInfo} />
       ) : (
         <div
           style={{

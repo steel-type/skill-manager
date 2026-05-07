@@ -64,7 +64,11 @@ function tildify(p: string): string {
 
 function formatRelative(iso: string | null): string {
   if (!iso) return "—";
-  const then = new Date(iso).getTime();
+  // Append Z if the stamp lacks a timezone marker — older config entries
+  // and the previous nowIso() output stripped the Z, which JavaScript then
+  // parses as local time and misreads UTC stamps.
+  const safe = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
+  const then = new Date(safe).getTime();
   if (isNaN(then)) return "—";
   const diff = Date.now() - then;
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));

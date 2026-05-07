@@ -23,9 +23,12 @@ const tabs: { id: Tab; label: string; icon: JSX.Element }[] = [
   {
     id: "deploy",
     label: "Deploy",
+    // Diverging-arrows mark: a horizontal axis with a tick at the centre and
+    // arrowheads pointing outward. Reads as "splitting up / sending out" —
+    // skills going from one library to many projects.
     icon: (
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M7 1.5v8M3.5 6L7 9.5 10.5 6M2 12h10" />
+        <path d="M2 7 H12 M5 4.5 L2 7 L5 9.5 M9 4.5 L12 7 L9 9.5 M7 4.5 V9.5" />
       </svg>
     ),
   },
