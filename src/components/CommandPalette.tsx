@@ -24,6 +24,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "../state/store";
 import type {
   Skill,
+  SkillStack,
   TrackedProject,
   UpdateInfo,
 } from "../../electron/services/types";
@@ -61,6 +62,8 @@ const RECOGNISED_VERBS = new Set([
   "open",
   "check",
   "help",
+  "stack",
+  "stacks",
 ]);
 
 const FILTER_KEYS = ["all", "updates", "bundles", "local", "deployed"] as const;
@@ -99,13 +102,17 @@ export function CommandPalette({
   const listRef = useRef<HTMLDivElement>(null);
 
   const projects = useAppStore((s) => s.projects);
+  const stacks = useAppStore((s) => s.stacks);
   const openModal = useAppStore((s) => s.openModal);
   const setScreen = useAppStore((s) => s.setScreen);
   const setFilter = useAppStore((s) => s.setFilter);
   const setLibraryLayout = useAppStore((s) => s.setLibraryLayout);
+  const setActiveTab = useAppStore((s) => s.setActiveTab);
   const runUpdateCheck = useAppStore((s) => s.runUpdateCheck);
   const refreshSkills = useAppStore((s) => s.refreshSkills);
   const refreshProjects = useAppStore((s) => s.refreshProjects);
+  const queueSkillForDeploy = useAppStore((s) => s.queueSkillForDeploy);
+  const queueStackForDeploy = useAppStore((s) => s.queueStackForDeploy);
   const setStoreError = useAppStore((s) => s.setError);
 
   useEffect(() => {
@@ -123,6 +130,7 @@ export function CommandPalette({
       buildSuggestions({
         input: query,
         skills,
+        stacks,
         projects,
         updateInfo,
         actions: {
@@ -130,16 +138,19 @@ export function CommandPalette({
           setScreen,
           setFilter,
           setLibraryLayout,
+          setActiveTab,
           runUpdateCheck,
           refreshSkills,
           refreshProjects,
+          queueSkillForDeploy,
+          queueStackForDeploy,
           setStoreError,
           setQuery,
           setError,
         },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [query, skills, projects, updateInfo],
+    [query, skills, stacks, projects, updateInfo],
   );
 
   const visibleIdx = Math.min(selectedIdx, Math.max(0, suggestions.length - 1));
@@ -434,6 +445,7 @@ export function CommandPalette({
 interface BuildArgs {
   input: string;
   skills: Skill[];
+  stacks: SkillStack[];
   projects: TrackedProject[];
   updateInfo: Record<string, UpdateInfo>;
   actions: {
@@ -441,9 +453,12 @@ interface BuildArgs {
     setScreen: ReturnType<typeof useAppStore.getState>["setScreen"];
     setFilter: ReturnType<typeof useAppStore.getState>["setFilter"];
     setLibraryLayout: ReturnType<typeof useAppStore.getState>["setLibraryLayout"];
+    setActiveTab: ReturnType<typeof useAppStore.getState>["setActiveTab"];
     runUpdateCheck: ReturnType<typeof useAppStore.getState>["runUpdateCheck"];
     refreshSkills: ReturnType<typeof useAppStore.getState>["refreshSkills"];
     refreshProjects: ReturnType<typeof useAppStore.getState>["refreshProjects"];
+    queueSkillForDeploy: ReturnType<typeof useAppStore.getState>["queueSkillForDeploy"];
+    queueStackForDeploy: ReturnType<typeof useAppStore.getState>["queueStackForDeploy"];
     setStoreError: ReturnType<typeof useAppStore.getState>["setError"];
     setQuery: (s: string) => void;
     setError: (s: string | null) => void;
@@ -475,9 +490,24 @@ function getAllCommands(actions: BuildArgs["actions"]): Suggestion[] {
       fill: "install ",
     },
     {
-      display: "deploy <skill>",
-      detail: "deploy a skill to a project",
+      display: "deploy <skill | stack>",
+      detail: "queue a skill or stack in the Deploy tab",
       fill: "deploy ",
+    },
+    {
+      display: "stack create",
+      detail: "open the new-stack modal",
+      run: () => actions.openModal({ type: "createStack" }),
+    },
+    {
+      display: "stack list",
+      detail: "switch to the Stacks tab",
+      run: () => actions.setActiveTab("stacks"),
+    },
+    {
+      display: "stack delete <id>",
+      detail: "open the delete-stack confirmation",
+      fill: "stack delete ",
     },
     {
       display: "update <skill> | --all",
@@ -551,9 +581,8 @@ function buildSuggestions(args: BuildArgs): Suggestion[] {
     return filtered.flatMap((s) => [
       {
         display: `deploy ${s.name}`,
-        detail: "open the deploy picker",
-        run: () =>
-          actions.openModal({ type: "deploy", skill: s.name }),
+        detail: "queue in the Deploy tab",
+        run: () => actions.queueSkillForDeploy(s.name),
       },
       {
         display: `browse ${s.name}`,
@@ -653,7 +682,101 @@ function buildSuggestions(args: BuildArgs): Suggestion[] {
     );
   }
 
+  if (verb === "stack" || verb === "stacks") {
+    return suggestStack(tokens, trailingSpace, args);
+  }
+
   return [];
+}
+
+function suggestStack(
+  tokens: string[],
+  trailingSpace: boolean,
+  args: BuildArgs,
+): Suggestion[] {
+  const { stacks, actions } = args;
+  const sub = (tokens[1] ?? "").toLowerCase();
+  if (!sub && !trailingSpace) {
+    return [
+      {
+        display: "stack create",
+        detail: "open the new-stack modal",
+        run: () => actions.openModal({ type: "createStack" }),
+      },
+      {
+        display: "stack list",
+        detail: "switch to the Stacks tab",
+        run: () => actions.setActiveTab("stacks"),
+      },
+      {
+        display: "stack delete <id>",
+        detail: "open the delete-stack confirmation",
+        fill: "stack delete ",
+      },
+    ];
+  }
+  if (sub === "create") {
+    return [
+      {
+        display: "stack create",
+        detail: "open the new-stack modal",
+        run: () => actions.openModal({ type: "createStack" }),
+      },
+    ];
+  }
+  if (sub === "list" || sub === "ls") {
+    return [
+      {
+        display: "stack list",
+        detail: "switch to the Stacks tab",
+        run: () => actions.setActiveTab("stacks"),
+      },
+    ];
+  }
+  if (sub === "delete" || sub === "rm" || sub === "remove") {
+    const partial = tokens.slice(2).join(" ").trim().toLowerCase();
+    if (!partial && !trailingSpace) {
+      return [
+        {
+          display: "stack delete <id>",
+          detail: "pick a stack",
+          fill: "stack delete ",
+        },
+        ...stacks.slice(0, 12).map((s) => ({
+          display: `stack delete ${s.id}`,
+          detail: `delete "${s.name}"`,
+          run: () =>
+            actions.openModal({ type: "deleteStack", stackId: s.id }),
+        })),
+      ];
+    }
+    const matches = stacks.filter(
+      (s) =>
+        s.id.toLowerCase().includes(partial) ||
+        s.name.toLowerCase().includes(partial),
+    );
+    if (matches.length === 0) {
+      return [
+        {
+          display: `stack delete ${partial}`,
+          detail: "no matching stack",
+        },
+      ];
+    }
+    return matches.slice(0, 12).map((s) => ({
+      display: `stack delete ${s.id}`,
+      detail: `delete "${s.name}"`,
+      run: () =>
+        actions.openModal({ type: "deleteStack", stackId: s.id }),
+    }));
+  }
+  // Unknown subcommand — fall back to top-level options
+  return [
+    {
+      display: `stack ${sub} — unknown subcommand`,
+      detail: "try: stack create / list / delete",
+    },
+  ];
 }
 
 function browseSkill(name: string): void {
@@ -744,74 +867,84 @@ function suggestDeploy(
   trailingSpace: boolean,
   args: BuildArgs,
 ): Suggestion[] {
-  const { skills, projects, actions } = args;
+  const { skills, stacks, projects, actions } = args;
   // Forms:
   //   deploy
-  //   deploy <partial-skill>
-  //   deploy <skill>
+  //   deploy <partial-skill | partial-stack>
+  //   deploy <skill | stack>
   //   deploy <skill> to
   //   deploy <skill> to <partial-project>
   //   deploy <skill> to <project>
   const rest = tokens.slice(1);
   const toIdx = rest.findIndex((t) => t.toLowerCase() === "to");
 
-  // Stage 1 — picking the skill
+  const skillSuggestion = (s: Skill) => ({
+    display: `deploy ${s.name}`,
+    detail: "queue this skill in the Deploy tab",
+    run: () => actions.queueSkillForDeploy(s.name),
+  });
+  const stackSuggestion = (st: SkillStack) => ({
+    display: `deploy ${st.id}`,
+    detail: `queue this stack (${st.skillIds.length} skill${st.skillIds.length === 1 ? "" : "s"}) in the Deploy tab`,
+    run: () => actions.queueStackForDeploy(st.id),
+  });
+
+  // Stage 1 — picking the skill or stack
   if (toIdx === -1) {
-    const skillPartial = rest.join(" ");
-    // No skill yet
-    if (skillPartial === "" && !trailingSpace) {
+    const partial = rest.join(" ");
+    if (partial === "" && !trailingSpace) {
       return [
         {
-          display: "deploy <skill>",
-          detail: "pick a skill",
+          display: "deploy <skill | stack>",
+          detail: "pick a skill or stack",
           fill: "deploy ",
         },
-        ...skills.slice(0, 8).map((s) => ({
-          display: `deploy ${s.name}`,
-          detail: "open the deploy picker",
-          run: () => actions.openModal({ type: "deploy", skill: s.name }),
-        })),
+        ...stacks.slice(0, 4).map(stackSuggestion),
+        ...skills.slice(0, 6).map(skillSuggestion),
       ];
     }
-    if (skillPartial === "" && trailingSpace) {
-      return skills.slice(0, 12).map((s) => ({
-        display: `deploy ${s.name}`,
-        detail: "open the deploy picker",
-        run: () => actions.openModal({ type: "deploy", skill: s.name }),
-      }));
-    }
-    const lc = skillPartial.toLowerCase();
-    const matches = skills.filter((s) => s.name.toLowerCase().includes(lc));
-    const exact = matches.find((s) => s.name === skillPartial);
-    if (exact && !trailingSpace) {
-      // Single complete skill name → offer "open picker" + "to <project>" route
+    if (partial === "" && trailingSpace) {
       return [
+        ...stacks.slice(0, 6).map(stackSuggestion),
+        ...skills.slice(0, 8).map(skillSuggestion),
+      ];
+    }
+    const lc = partial.toLowerCase();
+    const matchingStacks = stacks.filter(
+      (s) =>
+        s.id.toLowerCase().includes(lc) ||
+        s.name.toLowerCase().includes(lc),
+    );
+    const matchingSkills = skills.filter((s) =>
+      s.name.toLowerCase().includes(lc),
+    );
+    const exactStack = matchingStacks.find((s) => s.id === partial);
+    const exactSkill = matchingSkills.find((s) => s.name === partial);
+    if (exactStack && !trailingSpace) {
+      return [stackSuggestion(exactStack)];
+    }
+    if (exactSkill && !trailingSpace) {
+      return [
+        skillSuggestion(exactSkill),
         {
-          display: `deploy ${exact.name}`,
-          detail: "open the deploy picker",
-          run: () =>
-            actions.openModal({ type: "deploy", skill: exact.name }),
-        },
-        {
-          display: `deploy ${exact.name} to <project>`,
+          display: `deploy ${exactSkill.name} to <project>`,
           detail: "specify a project inline",
-          fill: `deploy ${exact.name} to `,
+          fill: `deploy ${exactSkill.name} to `,
         },
       ];
     }
-    if (matches.length === 0) {
+    if (matchingStacks.length === 0 && matchingSkills.length === 0) {
       return [
         {
-          display: `deploy ${skillPartial}`,
-          detail: "no matching skill",
+          display: `deploy ${partial}`,
+          detail: "no matching skill or stack",
         },
       ];
     }
-    return matches.slice(0, 12).map((s) => ({
-      display: `deploy ${s.name}`,
-      detail: "open the deploy picker",
-      run: () => actions.openModal({ type: "deploy", skill: s.name }),
-    }));
+    return [
+      ...matchingStacks.slice(0, 6).map(stackSuggestion),
+      ...matchingSkills.slice(0, 8).map(skillSuggestion),
+    ];
   }
 
   // Stage 2 — past the `to` keyword, optionally with a `for <agent>` suffix
