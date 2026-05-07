@@ -49,7 +49,8 @@ export default function App() {
         tag === "TEXTAREA" ||
         target?.isContentEditable === true;
       if (e.key.toLowerCase() === "k" && !e.shiftKey) {
-        if (isEditable) return;
+        // ⌘K toggles regardless of focus — the palette's own input is focused
+        // while it's open, and we still want ⌘K to dismiss back to cards.
         e.preventDefault();
         // Switch to the Library tab if we're not already there — the
         // shortcut should "show me the palette" no matter where I am.
