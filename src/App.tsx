@@ -14,6 +14,8 @@ import { RemoveProjectFlow } from "./flows/RemoveProjectFlow";
 import { RollbackFlow } from "./flows/RollbackFlow";
 import { DeployFlow } from "./flows/DeployFlow";
 import { SkillDetailFlow } from "./flows/SkillDetailFlow";
+import { CreateStackFlow } from "./flows/CreateStackFlow";
+import { DeleteStackFlow } from "./flows/DeleteStackFlow";
 import { useAppStore } from "./state/store";
 
 const TITLES: Record<string, string> = {
@@ -159,6 +161,13 @@ export default function App() {
       )}
       {modal?.type === "rollback" && <RollbackFlow name={modal.name} />}
       {modal?.type === "deploy" && <DeployFlow skillName={modal.skill} />}
+      {modal?.type === "createStack" && <CreateStackFlow />}
+      {modal?.type === "editStack" && (
+        <CreateStackFlow editingStackId={modal.stackId} />
+      )}
+      {modal?.type === "deleteStack" && (
+        <DeleteStackFlow stackId={modal.stackId} />
+      )}
 
       {lastError && (
         <div

@@ -1,0 +1,468 @@
+// Modal for creating or editing a skill stack. Used by both the
+// `createStack` modal type (empty start) and `editStack` (pre-populated).
+// Targeting decisions never happen here — the user picks members + meta,
+// then queues the stack into Deploy via "Send to Deploy" in StacksView.
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Modal } from "../components/Modal";
+import { useAppStore } from "../state/store";
+
+interface CreateStackFlowProps {
+  /** Stack id being edited, or undefined for create mode. */
+  editingStackId?: string;
+}
+
+// Mirror of validators.ts STACK_ID_REGEX so the user gets inline feedback
+// without an IPC round-trip per keystroke. Kept in sync manually — tests
+// over there guarantee the canonical truth.
+const STACK_ID_REGEX = /^[a-z0-9](?:-?[a-z0-9])*$/;
+
+function makeStackId(rawName: string): string {
+  return rawName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+}
+
+export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
+  const closeModal = useAppStore((s) => s.closeModal);
+  const stacks = useAppStore((s) => s.stacks);
+  const skills = useAppStore((s) => s.skills);
+  const refreshSkills = useAppStore((s) => s.refreshSkills);
+  const createStack = useAppStore((s) => s.createStack);
+  const updateStackComposition = useAppStore(
+    (s) => s.updateStackComposition,
+  );
+  const updateStackMeta = useAppStore.getState; // not directly — see below
+  const setError = useAppStore((s) => s.setError);
+  const loadStacks = useAppStore((s) => s.loadStacks);
+
+  void updateStackMeta; // composition update covers what we need today
+
+  const isEdit = !!editingStackId;
+  const editing = useMemo(
+    () => (editingStackId ? stacks.find((s) => s.id === editingStackId) : undefined),
+    [stacks, editingStackId],
+  );
+
+  const [name, setName] = useState(editing?.name ?? "");
+  const [description, setDescription] = useState(editing?.description ?? "");
+  const [selected, setSelected] = useState<string[]>(editing?.skillIds ?? []);
+  const [search, setSearch] = useState("");
+  const [running, setRunning] = useState(false);
+  const idEdited = useRef(false);
+  const [stackId, setStackId] = useState<string>(editing?.id ?? "");
+
+  // Auto-derive id from name on every keystroke unless the user has hand-
+  // typed an id (we don't currently expose that, but keep the toggle for a
+  // future "advanced" disclosure).
+  useEffect(() => {
+    if (idEdited.current) return;
+    if (isEdit) return; // Don't rename existing stacks.
+    setStackId(makeStackId(name));
+  }, [name, isEdit]);
+
+  useEffect(() => {
+    refreshSkills();
+  }, [refreshSkills]);
+
+  const idValid = stackId.length > 0 && STACK_ID_REGEX.test(stackId);
+  const idCollision =
+    !isEdit && idValid && stacks.some((s) => s.id === stackId);
+  const idError = !idValid
+    ? "Use lowercase letters, digits, and single hyphens only."
+    : idCollision
+      ? `A stack with id "${stackId}" already exists.`
+      : null;
+
+  const filteredSkills = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return skills;
+    return skills.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        s.displayName.toLowerCase().includes(q) ||
+        (s.description ?? "").toLowerCase().includes(q),
+    );
+  }, [skills, search]);
+
+  const toggleSkill = (skillName: string) => {
+    setSelected((prev) =>
+      prev.includes(skillName)
+        ? prev.filter((s) => s !== skillName)
+        : [...prev, skillName],
+    );
+  };
+
+  const move = (skillName: string, direction: -1 | 1) => {
+    setSelected((prev) => {
+      const i = prev.indexOf(skillName);
+      if (i < 0) return prev;
+      const j = i + direction;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  };
+
+  const preview = useMemo(() => {
+    const description_ = description.trim() || `Skill stack: ${name || "untitled"}`;
+    const lines = [
+      "---",
+      `name: ${stackId || "<id>"}`,
+      `description: ${description_}`,
+      "---",
+      `# ${name || "Untitled stack"}`,
+      "",
+      "This stack activates:",
+      ...(selected.length === 0
+        ? ["_(no skills configured)_"]
+        : selected.map((id) => `- ${id}`)),
+    ];
+    return lines.join("\n");
+  }, [name, description, stackId, selected]);
+
+  const canSubmit =
+    !running &&
+    name.trim().length > 0 &&
+    selected.length > 0 &&
+    (isEdit || (idValid && !idCollision));
+
+  const onSubmit = async () => {
+    setRunning(true);
+    try {
+      if (isEdit && editingStackId) {
+        await updateStackComposition(editingStackId, selected);
+        // Description / display-name edits aren't covered by the composition
+        // path yet — surface a no-op for now and refresh in case backend
+        // has any side effects on metadata.
+        await loadStacks();
+      } else {
+        await createStack(name.trim(), description.trim(), selected);
+      }
+      closeModal();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setRunning(false);
+    }
+  };
+
+  return (
+    <Modal
+      open
+      title={isEdit ? "Edit stack" : "Create stack"}
+      width={680}
+      height={620}
+      onClose={running ? () => {} : closeModal}
+      closeOnBackdrop={!running}
+    >
+      <div
+        style={{
+          padding: 18,
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+          flex: 1,
+          minHeight: 0,
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Label>Name</Label>
+            <input
+              type="text"
+              value={name}
+              disabled={isEdit}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="My Stack"
+              style={inputStyle}
+            />
+            <div
+              style={{
+                marginTop: 4,
+                fontSize: 11,
+                fontFamily: "var(--mono)",
+                color: idError ? "var(--warn)" : "var(--ink-faint)",
+              }}
+            >
+              id: {stackId || "—"} {idError && `· ${idError}`}
+            </div>
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Label>Description</Label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="One-line summary of what this stack does."
+              rows={2}
+              style={{ ...inputStyle, resize: "vertical", minHeight: 44 }}
+            />
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 12,
+            flex: 1,
+            minHeight: 0,
+          }}
+        >
+          {/* Skill picker */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              minHeight: 0,
+            }}
+          >
+            <Label>Skills · {selected.length} selected</Label>
+            {selected.length > 0 && (
+              <div
+                className="sk-box"
+                style={{
+                  padding: 6,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                  background: "var(--paper-2)",
+                  maxHeight: 130,
+                  overflow: "auto",
+                }}
+              >
+                {selected.map((skillName, i) => (
+                  <div
+                    key={skillName}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "3px 6px",
+                      fontSize: 12,
+                      fontFamily: "var(--mono)",
+                    }}
+                  >
+                    <span style={{ width: 18, color: "var(--ink-faint)" }}>
+                      {i + 1}.
+                    </span>
+                    <span style={{ flex: 1, minWidth: 0 }}>{skillName}</span>
+                    <ReorderButton
+                      label="↑"
+                      disabled={i === 0}
+                      onClick={() => move(skillName, -1)}
+                    />
+                    <ReorderButton
+                      label="↓"
+                      disabled={i === selected.length - 1}
+                      onClick={() => move(skillName, 1)}
+                    />
+                    <ReorderButton
+                      label="✕"
+                      onClick={() => toggleSkill(skillName)}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search library…"
+              style={inputStyle}
+            />
+            <div
+              className="sk-box"
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflow: "auto",
+                padding: 4,
+              }}
+            >
+              {filteredSkills.length === 0 && (
+                <div
+                  style={{
+                    padding: 16,
+                    textAlign: "center",
+                    fontSize: 12,
+                    color: "var(--ink-faint)",
+                  }}
+                >
+                  No skills match "{search}".
+                </div>
+              )}
+              {filteredSkills.map((skill) => {
+                const checked = selected.includes(skill.name);
+                return (
+                  <label
+                    key={skill.name}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "6px 8px",
+                      cursor: "pointer",
+                      fontSize: 12,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleSkill(skill.name)}
+                    />
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontWeight: checked ? 600 : 400,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {skill.displayName}
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: "var(--mono)",
+                          fontSize: 10,
+                          color: "var(--ink-faint)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {skill.isLocal ? "local" : skill.url ?? "—"}
+                      </div>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Meta-skill preview */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              minHeight: 0,
+            }}
+          >
+            <Label>Meta-skill preview</Label>
+            <pre
+              className="sk-box"
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflow: "auto",
+                background: "var(--paper-2)",
+                padding: 12,
+                fontFamily: "var(--mono)",
+                fontSize: 11,
+                lineHeight: 1.5,
+                color: "var(--ink)",
+                whiteSpace: "pre-wrap",
+                margin: 0,
+              }}
+            >
+              {preview}
+            </pre>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 6 }}>
+          <button
+            className="sk-btn ghost"
+            onClick={closeModal}
+            disabled={running}
+          >
+            Cancel
+          </button>
+          <div style={{ flex: 1 }} />
+          <button
+            className="sk-btn"
+            disabled={!canSubmit}
+            onClick={onSubmit}
+            style={{
+              background: canSubmit ? "var(--accent)" : "var(--paper-2)",
+              color: canSubmit ? "white" : "var(--ink-faint)",
+              borderColor: canSubmit ? "var(--accent)" : "var(--line-soft)",
+            }}
+          >
+            {running
+              ? isEdit
+                ? "Saving…"
+                : "Creating…"
+              : isEdit
+                ? "Save changes"
+                : "Create stack"}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "6px 10px",
+  fontSize: 13,
+  fontFamily: "var(--read)",
+  color: "var(--ink)",
+  background: "var(--paper)",
+  border: "1.5px solid var(--line)",
+  borderRadius: 6,
+  outline: "none",
+  boxSizing: "border-box",
+};
+
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="rail-section"
+      style={{ padding: 0, marginBottom: 4, fontSize: 11 }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ReorderButton({
+  label,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        width: 22,
+        height: 22,
+        padding: 0,
+        background: "var(--paper)",
+        border: "1px solid var(--line-soft)",
+        borderRadius: 4,
+        fontFamily: "var(--mono)",
+        fontSize: 11,
+        cursor: disabled ? "default" : "pointer",
+        opacity: disabled ? 0.35 : 1,
+        color: "var(--ink)",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
