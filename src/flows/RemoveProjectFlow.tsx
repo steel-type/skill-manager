@@ -45,7 +45,7 @@ export function RemoveProjectFlow({ path }: RemoveProjectFlowProps) {
     <Modal
       open
       title="Remove project — confirm"
-      width={560}
+      width={440}
       onClose={running ? () => {} : closeModal}
       closeOnBackdrop={!running}
     >

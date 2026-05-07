@@ -39,7 +39,7 @@ export function StacksView() {
   };
 
   const handleEdit = (stackId: string) => {
-    openModal({ type: "editStack", stackId });
+    setScreen({ kind: "editStack", stackId });
   };
 
   const handleDelete = (stackId: string) => {
@@ -79,7 +79,7 @@ export function StacksView() {
         </div>
         <button
           className="sk-btn sm"
-          onClick={() => openModal({ type: "createStack" })}
+          onClick={() => setScreen({ kind: "createStack" })}
         >
           Create stack
         </button>
@@ -88,7 +88,7 @@ export function StacksView() {
       <div style={{ flex: 1, minHeight: 0, padding: "4px 0" }}>
         {stacks.length === 0 ? (
           <EmptyState
-            onCreate={() => openModal({ type: "createStack" })}
+            onCreate={() => setScreen({ kind: "createStack" })}
           />
         ) : (
           <div

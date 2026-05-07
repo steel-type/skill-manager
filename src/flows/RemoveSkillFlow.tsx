@@ -44,7 +44,7 @@ export function RemoveSkillFlow({ name }: RemoveSkillFlowProps) {
     <Modal
       open
       title="Remove skill — confirm"
-      width={440}
+      width={400}
       onClose={running ? () => {} : closeModal}
       closeOnBackdrop={!running}
     >

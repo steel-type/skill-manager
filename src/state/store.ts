@@ -25,8 +25,6 @@ export type ModalState =
   | { type: "removeProject"; path: string }
   | { type: "rollback"; name: string }
   | { type: "deploy"; skill: string }
-  | { type: "createStack" }
-  | { type: "editStack"; stackId: string }
   | { type: "deleteStack"; stackId: string };
 
 /**
@@ -47,6 +45,8 @@ export type Screen =
   | { kind: "update"; prefillName?: string }
   | { kind: "detail"; name: string }
   | { kind: "stackDetail"; stackId: string }
+  | { kind: "createStack" }
+  | { kind: "editStack"; stackId: string }
   | {
       kind: "import";
       entries: ImportEntryPrefill[];
@@ -146,7 +146,17 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 export const useAppStore = create<AppState>((set, get) => ({
   activeTab: "library",
-  setActiveTab: (activeTab) => set({ activeTab }),
+  // Switching the primary tab always returns the right pane to its main
+  // content. Without this, a tab click while a takeover screen (Detail,
+  // Stack detail, Update, Import, CreateStack) was open would leave the
+  // screen on top of the new tab — the left rail would say Deploy but the
+  // user would still be looking at SkillDetail.
+  setActiveTab: (activeTab) =>
+    set((state) =>
+      state.screen.kind === "main"
+        ? { activeTab }
+        : { activeTab, screen: { kind: "main" } },
+    ),
 
   libraryLayout: "cards",
   setLibraryLayout: (libraryLayout) => set({ libraryLayout }),
@@ -303,6 +313,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       deployQueue: { type: "skill", id: skillName },
       activeTab: "deploy",
+      // Reset any takeover screen so the user lands on the Deploy view
+      // instead of staying on whatever screen they Send-to-Deploy'd from.
+      screen: { kind: "main" },
       // Close any modal that was previously routing to the Deploy flow.
       modal: null,
     }),
@@ -311,6 +324,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       deployQueue: { type: "stack", id: stackId },
       activeTab: "deploy",
+      screen: { kind: "main" },
       modal: null,
     }),
 

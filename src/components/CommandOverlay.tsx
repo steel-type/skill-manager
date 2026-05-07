@@ -33,7 +33,7 @@ export function CommandOverlay({ open, onClose }: CommandOverlayProps) {
     <Modal
       open
       title="Command palette"
-      width={640}
+      width={520}
       height={520}
       onClose={onClose}
       closeOnBackdrop

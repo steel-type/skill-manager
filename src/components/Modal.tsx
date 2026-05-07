@@ -20,7 +20,7 @@ const FOCUSABLE_SELECTOR =
 export function Modal({
   open,
   title,
-  width = 560,
+  width = 420,
   height = "auto",
   onClose,
   closeOnBackdrop = true,

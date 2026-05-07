@@ -178,7 +178,7 @@ export function StackDetailFlow({ stackId }: StackDetailFlowProps) {
             <button
               className="sk-btn sm ghost"
               onClick={() =>
-                openModal({ type: "editStack", stackId: stack.id })
+                setScreen({ kind: "editStack", stackId: stack.id })
               }
             >
               Edit composition
@@ -377,7 +377,7 @@ export function StackDetailFlow({ stackId }: StackDetailFlowProps) {
           <button
             className="sk-btn ghost"
             onClick={() =>
-              openModal({ type: "editStack", stackId: stack.id })
+              setScreen({ kind: "editStack", stackId: stack.id })
             }
           >
             Edit composition

@@ -1,10 +1,11 @@
-// Modal for creating or editing a skill stack. Used by both the
-// `createStack` modal type (empty start) and `editStack` (pre-populated).
-// Targeting decisions never happen here — the user picks members + meta,
-// then queues the stack into Deploy via "Send to Deploy" in StacksView.
+// Full-pane screen for creating or editing a skill stack. Routed via
+// `screen.kind === "createStack" | "editStack"` from App.tsx — no modal
+// chrome, just the right pane and a Back breadcrumb. Targeting decisions
+// (agents, projects, mode) never happen here; the user picks members +
+// meta, then queues the stack into Deploy via "Send to Deploy".
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Modal } from "../components/Modal";
+import { ScreenShell } from "../components/ScreenShell";
 import { useAppStore } from "../state/store";
 
 interface CreateStackFlowProps {
@@ -26,7 +27,8 @@ function makeStackId(rawName: string): string {
 }
 
 export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
-  const closeModal = useAppStore((s) => s.closeModal);
+  const setScreen = useAppStore((s) => s.setScreen);
+  const setActiveTab = useAppStore((s) => s.setActiveTab);
   const stacks = useAppStore((s) => s.stacks);
   const skills = useAppStore((s) => s.skills);
   const refreshSkills = useAppStore((s) => s.refreshSkills);
@@ -39,7 +41,8 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
 
   const isEdit = !!editingStackId;
   const editing = useMemo(
-    () => (editingStackId ? stacks.find((s) => s.id === editingStackId) : undefined),
+    () =>
+      editingStackId ? stacks.find((s) => s.id === editingStackId) : undefined,
     [stacks, editingStackId],
   );
 
@@ -52,8 +55,8 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
   const [stackId, setStackId] = useState<string>(editing?.id ?? "");
 
   // Auto-derive id from name on every keystroke unless the user has hand-
-  // typed an id (we don't currently expose that, but keep the toggle for a
-  // future "advanced" disclosure).
+  // typed an id (no advanced disclosure exposed yet, but the toggle is
+  // wired so we can add it without touching the form below).
   useEffect(() => {
     if (idEdited.current) return;
     if (isEdit) return; // Don't rename existing stacks.
@@ -63,6 +66,18 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
   useEffect(() => {
     refreshSkills();
   }, [refreshSkills]);
+
+  const goBack = () => {
+    if (running) return;
+    if (isEdit && editingStackId) {
+      // Came from the StackDetailFlow → return there.
+      setScreen({ kind: "stackDetail", stackId: editingStackId });
+    } else {
+      // Came from the Stacks tab.
+      setScreen({ kind: "main" });
+      setActiveTab("stacks");
+    }
+  };
 
   const idValid = stackId.length > 0 && STACK_ID_REGEX.test(stackId);
   const idCollision =
@@ -105,7 +120,8 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
   };
 
   const preview = useMemo(() => {
-    const description_ = description.trim() || `Skill stack: ${name || "untitled"}`;
+    const description_ =
+      description.trim() || `Skill stack: ${name || "untitled"}`;
     const lines = [
       "---",
       `name: ${stackId || "<id>"}`,
@@ -132,14 +148,18 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
     try {
       if (isEdit && editingStackId) {
         await updateStackComposition(editingStackId, selected);
-        // Description / display-name edits aren't covered by the composition
-        // path yet — surface a no-op for now and refresh in case backend
-        // has any side effects on metadata.
         await loadStacks();
+        setScreen({ kind: "stackDetail", stackId: editingStackId });
       } else {
-        await createStack(name.trim(), description.trim(), selected);
+        const created = await createStack(
+          name.trim(),
+          description.trim(),
+          selected,
+        );
+        // Drop the user into the freshly-created stack's detail screen so
+        // they can deploy it or edit further without navigating back.
+        setScreen({ kind: "stackDetail", stackId: created.id });
       }
-      closeModal();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setRunning(false);
@@ -147,26 +167,42 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
   };
 
   return (
-    <Modal
-      open
-      title={isEdit ? "Edit stack" : "Create stack"}
-      width={680}
-      height={620}
-      onClose={running ? () => {} : closeModal}
-      closeOnBackdrop={!running}
+    <ScreenShell
+      title={isEdit ? `Edit ${editing?.name ?? "stack"}` : "New stack"}
+      onBack={goBack}
+      rightSlot={
+        <button
+          className="sk-btn"
+          disabled={!canSubmit}
+          onClick={onSubmit}
+          style={{
+            background: canSubmit ? "var(--accent)" : "var(--paper-2)",
+            color: canSubmit ? "white" : "var(--ink-faint)",
+            borderColor: canSubmit ? "var(--accent)" : "var(--line-soft)",
+          }}
+        >
+          {running
+            ? isEdit
+              ? "Saving…"
+              : "Creating…"
+            : isEdit
+              ? "Save changes"
+              : "Create stack"}
+        </button>
+      }
     >
       <div
         style={{
           padding: 18,
           display: "flex",
           flexDirection: "column",
-          gap: 12,
+          gap: 14,
           flex: 1,
           minHeight: 0,
           overflow: "hidden",
         }}
       >
-        <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ display: "flex", gap: 14 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <Label>Name</Label>
             <input
@@ -204,7 +240,7 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
           style={{
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
-            gap: 12,
+            gap: 14,
             flex: 1,
             minHeight: 0,
           }}
@@ -228,7 +264,7 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
                   flexDirection: "column",
                   gap: 2,
                   background: "var(--paper-2)",
-                  maxHeight: 130,
+                  maxHeight: 160,
                   overflow: "auto",
                 }}
               >
@@ -376,37 +412,8 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
             </pre>
           </div>
         </div>
-
-        <div style={{ display: "flex", gap: 6 }}>
-          <button
-            className="sk-btn ghost"
-            onClick={closeModal}
-            disabled={running}
-          >
-            Cancel
-          </button>
-          <div style={{ flex: 1 }} />
-          <button
-            className="sk-btn"
-            disabled={!canSubmit}
-            onClick={onSubmit}
-            style={{
-              background: canSubmit ? "var(--accent)" : "var(--paper-2)",
-              color: canSubmit ? "white" : "var(--ink-faint)",
-              borderColor: canSubmit ? "var(--accent)" : "var(--line-soft)",
-            }}
-          >
-            {running
-              ? isEdit
-                ? "Saving…"
-                : "Creating…"
-              : isEdit
-                ? "Save changes"
-                : "Create stack"}
-          </button>
-        </div>
       </div>
-    </Modal>
+    </ScreenShell>
   );
 }
 

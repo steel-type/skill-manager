@@ -118,9 +118,13 @@ export default function App() {
               ? screen.name
               : screen.kind === "stackDetail"
                 ? "Stack"
-                : screen.kind === "import"
-                  ? "Import"
-                  : TITLES[activeTab]
+                : screen.kind === "createStack"
+                  ? "New stack"
+                  : screen.kind === "editStack"
+                    ? "Edit stack"
+                    : screen.kind === "import"
+                      ? "Import"
+                      : TITLES[activeTab]
         }
       >
         <LeftRail />
@@ -130,6 +134,10 @@ export default function App() {
           <SkillDetailFlow name={screen.name} />
         ) : screen.kind === "stackDetail" ? (
           <StackDetailFlow stackId={screen.stackId} />
+        ) : screen.kind === "createStack" ? (
+          <CreateStackFlow />
+        ) : screen.kind === "editStack" ? (
+          <CreateStackFlow editingStackId={screen.stackId} />
         ) : screen.kind === "import" ? (
           <ImportFlow
             entries={screen.entries}
@@ -157,10 +165,6 @@ export default function App() {
       )}
       {modal?.type === "rollback" && <RollbackFlow name={modal.name} />}
       {modal?.type === "deploy" && <DeployFlow skillName={modal.skill} />}
-      {modal?.type === "createStack" && <CreateStackFlow />}
-      {modal?.type === "editStack" && (
-        <CreateStackFlow editingStackId={modal.stackId} />
-      )}
       {modal?.type === "deleteStack" && (
         <DeleteStackFlow stackId={modal.stackId} />
       )}

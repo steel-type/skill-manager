@@ -103,7 +103,7 @@ export function InstallFlow({ prefillUrl }: InstallFlowProps) {
     <Modal
       open
       title={title}
-      width={580}
+      width={460}
       height={520}
       onClose={close}
       closeOnBackdrop={phase !== "cloning"}

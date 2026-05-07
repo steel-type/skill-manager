@@ -35,3 +35,4 @@ package-lock.json
 # as committed artifact so the build doesn't require running build-icons.sh)
 assets/icon.iconset/
 
+.claude/skills/

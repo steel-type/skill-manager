@@ -155,7 +155,7 @@ export function RollbackFlow({ name }: RollbackFlowProps) {
     <Modal
       open
       title={title}
-      width={600}
+      width={480}
       height={540}
       onClose={close}
       closeOnBackdrop={phase !== "running"}

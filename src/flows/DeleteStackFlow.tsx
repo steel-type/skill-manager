@@ -49,7 +49,7 @@ export function DeleteStackFlow({ stackId }: DeleteStackFlowProps) {
     <Modal
       open
       title="Delete stack — confirm"
-      width={480}
+      width={400}
       onClose={running ? () => {} : closeModal}
       closeOnBackdrop={!running}
     >

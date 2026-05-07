@@ -496,8 +496,8 @@ function getAllCommands(actions: BuildArgs["actions"]): Suggestion[] {
     },
     {
       display: "stack create",
-      detail: "open the new-stack modal",
-      run: () => actions.openModal({ type: "createStack" }),
+      detail: "open the new-stack screen",
+      run: () => actions.setScreen({ kind: "createStack" }),
     },
     {
       display: "stack list",
@@ -700,8 +700,8 @@ function suggestStack(
     return [
       {
         display: "stack create",
-        detail: "open the new-stack modal",
-        run: () => actions.openModal({ type: "createStack" }),
+        detail: "open the new-stack screen",
+        run: () => actions.setScreen({ kind: "createStack" }),
       },
       {
         display: "stack list",
@@ -719,8 +719,8 @@ function suggestStack(
     return [
       {
         display: "stack create",
-        detail: "open the new-stack modal",
-        run: () => actions.openModal({ type: "createStack" }),
+        detail: "open the new-stack screen",
+        run: () => actions.setScreen({ kind: "createStack" }),
       },
     ];
   }
