@@ -66,6 +66,7 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
   const setScreen = useAppStore((s) => s.setScreen);
   const skills = useAppStore((s) => s.skills);
   const openModal = useAppStore((s) => s.openModal);
+  const queueSkillForDeploy = useAppStore((s) => s.queueSkillForDeploy);
   const setError = useAppStore((s) => s.setError);
 
   const goBack = () => setScreen({ kind: "main" });
@@ -140,7 +141,7 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
   };
 
   const handleDeploy = () => {
-    openModal({ type: "deploy", skill: skill.name });
+    queueSkillForDeploy(skill.name);
   };
 
   const handleUpdate = () => {
@@ -507,7 +508,7 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
           )}
           <div style={{ flex: 1 }} />
           <button className="sk-btn primary" onClick={handleDeploy}>
-            Deploy
+            Send to Deploy
           </button>
           <button className="sk-btn" onClick={goBack}>
             Back to library

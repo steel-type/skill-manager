@@ -2,6 +2,7 @@
 // design-reference/variations/library.jsx LibraryC.Card.
 
 import { OverflowMenu } from "./OverflowMenu";
+import { StackBadge } from "./StackBadge";
 import type { Skill } from "../../electron/services/types";
 
 interface SkillCardProps {
@@ -9,9 +10,14 @@ interface SkillCardProps {
   hasUpdate: boolean;
   selected: boolean;
   isUpdating: boolean;
+  /** Names of stacks (display name) that include this skill. Drives the
+   *  StackBadge in the top-right corner. */
+  memberOfStacks: string[];
   onSelect: () => void;
   onOpen: () => void;
-  onDeploy: () => void;
+  /** Renamed from onDeploy: this no longer opens a modal, it just queues
+   *  the skill into the Deploy tab. */
+  onSendToDeploy: () => void;
   onBrowse: () => void;
   onUpdate: () => void;
   onRemove: () => void;
@@ -23,9 +29,10 @@ export function SkillCard({
   hasUpdate,
   selected,
   isUpdating,
+  memberOfStacks,
   onSelect,
   onOpen,
-  onDeploy,
+  onSendToDeploy,
   onBrowse,
   onUpdate,
   onRemove,
@@ -80,6 +87,7 @@ export function SkillCard({
         transition: "background 0.18s ease",
       }}
     >
+      <StackBadge stackNames={memberOfStacks} />
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <div
           className="skill-icon"
@@ -143,10 +151,11 @@ export function SkillCard({
           className="sk-btn sm"
           onClick={(e) => {
             e.stopPropagation();
-            onDeploy();
+            onSendToDeploy();
           }}
+          title="Queue this skill in the Deploy tab"
         >
-          Deploy
+          Send to Deploy
         </button>
         <OverflowMenu
           items={[

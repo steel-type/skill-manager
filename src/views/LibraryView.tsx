@@ -47,11 +47,31 @@ export function LibraryView() {
   const openModal = useAppStore((s) => s.openModal);
   const setFilter = useAppStore((s) => s.setFilter);
   const updatingNames = useAppStore((s) => s.updatingNames);
+  const stacks = useAppStore((s) => s.stacks);
+  const loadStacks = useAppStore((s) => s.loadStacks);
+  const queueSkillForDeploy = useAppStore((s) => s.queueSkillForDeploy);
 
   useEffect(() => {
     refreshSkills();
     refreshProjects();
-  }, [refreshSkills, refreshProjects]);
+    // Stacks drive the per-card StackBadge — load them so the indicator
+    // is correct even on a fresh app launch where the user hasn't visited
+    // the Stacks tab yet.
+    loadStacks();
+  }, [refreshSkills, refreshProjects, loadStacks]);
+
+  // Map: skill name → stack display names that include it. Built once per
+  // stacks-list change, looked up O(1) per card render.
+  const stacksBySkillName = useMemo(() => {
+    const m: Record<string, string[]> = {};
+    for (const stack of stacks) {
+      for (const skillName of stack.skillIds) {
+        if (!m[skillName]) m[skillName] = [];
+        m[skillName].push(stack.name);
+      }
+    }
+    return m;
+  }, [stacks]);
 
   const updatesCount = useMemo(
     () => skills.filter((s) => updateInfo[s.name]?.hasUpdate).length,
@@ -71,8 +91,8 @@ export function LibraryView() {
     [skills, filter, updateInfo],
   );
 
-  const handleDeploy = (skill: Skill) => {
-    openModal({ type: "deploy", skill: skill.name });
+  const handleSendToDeploy = (skill: Skill) => {
+    queueSkillForDeploy(skill.name);
   };
 
   const handleBrowse = (skill: Skill) => {
@@ -195,13 +215,14 @@ export function LibraryView() {
                   hasUpdate={updateInfo[skill.name]?.hasUpdate ?? false}
                   selected={selectedSkill === skill.name}
                   isUpdating={updatingNames.has(skill.name)}
+                  memberOfStacks={stacksBySkillName[skill.name] ?? []}
                   onSelect={() =>
                     setSelectedSkill(
                       selectedSkill === skill.name ? null : skill.name,
                     )
                   }
                   onOpen={() => handleOpen(skill)}
-                  onDeploy={() => handleDeploy(skill)}
+                  onSendToDeploy={() => handleSendToDeploy(skill)}
                   onBrowse={() => handleBrowse(skill)}
                   onUpdate={() => handleUpdate(skill)}
                   onRemove={() => handleRemove(skill)}
