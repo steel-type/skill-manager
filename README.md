@@ -53,7 +53,7 @@ migration.
 ## Develop
 
 ```bash
-git clone git@github.com:Steel-Type/skill-manager.git
+git clone https://github.com/Steel-Type/skill-manager.git
 cd skill-manager
 npm install
 npm run dev
