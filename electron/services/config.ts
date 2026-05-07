@@ -7,6 +7,8 @@ import {
   type Deployment,
   type SkillManagerConfig,
   type SkillRecord,
+  type SkillStack,
+  type StackDeployment,
 } from "./types";
 
 export function nowIso(): string {
@@ -32,6 +34,8 @@ interface RawConfig {
   skills?: Record<string, SkillRecord>;
   installed_skills?: { name?: string; url?: string }[];
   settings?: Partial<AppSettings>;
+  stacks?: SkillStack[];
+  stackDeployments?: StackDeployment[];
 }
 
 function withDefaults(partial?: Partial<AppSettings>): AppSettings {
@@ -131,6 +135,8 @@ export async function loadConfig(): Promise<SkillManagerConfig> {
       last_project: raw.last_project ?? "",
       skills: migrateDeployments(raw.skills),
       settings: withDefaults(raw.settings),
+      stacks: raw.stacks ?? [],
+      stackDeployments: raw.stackDeployments ?? [],
     };
   }
 
@@ -150,6 +156,8 @@ export async function loadConfig(): Promise<SkillManagerConfig> {
     last_project: raw.last_project ?? "",
     skills,
     settings: withDefaults(raw.settings),
+    stacks: raw.stacks ?? [],
+    stackDeployments: raw.stackDeployments ?? [],
   };
 }
 
@@ -229,6 +237,8 @@ export async function reconcileConfig(
       last_project: config.last_project,
       skills,
       settings: config.settings,
+      stacks: config.stacks ?? [],
+      stackDeployments: config.stackDeployments ?? [],
     };
     await saveConfig(next);
     return next;

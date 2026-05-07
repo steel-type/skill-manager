@@ -96,6 +96,49 @@ describe("loadConfig", () => {
     expect(config.skills["old-two"].url).toBeNull();
   });
 
+  it("hydrates stacks and stackDeployments to [] when missing from disk", async () => {
+    // Simulate a config written by an older app version that knows nothing
+    // about stacks. Must boot without errors and fields must be present.
+    await fs.writeFile(
+      CONFIG_PATH,
+      JSON.stringify({ skills: {}, settings: DEFAULT_SETTINGS }),
+    );
+    const config = await loadConfig();
+    expect(config.stacks).toEqual([]);
+    expect(config.stackDeployments).toEqual([]);
+  });
+
+  it("preserves existing stacks and stackDeployments when present", async () => {
+    const stack = {
+      id: "my-stack",
+      name: "My Stack",
+      description: "demo",
+      skillIds: ["alpha", "beta"],
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+    };
+    const dep = {
+      stackId: "my-stack",
+      projectPath: "/tmp/p",
+      agentId: "claude",
+      deployMode: "copy" as const,
+      timestamp: "2026-01-02T00:00:00Z",
+      includedSkillIds: ["alpha", "beta"],
+    };
+    await fs.writeFile(
+      CONFIG_PATH,
+      JSON.stringify({
+        skills: {},
+        settings: DEFAULT_SETTINGS,
+        stacks: [stack],
+        stackDeployments: [dep],
+      }),
+    );
+    const config = await loadConfig();
+    expect(config.stacks).toEqual([stack]);
+    expect(config.stackDeployments).toEqual([dep]);
+  });
+
   it("backs up a corrupt file and recovers with defaults", async () => {
     await fs.writeFile(CONFIG_PATH, "{ this is not valid json");
     const config = await loadConfig();
@@ -121,6 +164,8 @@ describe("saveConfig", () => {
         },
       },
       settings: DEFAULT_SETTINGS,
+      stacks: [],
+      stackDeployments: [],
     };
     await saveConfig(config);
     const text = await fs.readFile(CONFIG_PATH, "utf8");
@@ -134,6 +179,8 @@ describe("saveConfig", () => {
       last_project: "",
       skills: {},
       settings: DEFAULT_SETTINGS,
+      stacks: [],
+      stackDeployments: [],
     });
     const stat = await fs.stat(CONFIG_PATH);
     expect(stat.isFile()).toBe(true);
@@ -145,6 +192,8 @@ describe("saveConfig", () => {
       last_project: "/original",
       skills: {},
       settings: DEFAULT_SETTINGS,
+      stacks: [],
+      stackDeployments: [],
     };
     await saveConfig(original);
 
@@ -161,6 +210,8 @@ describe("saveConfig", () => {
         last_project: "/should-not-land",
         skills: {},
         settings: DEFAULT_SETTINGS,
+        stacks: [],
+        stackDeployments: [],
       }),
     ).rejects.toThrow();
 
@@ -209,6 +260,8 @@ describe("reconcileConfig", () => {
       last_project: "",
       skills: {},
       settings: DEFAULT_SETTINGS,
+      stacks: [],
+      stackDeployments: [],
     };
     const reconciled = await reconcileConfig(initial);
     expect(reconciled.skills["found-skill"]).toBeDefined();
@@ -229,6 +282,8 @@ describe("reconcileConfig", () => {
         },
       },
       settings: DEFAULT_SETTINGS,
+      stacks: [],
+      stackDeployments: [],
     };
     const reconciled = await reconcileConfig(initial);
     expect(reconciled.skills.ghost).toBeUndefined();
@@ -250,6 +305,8 @@ describe("reconcileConfig", () => {
         },
       },
       settings: DEFAULT_SETTINGS,
+      stacks: [],
+      stackDeployments: [],
     };
     const reconciled = await reconcileConfig(initial);
     expect(reconciled.skills.keep.projects).toEqual([aliveProject]);
@@ -262,6 +319,8 @@ describe("reconcileConfig", () => {
       last_project: "",
       skills: {},
       settings: DEFAULT_SETTINGS,
+      stacks: [],
+      stackDeployments: [],
     });
     expect(reconciled.skills[".git"]).toBeUndefined();
     expect(reconciled.skills.visible).toBeDefined();

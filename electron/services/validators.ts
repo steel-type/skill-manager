@@ -9,6 +9,12 @@ const MAX_SKILL_NAME_LENGTH = 100;
 const MAX_URL_LENGTH = 2048;
 const MAX_PATH_LENGTH = 4096;
 
+// Stricter than skill names — agentskills.io requires lowercase letters,
+// digits, and hyphens only, 1–64 chars, and forbids leading/trailing or
+// consecutive hyphens.
+const STACK_ID_REGEX = /^[a-z0-9](?:-?[a-z0-9])*$/;
+const MAX_STACK_ID_LENGTH = 64;
+
 export class ValidationError extends Error {
   constructor(message: string) {
     super(message);
@@ -96,6 +102,31 @@ export function validateProjectPath(path: unknown): string {
     throw new ValidationError(`Project path must be absolute — got "${path}"`);
   }
   return path;
+}
+
+/**
+ * Validate a skill-stack id per the agentskills.io naming spec: lowercase
+ * letters, digits, and hyphens; 1–64 chars; no leading/trailing/consecutive
+ * hyphens. Stricter than `validateSkillName` because the stack id becomes a
+ * `name:` in the generated meta-skill frontmatter, and the public spec is
+ * the contract every agent must accept.
+ */
+export function validateStackName(id: unknown): string {
+  if (typeof id !== "string") {
+    throw new ValidationError("Stack id must be a string");
+  }
+  if (id.length === 0) throw new ValidationError("Stack id is empty");
+  if (id.length > MAX_STACK_ID_LENGTH) {
+    throw new ValidationError(
+      `Stack id too long (${id.length} > ${MAX_STACK_ID_LENGTH})`,
+    );
+  }
+  if (!STACK_ID_REGEX.test(id)) {
+    throw new ValidationError(
+      `Stack id must be lowercase letters, digits, and single hyphens only — got "${id}"`,
+    );
+  }
+  return id;
 }
 
 /**

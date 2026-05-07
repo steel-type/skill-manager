@@ -4,6 +4,7 @@ import {
   validateCommitToken,
   validateProjectPath,
   validateSkillName,
+  validateStackName,
   validateUrl,
 } from "./validators";
 
@@ -138,6 +139,77 @@ describe("validateSkillName", () => {
   it("accepts exactly 100 chars", () => {
     const name = "a".repeat(100);
     expect(validateSkillName(name)).toBe(name);
+  });
+});
+
+describe("validateStackName", () => {
+  it("accepts simple kebab-case", () => {
+    expect(validateStackName("my-stack")).toBe("my-stack");
+  });
+
+  it("accepts a single lowercase letter", () => {
+    expect(validateStackName("a")).toBe("a");
+  });
+
+  it("accepts a single digit", () => {
+    expect(validateStackName("9")).toBe("9");
+  });
+
+  it("accepts digits anywhere", () => {
+    expect(validateStackName("v2-tools")).toBe("v2-tools");
+  });
+
+  it("accepts exactly 64 chars", () => {
+    const id = "a".repeat(64);
+    expect(validateStackName(id)).toBe(id);
+  });
+
+  it("rejects uppercase letters", () => {
+    expect(() => validateStackName("My-Stack")).toThrow(ValidationError);
+    expect(() => validateStackName("MYSTACK")).toThrow(ValidationError);
+  });
+
+  it("rejects underscores (allowed for skills, not stacks)", () => {
+    expect(() => validateStackName("my_stack")).toThrow(ValidationError);
+  });
+
+  it("rejects dots (allowed for skills, not stacks)", () => {
+    expect(() => validateStackName("my.stack")).toThrow(ValidationError);
+  });
+
+  it("rejects leading hyphens", () => {
+    expect(() => validateStackName("-stack")).toThrow(ValidationError);
+  });
+
+  it("rejects trailing hyphens", () => {
+    expect(() => validateStackName("stack-")).toThrow(ValidationError);
+  });
+
+  it("rejects consecutive hyphens", () => {
+    expect(() => validateStackName("a--b")).toThrow(ValidationError);
+    expect(() => validateStackName("foo---bar")).toThrow(ValidationError);
+  });
+
+  it("rejects spaces", () => {
+    expect(() => validateStackName("my stack")).toThrow(ValidationError);
+  });
+
+  it("rejects path components", () => {
+    expect(() => validateStackName("foo/bar")).toThrow(ValidationError);
+    expect(() => validateStackName("../etc")).toThrow(ValidationError);
+  });
+
+  it("rejects empty string", () => {
+    expect(() => validateStackName("")).toThrow(/empty/);
+  });
+
+  it("rejects names over 64 chars", () => {
+    expect(() => validateStackName("a".repeat(65))).toThrow(/too long/);
+  });
+
+  it("rejects non-string types", () => {
+    expect(() => validateStackName(42 as unknown)).toThrow(/string/);
+    expect(() => validateStackName(null)).toThrow(/string/);
   });
 });
 

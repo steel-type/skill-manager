@@ -21,6 +21,8 @@ const baseConfig: SkillManagerConfig = {
     theme: "light",
     default_deploy_mode: "copy",
   } as const,
+  stacks: [],
+  stackDeployments: [],
 };
 
 describe("exportSkillList", () => {

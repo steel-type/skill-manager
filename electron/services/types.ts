@@ -75,7 +75,45 @@ export interface SkillManagerConfig {
   last_project: string;
   skills: Record<string, SkillRecord>;
   settings: AppSettings;
+  /** User-defined skill stacks (named, ordered groups of skills). */
+  stacks: SkillStack[];
+  /** Per-(stack, project, agent) deployment ledger — analogous to
+   *  SkillRecord.deployments but for stacks. */
+  stackDeployments: StackDeployment[];
 }
+
+/** A named, reusable bundle of skills. Identified by `id` (kebab-case per the
+ *  agentskills.io naming spec). When deployed, members are pushed individually
+ *  AND a generated meta-skill SKILL.md is written so an agent can activate the
+ *  whole bundle by name. */
+export interface SkillStack {
+  id: string;
+  name: string;
+  description: string;
+  /** Ordered list of skill names from the library. Order is preserved in the
+   *  generated meta-skill body so the user can express priority. */
+  skillIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StackDeployment {
+  stackId: string;
+  projectPath: string;
+  agentId: string;
+  deployMode: DeployMode;
+  /** ISO timestamp of the deploy. */
+  timestamp: string;
+  /** Snapshot of stack.skillIds at deploy time — lets the UI flag drift when
+   *  the stack composition has changed since this deployment. */
+  includedSkillIds: string[];
+}
+
+/** Payload for the Deploy tab's queue. The Library and Stacks views push one
+ *  of these into the store, which switches the active tab to Deploy. */
+export type DeployRequest =
+  | { type: "skill"; id: string }
+  | { type: "stack"; id: string };
 
 export interface SkillFrontmatter {
   name?: string;
