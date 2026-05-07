@@ -24,7 +24,6 @@ export type ModalState =
   | { type: "removeSkill"; name: string }
   | { type: "removeProject"; path: string }
   | { type: "rollback"; name: string }
-  | { type: "deploy"; skill: string }
   | { type: "deleteStack"; stackId: string };
 
 /**

@@ -1,7 +1,7 @@
 // Variation D — power-user ⌘K interface. Real command parsing now:
 //
 //   install <url>                  → clone & open InstallFlow
-//   deploy <skill>                 → open DeployFlow for that skill
+//   deploy <skill | stack>         → queue in the Deploy tab
 //   deploy <skill> to <project>    → run the deploy directly
 //   update --all                   → check + open UpdateFlow
 //   update <skill>                 → open UpdateFlow pre-filled

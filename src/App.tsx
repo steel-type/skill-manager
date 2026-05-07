@@ -13,7 +13,6 @@ import { ImportFlow } from "./flows/ImportFlow";
 import { RemoveSkillFlow } from "./flows/RemoveSkillFlow";
 import { RemoveProjectFlow } from "./flows/RemoveProjectFlow";
 import { RollbackFlow } from "./flows/RollbackFlow";
-import { DeployFlow } from "./flows/DeployFlow";
 import { SkillDetailFlow } from "./flows/SkillDetailFlow";
 import { CreateStackFlow } from "./flows/CreateStackFlow";
 import { DeleteStackFlow } from "./flows/DeleteStackFlow";
@@ -164,7 +163,6 @@ export default function App() {
         <RemoveProjectFlow path={modal.path} />
       )}
       {modal?.type === "rollback" && <RollbackFlow name={modal.name} />}
-      {modal?.type === "deploy" && <DeployFlow skillName={modal.skill} />}
       {modal?.type === "deleteStack" && (
         <DeleteStackFlow stackId={modal.stackId} />
       )}
