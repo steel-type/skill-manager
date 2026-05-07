@@ -25,7 +25,10 @@ import {
   listTrackedProjects,
   removeProjectTracking,
   exportMarkdown,
+  exportJson,
   importMarkdown,
+  parseImportJson,
+  validateSkillUrl,
   getLastProject,
   setLastProject,
   getSettings,
@@ -342,6 +345,79 @@ ipcMain.handle(
 );
 
 ipcMain.handle("export-markdown", () => exportMarkdown());
+
+ipcMain.handle("export-json", () => exportJson());
+
+ipcMain.handle("parse-import-json", (_e, text: string) =>
+  parseImportJson(text),
+);
+
+ipcMain.handle("validate-skill-url", (_e, url: string) =>
+  validateSkillUrl(url),
+);
+
+// Persist a string payload (markdown or JSON share) to a user-chosen path.
+// Returns the chosen path or null when the user cancels.
+ipcMain.handle(
+  "save-text-file",
+  async (
+    _e,
+    args: { defaultName: string; content: string; filterName?: string; extensions?: string[] },
+  ) => {
+    if (!mainWindow) return null;
+    if (typeof args.content !== "string") {
+      throw new Error("File content must be a string");
+    }
+    const result = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: args.defaultName,
+      filters:
+        args.extensions && args.extensions.length > 0
+          ? [
+              {
+                name: args.filterName ?? "File",
+                extensions: args.extensions,
+              },
+            ]
+          : undefined,
+    });
+    if (result.canceled || !result.filePath) return null;
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(result.filePath, args.content, "utf8");
+    return result.filePath;
+  },
+);
+
+// Open a file picker, then return the chosen path + decoded UTF-8 content.
+ipcMain.handle(
+  "read-text-file",
+  async (
+    _e,
+    args: { filterName?: string; extensions?: string[] } = {},
+  ) => {
+    if (!mainWindow) return null;
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ["openFile"],
+      filters:
+        args.extensions && args.extensions.length > 0
+          ? [
+              {
+                name: args.filterName ?? "File",
+                extensions: args.extensions,
+              },
+            ]
+          : undefined,
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    const filePath = result.filePaths[0];
+    const { readFile, stat } = await import("node:fs/promises");
+    const s = await stat(filePath);
+    if (s.size > 1_000_000) {
+      throw new Error("File too large (>1 MB)");
+    }
+    const content = await readFile(filePath, "utf8");
+    return { path: filePath, content };
+  },
+);
 
 ipcMain.handle(
   "import-markdown",

@@ -38,7 +38,14 @@ export interface OpOptions {
   signal?: AbortSignal;
 }
 import { copyToProject, cascadeToProjects } from "./services/deploy";
-import { exportSkillList, parseSkillList } from "./services/exportImport";
+import {
+  exportSkillJson,
+  exportSkillList,
+  parseSkillJson,
+  parseSkillList,
+  type SkillJsonDoc,
+  type SkillJsonEntry,
+} from "./services/exportImport";
 import {
   archiveSkillVersion,
   clearHistory,
@@ -480,6 +487,93 @@ export async function exportMarkdown(): Promise<ExportPayload> {
   const markdown = exportSkillList(config);
   const count = Object.keys(config.skills).length;
   return { markdown, count };
+}
+
+export async function exportJson(): Promise<{ json: string; count: number }> {
+  const config = await loadConfig();
+  const skillsOnDisk = await listSkillsFromDisk();
+  const doc = exportSkillJson(config, skillsOnDisk);
+  const json = JSON.stringify(doc, null, 2) + "\n";
+  return { json, count: doc.skills.length };
+}
+
+export interface ParsedImportEntry extends SkillJsonEntry {
+  /** True if this name is already installed in the user's library. */
+  alreadyInstalled: boolean;
+}
+
+/**
+ * Parse a JSON share document and tag entries the user already has installed
+ * so the import-review UI can default those checkboxes to off.
+ */
+export async function parseImportJson(
+  text: string,
+): Promise<{ entries: ParsedImportEntry[]; doc: SkillJsonDoc | null }> {
+  if (typeof text !== "string") throw new Error("Body must be a string");
+  if (text.length > 1_000_000) throw new Error("Import body too large (>1 MB)");
+  const entries = parseSkillJson(text);
+  const config = await loadConfig();
+  const installed = new Set(Object.keys(config.skills));
+  const tagged = entries.map((e) => ({
+    ...e,
+    alreadyInstalled: installed.has(e.name),
+  }));
+  // Best-effort: also parse the wrapper out so callers can show metadata
+  // (export date) without re-parsing. parseSkillJson already validated shape.
+  let doc: SkillJsonDoc | null = null;
+  try {
+    const raw = JSON.parse(text);
+    if (
+      raw &&
+      typeof raw === "object" &&
+      raw.version === 1 &&
+      Array.isArray(raw.skills)
+    ) {
+      doc = raw as SkillJsonDoc;
+    }
+  } catch {
+    // ignore — entries already populated
+  }
+  return { entries: tagged, doc };
+}
+
+export interface SkillUrlValidation {
+  url: string;
+  ok: boolean;
+  remoteCommit: string | null;
+  error?: string;
+}
+
+/**
+ * Validate a single skill URL by asking the upstream `git ls-remote`. A
+ * non-null SHA proves the repo exists and is reachable; a null result
+ * means the URL is broken (typo, deleted repo, network down). Caller
+ * decides how strict to be — `validateUrl` first guards against
+ * malformed inputs so a junk URL fails fast without a network round-trip.
+ */
+export async function validateSkillUrl(
+  rawUrl: string,
+): Promise<SkillUrlValidation> {
+  const url = (() => {
+    try {
+      return validateUrl(rawUrl);
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) } as const;
+    }
+  })();
+  if (typeof url !== "string") {
+    return { url: rawUrl, ok: false, remoteCommit: null, error: url.error };
+  }
+  const sha = await checkRemoteSha(url);
+  if (!sha) {
+    return {
+      url,
+      ok: false,
+      remoteCommit: null,
+      error: "Could not reach repo (URL invalid or network down)",
+    };
+  }
+  return { url, ok: true, remoteCommit: sha };
 }
 
 export async function importMarkdown(

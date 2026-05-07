@@ -1,4 +1,92 @@
-import type { SkillManagerConfig } from "./types";
+import type { Skill, SkillManagerConfig } from "./types";
+
+export interface SkillJsonEntry {
+  name: string;
+  url: string;
+  commit?: string | null;
+  description?: string;
+}
+
+export interface SkillJsonDoc {
+  version: 1;
+  exported_at: string;
+  skills: SkillJsonEntry[];
+}
+
+/**
+ * Build a structured JSON snapshot of the library for sharing. Local-only
+ * skills (no `url`) are skipped — they can't be re-installed by a recipient.
+ * Description comes from disk-detected metadata when available so receivers
+ * can preview what they're importing without cloning.
+ */
+export function exportSkillJson(
+  config: SkillManagerConfig,
+  skillsOnDisk: Skill[] = [],
+): SkillJsonDoc {
+  const descByName = new Map<string, string>();
+  for (const s of skillsOnDisk) {
+    if (s.description) descByName.set(s.name, s.description);
+  }
+  const records = config.skills ?? {};
+  const entries: SkillJsonEntry[] = Object.keys(records)
+    .sort((a, b) => a.localeCompare(b))
+    .filter((name) => !!records[name].url)
+    .map((name) => {
+      const record = records[name];
+      const description = descByName.get(name);
+      return {
+        name,
+        url: record.url!,
+        commit: record.commit ?? null,
+        ...(description ? { description } : {}),
+      };
+    });
+  return {
+    version: 1,
+    exported_at: new Date().toISOString(),
+    skills: entries,
+  };
+}
+
+/**
+ * Parse a structured JSON skill list back into entries. Tolerant of two
+ * shapes: the v1 doc `{ version, skills: [...] }` and a bare array of
+ * entries, since hand-edited shares sometimes drop the wrapper. Entries
+ * without a usable `url` are skipped.
+ */
+export function parseSkillJson(text: string): SkillJsonEntry[] {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    throw new Error("Not valid JSON");
+  }
+  const list: unknown[] = Array.isArray(raw)
+    ? raw
+    : Array.isArray((raw as { skills?: unknown }).skills)
+      ? ((raw as { skills: unknown[] }).skills)
+      : [];
+  if (list.length === 0 && !Array.isArray(raw)) {
+    throw new Error("Missing 'skills' array");
+  }
+  const out: SkillJsonEntry[] = [];
+  for (const item of list) {
+    if (!item || typeof item !== "object") continue;
+    const obj = item as Record<string, unknown>;
+    const name = typeof obj.name === "string" ? obj.name.trim() : "";
+    const url = typeof obj.url === "string" ? obj.url.trim() : "";
+    if (!name || !url) continue;
+    const entry: SkillJsonEntry = { name, url };
+    if (typeof obj.commit === "string" && obj.commit.trim()) {
+      entry.commit = obj.commit.trim();
+    }
+    if (typeof obj.description === "string" && obj.description.trim()) {
+      entry.description = obj.description.trim();
+    }
+    out.push(entry);
+  }
+  return out;
+}
 
 /**
  * Generate a shareable markdown bullet list of the user's library. Skills

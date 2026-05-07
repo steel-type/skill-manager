@@ -6,6 +6,7 @@ import { DeployView } from "./views/DeployView";
 import { SettingsView } from "./views/SettingsView";
 import { InstallFlow } from "./flows/InstallFlow";
 import { UpdateFlow } from "./flows/UpdateFlow";
+import { ImportFlow } from "./flows/ImportFlow";
 import { RemoveSkillFlow } from "./flows/RemoveSkillFlow";
 import { RemoveProjectFlow } from "./flows/RemoveProjectFlow";
 import { RollbackFlow } from "./flows/RollbackFlow";
@@ -110,7 +111,9 @@ export default function App() {
             ? "Updates"
             : screen.kind === "detail"
               ? screen.name
-              : TITLES[activeTab]
+              : screen.kind === "import"
+                ? "Import"
+                : TITLES[activeTab]
         }
       >
         <LeftRail />
@@ -118,6 +121,12 @@ export default function App() {
           <UpdateFlow prefillName={screen.prefillName} />
         ) : screen.kind === "detail" ? (
           <SkillDetailFlow name={screen.name} />
+        ) : screen.kind === "import" ? (
+          <ImportFlow
+            entries={screen.entries}
+            sourcePath={screen.sourcePath}
+            exportedAt={screen.exportedAt}
+          />
         ) : (
           <>
             {activeTab === "library" && <LibraryView />}

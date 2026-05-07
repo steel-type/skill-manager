@@ -101,6 +101,45 @@ const api = {
   exportMarkdown: () =>
     ipcRenderer.invoke("export-markdown") as Promise<ExportPayload>,
 
+  exportJson: () =>
+    ipcRenderer.invoke("export-json") as Promise<{
+      json: string;
+      count: number;
+    }>,
+
+  parseImportJson: (text: string) =>
+    ipcRenderer.invoke("parse-import-json", text) as Promise<{
+      entries: {
+        name: string;
+        url: string;
+        commit?: string | null;
+        description?: string;
+        alreadyInstalled: boolean;
+      }[];
+      doc: { version: 1; exported_at: string } | null;
+    }>,
+
+  validateSkillUrl: (url: string) =>
+    ipcRenderer.invoke("validate-skill-url", url) as Promise<{
+      url: string;
+      ok: boolean;
+      remoteCommit: string | null;
+      error?: string;
+    }>,
+
+  saveTextFile: (args: {
+    defaultName: string;
+    content: string;
+    filterName?: string;
+    extensions?: string[];
+  }) =>
+    ipcRenderer.invoke("save-text-file", args) as Promise<string | null>,
+
+  readTextFile: (args?: { filterName?: string; extensions?: string[] }) =>
+    ipcRenderer.invoke("read-text-file", args ?? {}) as Promise<
+      { path: string; content: string } | null
+    >,
+
   importMarkdown: (
     text: string,
     streamId: string,

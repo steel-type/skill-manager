@@ -28,10 +28,24 @@ export type ModalState =
  * visible). Used for multi-step flows that warrant their own breadcrumb
  * rather than a popup modal.
  */
+export interface ImportEntryPrefill {
+  name: string;
+  url: string;
+  commit?: string | null;
+  description?: string;
+  alreadyInstalled: boolean;
+}
+
 export type Screen =
   | { kind: "main" }
   | { kind: "update"; prefillName?: string }
-  | { kind: "detail"; name: string };
+  | { kind: "detail"; name: string }
+  | {
+      kind: "import";
+      entries: ImportEntryPrefill[];
+      sourcePath: string | null;
+      exportedAt: string | null;
+    };
 
 interface AppState {
   activeTab: Tab;

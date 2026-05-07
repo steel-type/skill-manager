@@ -208,8 +208,25 @@ body { background: #e8e4d8; margin: 0; font-family: var(--read); color: var(--in
   height: 36px;
   flex-shrink: 0;
   -webkit-app-region: drag;
+  /* Without this, hovering the title shows the I-beam (text cursor) and
+     the OS treats clicks as text-selection rather than window drag. */
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
 }
-.wf-titlebar > * { -webkit-app-region: no-drag; }
+/* Default children to drag — only the explicitly interactive elements
+   below opt out. The previous blanket `> *` rule made the title text
+   non-draggable, which left users unable to drag the window when they
+   happened to grab the horizontal centre of the bar. */
+.wf-titlebar button,
+.wf-titlebar input,
+.wf-titlebar select,
+.wf-titlebar textarea,
+.wf-titlebar a,
+.wf-titlebar [role="button"],
+.wf-titlebar .wf-tlights {
+  -webkit-app-region: no-drag;
+}
 .wf-tlights { display: flex; gap: 6px; }
 .wf-tlights .tl {
   width: 11px; height: 11px; border-radius: 50%;
