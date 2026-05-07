@@ -21,6 +21,19 @@ const tabs: { id: Tab; label: string; icon: JSX.Element }[] = [
     ),
   },
   {
+    id: "stacks",
+    label: "Stacks",
+    // Three horizontal slabs stacked with a small gap. Reads as "layered
+    // bundle" — matches the StackBadge that appears on member skill cards.
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="2.5" width="10" height="2.5" rx="0.6" />
+        <rect x="2" y="5.75" width="10" height="2.5" rx="0.6" />
+        <rect x="2" y="9" width="10" height="2.5" rx="0.6" />
+      </svg>
+    ),
+  },
+  {
     id: "deploy",
     label: "Deploy",
     // V-shape diverging arrows: two legs originate at the centre-bottom and

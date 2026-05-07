@@ -4,6 +4,7 @@ import { LeftRail } from "./components/LeftRail";
 import { LibraryView } from "./views/LibraryView";
 import { DeployView } from "./views/DeployView";
 import { SettingsView } from "./views/SettingsView";
+import { PlaceholderView } from "./views/PlaceholderView";
 import { InstallFlow } from "./flows/InstallFlow";
 import { UpdateFlow } from "./flows/UpdateFlow";
 import { ImportFlow } from "./flows/ImportFlow";
@@ -16,6 +17,7 @@ import { useAppStore } from "./state/store";
 
 const TITLES: Record<string, string> = {
   library: "Skill Library",
+  stacks: "Stacks",
   deploy: "Deploy",
   settings: "Settings",
 };
@@ -57,10 +59,10 @@ export default function App() {
         const state = useAppStore.getState();
         if (state.activeTab !== "library") setActiveTab("library");
         setLibraryLayout(state.libraryLayout === "cards" ? "palette" : "cards");
-      } else if (["1", "2", "3"].includes(e.key)) {
+      } else if (["1", "2", "3", "4"].includes(e.key)) {
         if (isEditable) return;
         e.preventDefault();
-        const tabs = ["library", "deploy", "settings"] as const;
+        const tabs = ["library", "stacks", "deploy", "settings"] as const;
         setActiveTab(tabs[Number(e.key) - 1]);
       }
     };
@@ -131,6 +133,12 @@ export default function App() {
         ) : (
           <>
             {activeTab === "library" && <LibraryView />}
+            {activeTab === "stacks" && (
+              <PlaceholderView
+                title="Stacks"
+                hint="Combine skills into reusable stacks and deploy them together. Coming online in the next step."
+              />
+            )}
             {activeTab === "deploy" && <DeployView />}
             {activeTab === "settings" && <SettingsView />}
           </>
