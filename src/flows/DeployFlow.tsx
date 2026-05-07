@@ -15,6 +15,17 @@ function tildify(path: string): string {
   return path.replace(/^\/Users\/[^/]+/, "~");
 }
 
+/** Strip the project root from an absolute destination path so the success
+ *  message can show a tight ".claude/skills/<name>" tail. Falls back to the
+ *  full path (tildified) if the dest doesn't actually live inside the
+ *  project — shouldn't happen but defensive. */
+function relativeFromProject(absDest: string, projectRoot: string): string {
+  if (absDest.startsWith(projectRoot + "/")) {
+    return absDest.slice(projectRoot.length + 1);
+  }
+  return tildify(absDest);
+}
+
 export function DeployFlow({ skillName }: DeployFlowProps) {
   const closeModal = useAppStore((s) => s.closeModal);
   const skills = useAppStore((s) => s.skills);
@@ -47,6 +58,12 @@ export function DeployFlow({ skillName }: DeployFlowProps) {
     new Set(["claude"]),
   );
   const [warnings, setWarnings] = useState<string[]>([]);
+  // Concrete destinations from the most recent deploy, one per agent. Used
+  // to render the success screen with exact paths instead of a generic
+  // ".claude/skills/" string.
+  const [destinations, setDestinations] = useState<
+    { agentId: string; destPath: string; deployMode: "copy" | "symlink" }[]
+  >([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,7 +103,9 @@ export function DeployFlow({ skillName }: DeployFlowProps) {
     if (!selectedPath || !skill || selectedAgents.size === 0) return;
     setRunning(true);
     setWarnings([]);
-    const collected: string[] = [];
+    setDestinations([]);
+    const collectedWarnings: string[] = [];
+    const collectedDestinations: typeof destinations = [];
     try {
       // Deploy sequentially per agent so each one finishes (and writes its
       // config record) before the next starts — avoids contending on the
@@ -96,14 +115,23 @@ export function DeployFlow({ skillName }: DeployFlowProps) {
           agentId,
           deployMode,
         });
-        if (result.warning) collected.push(result.warning);
+        if (result.warning) collectedWarnings.push(result.warning);
+        collectedDestinations.push({
+          agentId,
+          destPath: result.destPath,
+          deployMode: result.deployMode,
+        });
       }
-      setWarnings(collected);
+      setWarnings(collectedWarnings);
+      setDestinations(collectedDestinations);
       await refreshSkills();
       await refreshProjects();
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      // Always reset running so the close button comes back alive on both
+      // success and failure. setDone separately gates which body renders.
       setRunning(false);
     }
   };
@@ -323,14 +351,32 @@ export function DeployFlow({ skillName }: DeployFlowProps) {
                 {tildify(selectedPath)}
               </span>
             </div>
-            <div className="hand" style={{ color: "var(--good)", fontSize: 15 }}>
-              ✓ {skill.displayName}{" "}
-              {deployMode === "symlink"
-                ? "is now linked into"
-                : "is now copied into"}{" "}
-              <span style={{ fontFamily: "var(--mono)", fontSize: 11 }}>
-                .claude/skills/
-              </span>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+              }}
+            >
+              {destinations.map((d) => {
+                const agentName =
+                  agents.find((a) => a.id === d.agentId)?.displayName ??
+                  d.agentId;
+                const tail = relativeFromProject(d.destPath, selectedPath);
+                return (
+                  <div
+                    key={d.agentId}
+                    className="hand"
+                    style={{ color: "var(--good)", fontSize: 14 }}
+                  >
+                    ✓ {agentName} ·{" "}
+                    {d.deployMode === "symlink" ? "linked" : "copied"} →{" "}
+                    <span style={{ fontFamily: "var(--mono)", fontSize: 11 }}>
+                      {tail}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
             {warnings.length > 0 && (
               <div

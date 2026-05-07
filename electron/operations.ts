@@ -379,6 +379,9 @@ export interface DeploySkillResult {
   agentId: string;
   deployMode: DeployMode;
   warning: string | null;
+  /** Concrete on-disk destination so the renderer can report exactly where
+   *  the skill landed instead of a generic ".claude/skills/" string. */
+  destPath: string;
 }
 
 export async function deploySkill(
@@ -425,6 +428,7 @@ export async function deploySkill(
     agentId,
     deployMode: result.deployMode,
     warning: result.warning,
+    destPath: result.destPath,
   };
 }
 

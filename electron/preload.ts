@@ -98,6 +98,7 @@ const api = {
     agentId: string;
     deployMode: "copy" | "symlink";
     warning: string | null;
+    destPath: string;
   }> =>
     ipcRenderer.invoke("deploy-skill", {
       name,
