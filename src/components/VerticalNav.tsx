@@ -23,22 +23,37 @@ const tabs: { id: Tab; label: string; icon: JSX.Element }[] = [
   {
     id: "deploy",
     label: "Deploy",
-    // Diverging-arrows mark: a horizontal axis with a tick at the centre and
-    // arrowheads pointing outward. Reads as "splitting up / sending out" —
-    // skills going from one library to many projects.
+    // V-shape diverging arrows: two legs originate at the centre-bottom and
+    // travel outward to the upper corners, each capped with an arrowhead at
+    // the tip. Reads as "splitting up / sending out" — one source, many
+    // destinations — with the tips spaced wide so the arrows feel distinct
+    // from a decorative chevron.
     icon: (
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M2 7 H12 M5 4.5 L2 7 L5 9.5 M9 4.5 L12 7 L9 9.5 M7 4.5 V9.5" />
+        <path d="M7 12 L1.5 2 M7 12 L12.5 2 M1.5 2 L4.5 2 M1.5 2 L1.5 5 M12.5 2 L9.5 2 M12.5 2 L12.5 5" />
       </svg>
     ),
   },
   {
     id: "settings",
     label: "Settings",
+    // Cog: outer ring + central hub + 8 short teeth poking out at the
+    // cardinal and diagonal directions. Was previously a sun-with-rays
+    // which read as a brightness toggle in dark mode.
     icon: (
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-        <circle cx="7" cy="7" r="2" />
-        <path d="M7 1v2M7 11v2M1 7h2M11 7h2M2.8 2.8l1.4 1.4M9.8 9.8l1.4 1.4M2.8 11.2l1.4-1.4M9.8 4.2l1.4-1.4" />
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 14 14"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <circle cx="7" cy="7" r="3.4" />
+        <circle cx="7" cy="7" r="1.4" />
+        <path d="M7 0.8 V2.4 M7 11.6 V13.2 M0.8 7 H2.4 M11.6 7 H13.2 M2.6 2.6 L3.7 3.7 M10.3 10.3 L11.4 11.4 M2.6 11.4 L3.7 10.3 M10.3 3.7 L11.4 2.6" />
       </svg>
     ),
   },
