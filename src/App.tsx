@@ -5,6 +5,7 @@ import { LibraryView } from "./views/LibraryView";
 import { DeployView } from "./views/DeployView";
 import { SettingsView } from "./views/SettingsView";
 import { PlaceholderView } from "./views/PlaceholderView";
+import { StacksView } from "./views/StacksView";
 import { InstallFlow } from "./flows/InstallFlow";
 import { UpdateFlow } from "./flows/UpdateFlow";
 import { ImportFlow } from "./flows/ImportFlow";
@@ -114,9 +115,11 @@ export default function App() {
             ? "Updates"
             : screen.kind === "detail"
               ? screen.name
-              : screen.kind === "import"
-                ? "Import"
-                : TITLES[activeTab]
+              : screen.kind === "stackDetail"
+                ? "Stack"
+                : screen.kind === "import"
+                  ? "Import"
+                  : TITLES[activeTab]
         }
       >
         <LeftRail />
@@ -124,6 +127,11 @@ export default function App() {
           <UpdateFlow prefillName={screen.prefillName} />
         ) : screen.kind === "detail" ? (
           <SkillDetailFlow name={screen.name} />
+        ) : screen.kind === "stackDetail" ? (
+          <PlaceholderView
+            title={`Stack: ${screen.stackId}`}
+            hint="Stack detail screen lands in the next step. Use Edit or Delete from the Stacks tab for now."
+          />
         ) : screen.kind === "import" ? (
           <ImportFlow
             entries={screen.entries}
@@ -133,12 +141,7 @@ export default function App() {
         ) : (
           <>
             {activeTab === "library" && <LibraryView />}
-            {activeTab === "stacks" && (
-              <PlaceholderView
-                title="Stacks"
-                hint="Combine skills into reusable stacks and deploy them together. Coming online in the next step."
-              />
-            )}
+            {activeTab === "stacks" && <StacksView />}
             {activeTab === "deploy" && <DeployView />}
             {activeTab === "settings" && <SettingsView />}
           </>
