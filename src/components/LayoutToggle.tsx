@@ -1,8 +1,11 @@
-// Blue two-position slider — toggles the Library between "cards" (default,
-// variation C) and "palette" (variation D, power-user ⌘K).
+// Blue two-position slider — toggles the Library between "cards" (default
+// grid) and "palette" (the same verb-driven UI used by the global ⌘K
+// overlay, but rendered inline in the Library so power users can browse
+// + search without dismissing it).
 //
-// Per the user's direction in planning: "Card grid with a blue button two
-// position slider, to toggle between card and power user."
+// Note: ⌘K used to drive this toggle, but as of the Stacks build it opens
+// a global command overlay instead. This button is the canonical way to
+// switch the Library skill list into palette mode.
 
 import { useAppStore, type LibraryLayout } from "../state/store";
 
@@ -26,7 +29,7 @@ const options: { id: LibraryLayout; label: string; icon: JSX.Element }[] = [
   },
   {
     id: "palette",
-    label: "⌘K",
+    label: "List",
     icon: (
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
         <path d="M2 4l2 2-2 2M6 8h4" />
@@ -51,7 +54,7 @@ export function LayoutToggle() {
         borderRadius: 18,
         background: "rgba(61,110,140,0.06)",
       }}
-      title="Toggle library layout"
+      title="Toggle library layout — Cards / List. Press ⌘K for the global command palette."
     >
       <div
         aria-hidden
