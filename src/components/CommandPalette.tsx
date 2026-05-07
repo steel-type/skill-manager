@@ -31,6 +31,13 @@ import type {
 interface CommandPaletteProps {
   skills: Skill[];
   updateInfo: Record<string, UpdateInfo>;
+  /** Called after a suggestion's `run` resolves successfully. The global
+   *  CommandOverlay uses this to dismiss itself once a command lands; the
+   *  in-Library palette layout passes nothing (it stays open). */
+  onCommandRun?: () => void;
+  /** Optional placeholder override — the overlay shows a different hint
+   *  than the in-Library palette. */
+  placeholder?: string;
 }
 
 interface Suggestion {
@@ -79,7 +86,12 @@ function formatRelative(iso: string | null): string {
   return `${Math.floor(days / 365)}y`;
 }
 
-export function CommandPalette({ skills, updateInfo }: CommandPaletteProps) {
+export function CommandPalette({
+  skills,
+  updateInfo,
+  onCommandRun,
+  placeholder,
+}: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -143,10 +155,12 @@ export function CommandPalette({ skills, updateInfo }: CommandPaletteProps) {
   const trigger = (s: Suggestion | undefined) => {
     if (!s) return;
     if (s.run) {
-      Promise.resolve(s.run()).catch((err) => {
-        const message = err instanceof Error ? err.message : String(err);
-        setError(message);
-      });
+      Promise.resolve(s.run())
+        .then(() => onCommandRun?.())
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          setError(message);
+        });
     } else if (s.fill !== undefined) {
       setQuery(s.fill);
       requestAnimationFrame(() => {
@@ -208,7 +222,9 @@ export function CommandPalette({ skills, updateInfo }: CommandPaletteProps) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder='search or type a command — "help" for the list'
+          placeholder={
+            placeholder ?? 'search or type a command — "help" for the list'
+          }
           style={{
             flex: 1,
             border: "none",

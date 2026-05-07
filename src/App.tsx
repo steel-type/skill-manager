@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { AppWindow } from "./components/AppWindow";
 import { LeftRail } from "./components/LeftRail";
+import { CommandOverlay } from "./components/CommandOverlay";
 import { LibraryView } from "./views/LibraryView";
 import { DeployView } from "./views/DeployView";
 import { SettingsView } from "./views/SettingsView";
@@ -36,18 +37,19 @@ export default function App() {
   const settings = useAppStore((s) => s.settings);
   const refreshSkills = useAppStore((s) => s.refreshSkills);
   const runUpdateCheck = useAppStore((s) => s.runUpdateCheck);
-  const setLibraryLayout = useAppStore((s) => s.setLibraryLayout);
   const setActiveTab = useAppStore((s) => s.setActiveTab);
 
-  // Global keyboard shortcuts. ⌘K (Mac) / Ctrl+K (Win/Linux) toggles between
-  // the card grid and the ⌘K command palette layout while the Library tab
-  // is active. ⌘1/2/3 jump between tabs.
+  const [overlayOpen, setOverlayOpen] = useState(false);
+
+  // Global keyboard shortcuts. ⌘K opens the command overlay from any tab;
+  // ⌘1/2/3/4 jump to Library / Stacks / Deploy / Settings. The Library
+  // palette layout still exists but is reached via its layout-toggle
+  // button; ⌘K no longer drives it (decoupled in step 11 of the stacks
+  // build, will be re-homed cleanly in step 13).
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
-      // Skip if focus is in an input/textarea/contenteditable so the user's
-      // text editing isn't hijacked.
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
       const isEditable =
@@ -55,14 +57,10 @@ export default function App() {
         tag === "TEXTAREA" ||
         target?.isContentEditable === true;
       if (e.key.toLowerCase() === "k" && !e.shiftKey) {
-        // ⌘K toggles regardless of focus — the palette's own input is focused
-        // while it's open, and we still want ⌘K to dismiss back to cards.
+        // ⌘K is a global toggle — the overlay's own input is focused while
+        // it's open, so we still want ⌘K to dismiss back to the page.
         e.preventDefault();
-        // Switch to the Library tab if we're not already there — the
-        // shortcut should "show me the palette" no matter where I am.
-        const state = useAppStore.getState();
-        if (state.activeTab !== "library") setActiveTab("library");
-        setLibraryLayout(state.libraryLayout === "cards" ? "palette" : "cards");
+        setOverlayOpen((prev) => !prev);
       } else if (["1", "2", "3", "4"].includes(e.key)) {
         if (isEditable) return;
         e.preventDefault();
@@ -72,7 +70,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [setActiveTab, setLibraryLayout]);
+  }, [setActiveTab]);
 
   // Bootstrap: load settings, then skills, then optionally auto-check.
   useEffect(() => {
@@ -166,6 +164,11 @@ export default function App() {
       {modal?.type === "deleteStack" && (
         <DeleteStackFlow stackId={modal.stackId} />
       )}
+
+      <CommandOverlay
+        open={overlayOpen}
+        onClose={() => setOverlayOpen(false)}
+      />
 
       {lastError && (
         <div
