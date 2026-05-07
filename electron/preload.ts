@@ -46,6 +46,16 @@ function withLogChannel<T>(
 const api = {
   envInfo: () => ipcRenderer.invoke("env-info") as Promise<EnvInfo>,
 
+  listAgents: () =>
+    ipcRenderer.invoke("list-agents") as Promise<
+      {
+        id: string;
+        displayName: string;
+        supportsSymlinks: boolean;
+        formatNotes: string | null;
+      }[]
+    >,
+
   listSkills: () => ipcRenderer.invoke("list-skills") as Promise<Skill[]>,
 
   /**

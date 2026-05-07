@@ -13,6 +13,7 @@ import { randomUUID } from "node:crypto";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CLAUDE_DIR, CONFIG_PATH, LIBRARY_PATH } from "./services/paths";
+import { getSupportedAgents } from "./services/agents";
 import { killAllGitChildren } from "./services/git";
 import {
   bootstrap,
@@ -291,6 +292,15 @@ ipcMain.handle("env-info", () => ({
     claudeDir: CLAUDE_DIR,
   },
 }));
+
+ipcMain.handle("list-agents", () =>
+  getSupportedAgents().map((a) => ({
+    id: a.id,
+    displayName: a.displayName,
+    supportsSymlinks: a.supportsSymlinks,
+    formatNotes: a.formatNotes,
+  })),
+);
 
 ipcMain.handle("list-skills", () => listSkills());
 

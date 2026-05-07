@@ -138,6 +138,10 @@ export interface TrackedProject {
   skillNames: string[];
   lastDeployedAt: string | null;
   exists: boolean;
+  /** Unique agent ids that have at least one deployment in this project. */
+  agentIds: string[];
+  /** Unique deploy modes used in this project (for the copy/symlink hint). */
+  deployModes: DeployMode[];
 }
 
 export interface InstallResult {

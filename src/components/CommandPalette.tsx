@@ -798,7 +798,11 @@ function suggestDeploy(
     }));
   }
 
-  // Stage 2 — past the `to` keyword
+  // Stage 2 — past the `to` keyword, optionally with a `for <agent>` suffix
+  // for multi-agent deploys. Recognised forms:
+  //   deploy <skill> to <project>                  → claude (default)
+  //   deploy <skill> to <project> for <agent>      → that agent only
+  //   deploy <skill> to <project> for all          → every supported agent
   const skillName = rest.slice(0, toIdx).join(" ").trim();
   const skill = findSkill(skills, skillName);
   if (!skill) {
@@ -809,7 +813,48 @@ function suggestDeploy(
       },
     ];
   }
-  const projectPartial = rest.slice(toIdx + 1).join(" ");
+  const restPastTo = rest.slice(toIdx + 1);
+  const forIdx = restPastTo.findIndex((t) => t.toLowerCase() === "for");
+  const projectTokens =
+    forIdx === -1 ? restPastTo : restPastTo.slice(0, forIdx);
+  const agentTokens =
+    forIdx === -1 ? [] : restPastTo.slice(forIdx + 1);
+  const projectPartial = projectTokens.join(" ").trim();
+  const agentPartial = agentTokens.join(" ").trim().toLowerCase();
+
+  // If `for` is present we need both a complete project path AND an agent
+  // hint to actually run; otherwise fall back to the path-completion UI.
+  if (forIdx !== -1 && projectPartial && /^(~|\/)/.test(projectPartial)) {
+    const expanded = expandTilde(projectPartial);
+    if (agentPartial === "all") {
+      return [
+        {
+          display: `deploy ${skill.name} to ${tildify(expanded)} for all`,
+          detail: "deploy to every supported agent",
+          run: () => deployNow(skill.name, expanded, args, "__all__"),
+        },
+      ];
+    }
+    if (agentPartial.length > 0) {
+      return [
+        {
+          display: `deploy ${skill.name} to ${tildify(expanded)} for ${agentPartial}`,
+          detail: `deploy to ${agentPartial}`,
+          run: () =>
+            deployNow(skill.name, expanded, args, agentPartial),
+        },
+      ];
+    }
+    // `for ` typed but no agent yet — hint completion.
+    return [
+      {
+        display: `deploy ${skill.name} to ${tildify(expanded)} for <agent>`,
+        detail: "agent id (claude, codex, gemini, cursor, continue, cline) or 'all'",
+        fill: `deploy ${skill.name} to ${projectPartial} for `,
+      },
+    ];
+  }
+
   if (projectPartial === "" && !trailingSpace) {
     return [
       {
@@ -823,7 +868,8 @@ function suggestDeploy(
   const lc = projectPartial.toLowerCase();
   const projectMatches = projects.filter(
     (p) =>
-      p.path.toLowerCase().includes(lc) || tildify(p.path).toLowerCase().includes(lc),
+      p.path.toLowerCase().includes(lc) ||
+      tildify(p.path).toLowerCase().includes(lc),
   );
 
   const out: Suggestion[] = projectMatches.slice(0, 8).map((p) => ({
@@ -833,8 +879,8 @@ function suggestDeploy(
   }));
 
   // Always offer "execute as typed" if the partial looks like an absolute path
-  if (/^(~|\/)/.test(projectPartial.trim())) {
-    const expanded = expandTilde(projectPartial.trim());
+  if (/^(~|\/)/.test(projectPartial)) {
+    const expanded = expandTilde(projectPartial);
     if (!projectMatches.some((p) => p.path === expanded)) {
       out.unshift({
         display: `deploy ${skill.name} to ${tildify(expanded)}`,
@@ -866,7 +912,25 @@ function expandTilde(p: string): string {
   return p;
 }
 
-function deployNow(name: string, path: string, args: BuildArgs): void {
+// Hardcoded fallback agent list used by `for all`. Kept in sync with the
+// main-process AGENTS map; if a new agent is added there and this list is
+// stale, "for all" simply won't include it — UI surfaces a warning per
+// agent that fails, which is the correct degradation.
+const ALL_AGENT_IDS = [
+  "claude",
+  "codex",
+  "gemini",
+  "cursor",
+  "continue",
+  "cline",
+];
+
+function deployNow(
+  name: string,
+  path: string,
+  args: BuildArgs,
+  agentSpec?: string,
+): void {
   // The validator on the main side rejects non-absolute paths, so a `~`
   // shorthand will fail there. Surface that gracefully.
   if (!path.startsWith("/")) {
@@ -875,18 +939,34 @@ function deployNow(name: string, path: string, args: BuildArgs): void {
     );
     return;
   }
-  window.api
-    .deploySkill(name, path)
-    .then(async () => {
+  const targets =
+    agentSpec === "__all__"
+      ? ALL_AGENT_IDS
+      : agentSpec
+        ? [agentSpec]
+        : ["claude"];
+  // Run sequentially — the deploy IPC writes to the config under a lock,
+  // so parallel calls would just queue anyway and clearer error messages
+  // come from finishing one before starting the next.
+  (async () => {
+    try {
+      const warnings: string[] = [];
+      for (const agentId of targets) {
+        const result = await window.api.deploySkill(name, path, { agentId });
+        if (result.warning) warnings.push(result.warning);
+      }
       await args.actions.refreshSkills();
       await args.actions.refreshProjects();
       args.actions.setQuery("");
-    })
-    .catch((err) => {
+      if (warnings.length > 0) {
+        args.actions.setStoreError(warnings.join("\n"));
+      }
+    } catch (err) {
       args.actions.setError(
         err instanceof Error ? err.message : String(err),
       );
-    });
+    }
+  })();
 }
 
 function suggestUpdate(

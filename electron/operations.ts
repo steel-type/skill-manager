@@ -466,15 +466,53 @@ export async function listTrackedProjects(): Promise<TrackedProject[]> {
   const config = await loadConfig();
   const map = new Map<
     string,
-    { skillNames: string[]; latest: string | null }
+    {
+      skillNames: string[];
+      latest: string | null;
+      agents: Set<string>;
+      modes: Set<DeployMode>;
+    }
   >();
   for (const [name, record] of Object.entries(config.skills)) {
-    for (const project of record.projects) {
-      const entry = map.get(project) ?? { skillNames: [], latest: null };
-      entry.skillNames.push(name);
-      const ts = record.updated_at ?? record.installed_at;
-      if (ts && (!entry.latest || ts > entry.latest)) entry.latest = ts;
-      map.set(project, entry);
+    const deployments = record.deployments ?? [];
+    // Use the deployment list as the source of truth so agent + mode info
+    // surfaces correctly. Fall back to record.projects only if deployments
+    // is empty (paranoia for an in-flight migration on a partially-updated
+    // config).
+    const seen = new Set<string>();
+    const sources: { path: string; agentId: string; mode: DeployMode; ts: string | null }[] = [];
+    for (const d of deployments) {
+      sources.push({
+        path: d.projectPath,
+        agentId: d.agentId,
+        mode: d.deployMode,
+        ts: d.deployedAt,
+      });
+      seen.add(d.projectPath);
+    }
+    for (const p of record.projects) {
+      if (seen.has(p)) continue;
+      sources.push({
+        path: p,
+        agentId: "claude",
+        mode: "copy",
+        ts: record.updated_at ?? record.installed_at,
+      });
+    }
+    for (const s of sources) {
+      const entry =
+        map.get(s.path) ??
+        {
+          skillNames: [],
+          latest: null,
+          agents: new Set<string>(),
+          modes: new Set<DeployMode>(),
+        };
+      if (!entry.skillNames.includes(name)) entry.skillNames.push(name);
+      entry.agents.add(s.agentId);
+      entry.modes.add(s.mode);
+      if (s.ts && (!entry.latest || s.ts > entry.latest)) entry.latest = s.ts;
+      map.set(s.path, entry);
     }
   }
   const projects: TrackedProject[] = [];
@@ -492,6 +530,8 @@ export async function listTrackedProjects(): Promise<TrackedProject[]> {
       skillNames: [...info.skillNames].sort(),
       lastDeployedAt: info.latest,
       exists,
+      agentIds: [...info.agents].sort(),
+      deployModes: [...info.modes],
     });
   }
   return projects.sort((a, b) => a.path.localeCompare(b.path));

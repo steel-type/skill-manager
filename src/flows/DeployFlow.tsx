@@ -34,11 +34,32 @@ export function DeployFlow({ skillName }: DeployFlowProps) {
   const [done, setDone] = useState(false);
   // Mode defaults to the user's saved preference but can be flipped per
   // deploy. Symlink falls back to copy (with a warning) for agents that
-  // don't support links — surfaced in `warning` after the deploy returns.
+  // don't support links — surfaced in `warnings` after the deploy returns.
   const [deployMode, setDeployMode] = useState<"copy" | "symlink">(
     settings.default_deploy_mode,
   );
-  const [warning, setWarning] = useState<string | null>(null);
+  const [agents, setAgents] = useState<
+    { id: string; displayName: string; supportsSymlinks: boolean }[]
+  >([]);
+  // Default to claude only — multi-agent deploys are opt-in. Stored as a
+  // Set keyed by agent id so toggle/contains operations stay O(1).
+  const [selectedAgents, setSelectedAgents] = useState<Set<string>>(
+    new Set(["claude"]),
+  );
+  const [warnings, setWarnings] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    window.api
+      .listAgents()
+      .then((list) => {
+        if (!cancelled) setAgents(list);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Pre-fill with the last-used project if it exists; otherwise leave empty
   // and force the user to Browse.
@@ -62,14 +83,22 @@ export function DeployFlow({ skillName }: DeployFlowProps) {
   };
 
   const performDeploy = async () => {
-    if (!selectedPath || !skill) return;
+    if (!selectedPath || !skill || selectedAgents.size === 0) return;
     setRunning(true);
-    setWarning(null);
+    setWarnings([]);
+    const collected: string[] = [];
     try {
-      const result = await window.api.deploySkill(skill.name, selectedPath, {
-        deployMode,
-      });
-      if (result.warning) setWarning(result.warning);
+      // Deploy sequentially per agent so each one finishes (and writes its
+      // config record) before the next starts — avoids contending on the
+      // config lock and gives clearer error messages.
+      for (const agentId of selectedAgents) {
+        const result = await window.api.deploySkill(skill.name, selectedPath, {
+          agentId,
+          deployMode,
+        });
+        if (result.warning) collected.push(result.warning);
+      }
+      setWarnings(collected);
       await refreshSkills();
       await refreshProjects();
       setDone(true);
@@ -77,6 +106,20 @@ export function DeployFlow({ skillName }: DeployFlowProps) {
       setError(err instanceof Error ? err.message : String(err));
       setRunning(false);
     }
+  };
+
+  const toggleAgent = (id: string) => {
+    setSelectedAgents((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        // Don't allow zero — at least one agent must be selected.
+        if (next.size === 1) return prev;
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
   if (!skill) return null;
@@ -144,6 +187,52 @@ export function DeployFlow({ skillName }: DeployFlowProps) {
                 Browse…
               </button>
             </div>
+
+            {agents.length > 0 && (
+              <>
+                <div className="rail-section" style={{ padding: 0 }}>
+                  Agents
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 6,
+                  }}
+                >
+                  {agents.map((a) => {
+                    const checked = selectedAgents.has(a.id);
+                    return (
+                      <label
+                        key={a.id}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "5px 9px",
+                          fontSize: 12,
+                          border: "1.5px solid var(--line)",
+                          borderRadius: 14,
+                          background: checked
+                            ? "var(--card-selected-bg)"
+                            : "transparent",
+                          borderColor: checked ? "var(--accent)" : undefined,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleAgent(a.id)}
+                          style={{ margin: 0 }}
+                        />
+                        {a.displayName}
+                      </label>
+                    );
+                  })}
+                </div>
+              </>
+            )}
 
             <div className="rail-section" style={{ padding: 0 }}>
               Mode
@@ -243,15 +332,20 @@ export function DeployFlow({ skillName }: DeployFlowProps) {
                 .claude/skills/
               </span>
             </div>
-            {warning && (
+            {warnings.length > 0 && (
               <div
                 style={{
                   fontSize: 12,
                   color: "var(--warn)",
                   fontFamily: "var(--read)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
                 }}
               >
-                {warning}
+                {warnings.map((w, i) => (
+                  <div key={i}>{w}</div>
+                ))}
               </div>
             )}
           </>

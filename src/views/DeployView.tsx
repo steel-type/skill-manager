@@ -1,9 +1,15 @@
 // Deploy view — list of every project where skills have been deployed.
 // Add new projects via the native folder picker; remove via RemoveProjectFlow.
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "../state/store";
 import type { TrackedProject } from "../../electron/services/types";
+
+interface AgentMeta {
+  id: string;
+  displayName: string;
+  supportsSymlinks: boolean;
+}
 
 function relativeTime(iso: string | null): string {
   if (!iso) return "never";
@@ -27,10 +33,27 @@ export function DeployView() {
   const setActiveTab = useAppStore((s) => s.setActiveTab);
   const openModal = useAppStore((s) => s.openModal);
   const [pendingPath, setPendingPath] = useState("");
+  const [agents, setAgents] = useState<AgentMeta[]>([]);
 
   useEffect(() => {
     refreshProjects();
+    let cancelled = false;
+    window.api
+      .listAgents()
+      .then((list) => {
+        if (!cancelled) setAgents(list);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, [refreshProjects]);
+
+  const agentLabels = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of agents) map.set(a.id, a.displayName);
+    return map;
+  }, [agents]);
 
   const handlePick = async () => {
     const picked = await window.api.pickFolder();
@@ -140,6 +163,7 @@ export function DeployView() {
           <ProjectRow
             key={p.path}
             project={p}
+            agentLabels={agentLabels}
             onOpen={() => window.api.openInFinder(p.path)}
             onRemove={() =>
               openModal({ type: "removeProject", path: p.path })
@@ -153,10 +177,12 @@ export function DeployView() {
 
 function ProjectRow({
   project,
+  agentLabels,
   onOpen,
   onRemove,
 }: {
   project: TrackedProject;
+  agentLabels: Map<string, string>;
   onOpen: () => void;
   onRemove: () => void;
 }) {
@@ -207,6 +233,32 @@ function ProjectRow({
             {project.skillCount > 0 &&
               ` · ${project.skillNames.slice(0, 3).join(", ")}${project.skillCount > 3 ? "…" : ""}`}
           </div>
+          {(project.agentIds.length > 0 ||
+            project.deployModes.length > 0) && (
+            <div
+              style={{
+                marginTop: 4,
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 4,
+              }}
+            >
+              {project.agentIds.map((id) => (
+                <span key={id} className="sk-tag" style={{ fontSize: 9 }}>
+                  {agentLabels.get(id) ?? id}
+                </span>
+              ))}
+              {project.deployModes.includes("symlink") && (
+                <span
+                  className="sk-tag"
+                  style={{ fontSize: 9 }}
+                  title="this project has at least one symlink deployment"
+                >
+                  ↗ symlink
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <button
           className="sk-btn sm ghost"
