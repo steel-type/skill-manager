@@ -708,7 +708,7 @@ export function DeployView() {
           onClick={performDeploy}
           style={{
             background: canDeploy ? "var(--accent)" : "var(--paper-2)",
-            color: canDeploy ? "white" : "var(--ink-faint)",
+            color: canDeploy ? "var(--on-accent)" : "var(--ink-faint)",
             borderColor: canDeploy ? "var(--accent)" : "var(--line-soft)",
             fontWeight: 700,
           }}
@@ -871,7 +871,7 @@ function QueuedItemCard({
           style={{
             fontSize: 9,
             background: queue.type === "stack" ? "var(--accent)" : "var(--paper-2)",
-            color: queue.type === "stack" ? "white" : "var(--ink)",
+            color: queue.type === "stack" ? "var(--on-accent)" : "var(--ink)",
           }}
         >
           {queue.type}
@@ -948,14 +948,14 @@ function ModeToggle({
       }}
     >
       <ModeButton
-        label="Copy"
-        active={mode === "copy"}
-        onClick={() => onChange("copy")}
-      />
-      <ModeButton
         label="Symlink"
         active={mode === "symlink"}
         onClick={() => onChange("symlink")}
+      />
+      <ModeButton
+        label="Copy"
+        active={mode === "copy"}
+        onClick={() => onChange("copy")}
       />
     </div>
   );
@@ -982,7 +982,7 @@ function ModeButton({
         fontWeight: active ? 700 : 500,
         fontFamily: "var(--read)",
         background: active ? "var(--accent)" : "transparent",
-        color: active ? "white" : "var(--ink-soft)",
+        color: active ? "var(--on-accent)" : "var(--ink-soft)",
         border: "none",
         cursor: "pointer",
       }}

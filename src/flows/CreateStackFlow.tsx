@@ -177,7 +177,7 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
           onClick={onSubmit}
           style={{
             background: canSubmit ? "var(--accent)" : "var(--paper-2)",
-            color: canSubmit ? "white" : "var(--ink-faint)",
+            color: canSubmit ? "var(--on-accent)" : "var(--ink-faint)",
             borderColor: canSubmit ? "var(--accent)" : "var(--line-soft)",
           }}
         >

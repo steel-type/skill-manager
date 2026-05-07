@@ -447,7 +447,7 @@ function ToggleRow({
             width: 12,
             height: 12,
             borderRadius: "50%",
-            background: value ? "white" : "var(--ink-soft)",
+            background: value ? "var(--paper)" : "var(--ink-soft)",
             transition: "left 0.2s",
           }}
         />

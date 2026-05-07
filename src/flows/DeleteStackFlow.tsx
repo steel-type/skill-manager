@@ -111,7 +111,7 @@ export function DeleteStackFlow({ stackId }: DeleteStackFlowProps) {
             className="sk-btn"
             style={{
               background: "var(--warn)",
-              color: "white",
+              color: "var(--on-warn)",
               borderColor: "var(--warn)",
             }}
             disabled={running}

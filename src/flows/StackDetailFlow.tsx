@@ -387,7 +387,7 @@ export function StackDetailFlow({ stackId }: StackDetailFlowProps) {
             onClick={() => queueStackForDeploy(stack.id)}
             style={{
               background: "var(--accent)",
-              color: "white",
+              color: "var(--on-accent)",
               borderColor: "var(--accent)",
             }}
           >

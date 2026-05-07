@@ -262,7 +262,7 @@ export function RollbackFlow({ name }: RollbackFlowProps) {
                             width: 6,
                             height: 6,
                             borderRadius: "50%",
-                            background: "white",
+                            background: "var(--paper)",
                           }}
                         />
                       )}

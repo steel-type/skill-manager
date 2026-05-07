@@ -86,7 +86,7 @@ export function LayoutToggle() {
             fontSize: 11,
             fontWeight: i === idx ? 700 : 500,
             fontFamily: "var(--read)",
-            color: i === idx ? "white" : TOGGLE_COLOR,
+            color: i === idx ? "var(--on-accent-2)" : TOGGLE_COLOR,
             zIndex: 1,
             transition: "color 0.2s",
           }}

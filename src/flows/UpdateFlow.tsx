@@ -558,10 +558,10 @@ function Step({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          // Dark ink on the bright accent/good fills (green in dark theme,
-          // terracotta/olive in light) keeps the symbol readable; warn keeps
-          // white because red-orange has enough contrast either way.
-          color: state === "failed" ? "white" : "#0a0a0a",
+          // --on-warn for failed (red bg), --on-accent for the bright
+          // success/active states. Both tokens invert per theme so the
+          // symbol stays readable on whatever fill is behind it.
+          color: state === "failed" ? "var(--on-warn)" : "var(--on-accent)",
           fontSize: 11,
           flexShrink: 0,
         }}

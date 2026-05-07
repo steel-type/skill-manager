@@ -91,7 +91,7 @@ export function ViewSwitcher({ active, onChange }: ViewSwitcherProps) {
             fontSize: 11,
             fontWeight: i === idx ? 700 : 500,
             fontFamily: "var(--read)",
-            color: i === idx ? "white" : "var(--ink-soft)",
+            color: i === idx ? "var(--on-accent)" : "var(--ink-soft)",
             cursor: "pointer",
             userSelect: "none",
             zIndex: 1,

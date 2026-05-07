@@ -185,7 +185,7 @@ export function RemoveSkillFlow({ name }: RemoveSkillFlowProps) {
             className="sk-btn"
             style={{
               background: cascade ? "var(--warn)" : "var(--ink)",
-              color: "white",
+              color: cascade ? "var(--on-warn)" : "var(--paper)",
               borderColor: cascade ? "var(--warn)" : "var(--ink)",
             }}
             disabled={running || (cascade && !confirmed)}
@@ -250,7 +250,7 @@ function Radio({
               width: 6,
               height: 6,
               borderRadius: "50%",
-              background: "white",
+              background: "var(--paper)",
             }}
           />
         )}

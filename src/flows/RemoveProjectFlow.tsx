@@ -175,7 +175,7 @@ export function RemoveProjectFlow({ path }: RemoveProjectFlowProps) {
             className="sk-btn"
             style={{
               background: cleanFiles ? "var(--warn)" : "var(--ink)",
-              color: "white",
+              color: cleanFiles ? "var(--on-warn)" : "var(--paper)",
               borderColor: cleanFiles ? "var(--warn)" : "var(--ink)",
             }}
             disabled={running || (cleanFiles && !confirmed)}
@@ -240,7 +240,7 @@ function Radio({
               width: 6,
               height: 6,
               borderRadius: "50%",
-              background: "white",
+              background: "var(--paper)",
             }}
           />
         )}

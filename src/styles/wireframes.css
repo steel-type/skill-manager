@@ -13,6 +13,15 @@
   --note: #fef4a8;
   --warn: #d97757;
   --good: #6f8f5e;
+
+  /* Foreground tokens for text/icons that sit ON TOP of accent/good/warn.
+     Light theme uses terracotta/olive/coral backgrounds — white reads
+     fine. The dark theme overrides these below so green-on-green doesn't
+     happen. Components MUST consume these instead of hardcoding white. */
+  --on-accent:   #ffffff;
+  --on-accent-2: #ffffff;
+  --on-good:     #ffffff;
+  --on-warn:     #ffffff;
   --hand: 'Caveat', 'Patrick Hand', 'Comic Sans MS', cursive;
   --read: 'Kalam', 'Patrick Hand', system-ui, sans-serif;
   --mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
@@ -91,7 +100,7 @@ body { background: #e8e4d8; margin: 0; font-family: var(--read); color: var(--in
 .sk-btn.primary:not(:disabled):hover { background: var(--primary-hover-bg); }
 .sk-btn.accent {
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   border-color: var(--accent);
 }
 .sk-btn.accent:not(:disabled):hover { background: var(--accent-hover-bg); }
@@ -127,9 +136,9 @@ body { background: #e8e4d8; margin: 0; font-family: var(--read); color: var(--in
   color: var(--ink-soft);
   background: var(--paper-2);
 }
-.sk-tag.warn { background: var(--warn); color: white; border-color: var(--warn); }
-.sk-tag.good { background: var(--good); color: white; border-color: var(--good); }
-.sk-tag.update { background: var(--accent); color: white; border-color: var(--accent); }
+.sk-tag.warn { background: var(--warn); color: var(--on-warn); border-color: var(--warn); }
+.sk-tag.good { background: var(--good); color: var(--on-good); border-color: var(--good); }
+.sk-tag.update { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 
 .sk-divider {
   height: 1.5px;
@@ -314,6 +323,16 @@ body { background: #e8e4d8; margin: 0; font-family: var(--read); color: var(--in
   --warn:       #ff6b5a;
   --good:       #3ee07a;
 
+  /* Dark-mode foregrounds: bright green --accent/--good need a near-black
+     ink on top to stay readable. Vivid orange --warn still works with
+     white. Slate-blue --accent-2 stays with white in both themes since
+     it's dark enough either way. Mirrors the #0a0a0a convention used in
+     the older .sk-tag.update / .sk-btn.accent overrides. */
+  --on-accent:   #0a0a0a;
+  --on-accent-2: #ffffff;
+  --on-good:     #0a0a0a;
+  --on-warn:     #ffffff;
+
   /* Card colours: swap so cards sit on the elevated surface tone in dark
      instead of disappearing into the page. */
   --card-bg:          var(--paper-2);
@@ -372,14 +391,7 @@ body { background: #e8e4d8; margin: 0; font-family: var(--read); color: var(--in
   --icon-update-bg: rgba(62, 224, 122, 0.22);
 }
 
-/* In dark mode the green --accent/--good fill is bright enough that white
-   text fails contrast. Force a dark ink on the green-filled tag and accent
-   button so "UPDATE" / "good" / accent CTAs stay readable. The light theme
-   uses terracotta (--accent) and olive (--good) where white reads fine, so
-   it stays on the default. Mirrors the same #0a0a0a treatment used on the
-   UpdateFlow row check icon. */
-:root[data-theme="dark"] .sk-tag.update,
-:root[data-theme="dark"] .sk-tag.good,
-:root[data-theme="dark"] .sk-btn.accent {
-  color: #0a0a0a;
-}
+/* Class-based dark-mode overrides have been replaced by the --on-accent
+   / --on-good / --on-warn token contract above. The .sk-tag and .sk-btn
+   rules consume those tokens directly, so the dark-mode swap happens
+   automatically without per-class overrides. */

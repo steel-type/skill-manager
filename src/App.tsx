@@ -183,7 +183,7 @@ export default function App() {
             right: 20,
             padding: "10px 14px",
             background: "var(--warn)",
-            color: "white",
+            color: "var(--on-warn)",
             fontFamily: "var(--read)",
             fontSize: 13,
             borderRadius: 6,
@@ -204,7 +204,7 @@ export default function App() {
             style={{
               background: "transparent",
               border: "none",
-              color: "white",
+              color: "var(--on-warn)",
               cursor: "pointer",
               fontSize: 16,
               lineHeight: 1,

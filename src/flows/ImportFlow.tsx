@@ -699,9 +699,9 @@ function RunRowDisplay({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          // Same readability rule as UpdateFlow: dark ink on the bright
-          // accent/good fills, white only on the warn (red) state.
-          color: state === "failed" ? "white" : "#0a0a0a",
+          // Tokens invert per theme: --on-warn for failed (red bg),
+          // --on-accent for accent/good fills.
+          color: state === "failed" ? "var(--on-warn)" : "var(--on-accent)",
           fontSize: 11,
           flexShrink: 0,
         }}
