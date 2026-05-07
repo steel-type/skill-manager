@@ -1,0 +1,144 @@
+/* App-level styles. wireframes.css owns the design tokens; this file
+   handles app-shell layout and Electron-specific concerns (drag regions,
+   no-select, overflow). */
+
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Kalam:wght@300;400;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+#root {
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+/* The wf-window fills the entire OS window edge-to-edge. With
+   titleBarStyle: "hidden" + trafficLightPosition the native lights sit
+   inside our drawn titlebar, so we don't want any padding between OS frame
+   and wf chrome — that would create the dreaded "two frames" effect. */
+.app-root {
+  flex: 1;
+  display: flex;
+  background: var(--paper);
+}
+
+.app-root .wf-window {
+  flex: 1;
+  width: auto;
+  height: auto;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* The titlebar still keeps its bottom rule so the wireframe's "page header"
+   beat is preserved even though the surrounding frame is gone. */
+.app-root .wf-titlebar {
+  border-bottom: 1.5px solid var(--line);
+}
+
+/* Custom scrollbars to match the warm palette */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-soft);
+  border-radius: 5px;
+  border: 2px solid #e8e4d8;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-soft);
+}
+
+/* Buttons inherit cursor:pointer in our overrides; reset native button look */
+button {
+  font-family: var(--read);
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+}
+
+input, textarea {
+  font-family: var(--read);
+}
+
+/* Section header inside the FilterRail — uppercase mono micro-label */
+.rail-section {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 4px;
+}
+
+/* Disabled buttons should look it */
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Skill-card hover & focus pop. Subtle lift + sketchy offset shadow that
+   matches the wireframe's hand-drawn aesthetic. We don't change
+   layout-shifting properties; the pop is pure transform + box-shadow so
+   neighbouring cards never reflow.
+
+   `translate3d` (vs `translateY`) keeps the card on a composited GPU layer
+   continuously — without it the 1.5px border re-rasterises at a sub-pixel
+   offset on hover entry/exit and reads as fuzzy. */
+.skill-card {
+  transition:
+    transform 0.16s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.16s cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 0.16s ease;
+  transform: translate3d(0, 0, 0);
+  will-change: transform, box-shadow;
+}
+.skill-card:hover {
+  transform: translate3d(0, -2px, 0);
+  box-shadow: 4px 6px 0 var(--line);
+  border-color: var(--ink);
+}
+.skill-card:focus-visible {
+  /* Focus state takes precedence over hover when both apply */
+  transform: translate3d(0, -2px, 0);
+  box-shadow: 4px 6px 0 var(--accent);
+  border-color: var(--accent);
+}
+.skill-card:active {
+  transform: translate3d(0, 0, 0);
+  box-shadow: 2px 3px 0 var(--line);
+}
+
+/* Visible focus rings — Chrome's default outline is invisible against the
+   cream paper. Using :focus-visible so mouse users don't see rings on
+   click, but keyboard users always do. Matches the warm palette via
+   --accent-2 (slate blue) so it reads as intentional, not a bug.
+   Inputs are deliberately excluded — they already signal focus via
+   `.sk-input:focus { border-color: var(--accent) }` from wireframes.css,
+   so adding the outline on top would double-stroke (one accent border +
+   one accent-2 outline) and feel noisy. */
+button:focus-visible,
+.sk-btn:focus-visible,
+[role="button"]:focus-visible,
+[tabindex="0"]:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+
+/* The whole window must reject file drops — Chrome's default behavior is to
+   navigate to the dropped file's file:// URL. We block this in
+   electron/main.ts:will-navigate, but belt-and-braces here too. */
+html, body {
+  -webkit-user-drag: none;
+}

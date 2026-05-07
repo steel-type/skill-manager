@@ -21,3 +21,16 @@ dist/
 
 # Build artifacts
 skill-manager.app/
+
+# Node / Electron / Vite
+node_modules/
+dist-electron/
+release/
+.vite/
+*.log
+package-lock.json
+
+# Icon build intermediates (kept: assets/icon.svg as source, assets/icon.icns
+# as committed artifact so the build doesn't require running build-icons.sh)
+assets/icon.iconset/
+

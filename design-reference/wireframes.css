@@ -1,0 +1,230 @@
+/* Wireframe sketchy aesthetic */
+:root {
+  --ink: #2a2a2a;
+  --ink-soft: #555;
+  --ink-faint: #888;
+  --paper: #fdfcf8;
+  --paper-2: #f5f3ec;
+  --line: #2a2a2a;
+  --line-soft: #b8b3a4;
+  --accent: #c96442;     /* terracotta highlight */
+  --accent-2: #3d6e8c;   /* slate blue */
+  --highlight: #fff3a0;  /* yellow highlighter */
+  --note: #fef4a8;
+  --warn: #d97757;
+  --good: #6f8f5e;
+  --hand: 'Caveat', 'Patrick Hand', 'Comic Sans MS', cursive;
+  --read: 'Kalam', 'Patrick Hand', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+body { background: #e8e4d8; margin: 0; font-family: var(--read); color: var(--ink); }
+
+/* shared sketchy element styles */
+.wf {
+  font-family: var(--read);
+  color: var(--ink);
+  letter-spacing: 0.01em;
+}
+.wf .hand { font-family: var(--hand); }
+.wf .mono { font-family: var(--mono); font-size: 11px; }
+
+/* sketch borders use slightly hand-drawn look via box-shadow + border */
+.sk-box {
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  border-radius: 6px;
+  position: relative;
+}
+.sk-box.dashed { border-style: dashed; }
+.sk-box.soft { border-color: var(--line-soft); border-width: 1px; }
+.sk-box.shadow {
+  box-shadow: 3px 3px 0 var(--line);
+}
+.sk-box.tilt-l { transform: rotate(-0.5deg); }
+.sk-box.tilt-r { transform: rotate(0.5deg); }
+
+.sk-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 18px;
+  background: var(--paper);
+  font-family: var(--read);
+  font-size: 13px;
+  color: var(--ink);
+  cursor: default;
+  white-space: nowrap;
+}
+.sk-btn.primary {
+  background: var(--ink);
+  color: var(--paper);
+  box-shadow: 2px 2px 0 var(--line-soft);
+}
+.sk-btn.accent {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.sk-btn.ghost { background: transparent; }
+.sk-btn.sm { padding: 3px 9px; font-size: 11px; border-radius: 14px; }
+
+.sk-input {
+  border: 1.5px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 10px;
+  background: var(--paper);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.sk-tag {
+  display: inline-block;
+  padding: 1px 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--ink-soft);
+  background: var(--paper-2);
+}
+.sk-tag.warn { background: var(--warn); color: white; border-color: var(--warn); }
+.sk-tag.good { background: var(--good); color: white; border-color: var(--good); }
+.sk-tag.update { background: var(--accent); color: white; border-color: var(--accent); }
+
+.sk-divider {
+  height: 1.5px;
+  background: var(--line);
+  margin: 8px 0;
+  position: relative;
+}
+.sk-divider.soft { background: var(--line-soft); height: 1px; }
+
+/* placeholder image / icon boxes */
+.sk-img {
+  background: repeating-linear-gradient(
+    -45deg, transparent, transparent 6px,
+    rgba(0,0,0,0.07) 6px, rgba(0,0,0,0.07) 7px
+  );
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+}
+.sk-circle { border-radius: 50%; }
+
+.sk-line {
+  height: 8px;
+  background: var(--line-soft);
+  border-radius: 4px;
+  opacity: 0.55;
+}
+.sk-line.short { width: 40%; }
+.sk-line.med { width: 70%; }
+.sk-line.dark { background: var(--ink-soft); opacity: 0.7; }
+
+/* annotation callouts */
+.anno {
+  font-family: var(--hand);
+  color: var(--accent);
+  font-size: 16px;
+  line-height: 1.1;
+  position: absolute;
+  pointer-events: none;
+}
+.anno-arrow {
+  position: absolute;
+  pointer-events: none;
+  color: var(--accent);
+}
+.anno-pill {
+  font-family: var(--hand);
+  color: var(--accent);
+  font-size: 14px;
+  background: #fffbe6;
+  border: 1px dashed var(--accent);
+  padding: 2px 8px;
+  border-radius: 12px;
+  display: inline-block;
+}
+
+/* mac window override - keep in canvas */
+.wf-window {
+  background: #fdfcf8;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 4px 4px 0 rgba(42,42,42,0.15);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.wf-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1.5px solid var(--line);
+  background: var(--paper-2);
+  height: 28px;
+  flex-shrink: 0;
+}
+.wf-tlights { display: flex; gap: 6px; }
+.wf-tlights .tl {
+  width: 11px; height: 11px; border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+.wf-title { font-family: var(--hand); font-size: 14px; color: var(--ink-soft); flex: 1; text-align: center; }
+
+/* skills lockup -- a "skill card" used everywhere */
+.skill-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px dashed var(--line-soft);
+}
+.skill-row:last-child { border-bottom: none; }
+.skill-row.selected { background: #fff8d8; }
+.skill-icon {
+  width: 28px; height: 28px;
+  border: 1.5px solid var(--line);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  background: var(--paper);
+  flex-shrink: 0;
+}
+.skill-name { font-family: var(--read); font-size: 13px; font-weight: 600; }
+.skill-desc { font-family: var(--read); font-size: 11px; color: var(--ink-faint); }
+
+/* highlighter swipe over text */
+.hl {
+  background: linear-gradient(180deg, transparent 55%, var(--highlight) 55%, var(--highlight) 90%, transparent 90%);
+  padding: 0 2px;
+}
+
+/* annotation hidden state (tweak) */
+[data-annotations="off"] .anno,
+[data-annotations="off"] .anno-arrow,
+[data-annotations="off"] .anno-pill { display: none !important; }
+
+[data-sketchy="off"] .wf .sk-box,
+[data-sketchy="off"] .wf .skill-icon,
+[data-sketchy="off"] .wf .sk-btn,
+[data-sketchy="off"] .wf .sk-input,
+[data-sketchy="off"] .wf-window {
+  border-style: solid !important;
+}
+[data-sketchy="off"] .wf .sk-box.shadow,
+[data-sketchy="off"] .wf-window { box-shadow: none !important; }
+[data-sketchy="off"] .wf .sk-btn.primary { box-shadow: none !important; }
+[data-sketchy="off"] .wf .tilt-l, [data-sketchy="off"] .wf .tilt-r { transform: none !important; }
+[data-sketchy="off"] .wf .hand { font-family: var(--read) !important; }
+
+/* spec callout used between artboards */
+.spec {
+  font-family: var(--hand);
+  font-size: 16px;
+  color: var(--ink-soft);
+  max-width: 280px;
+  line-height: 1.25;
+}
+.spec b { color: var(--ink); }

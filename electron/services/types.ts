@@ -1,0 +1,161 @@
+// Shared types between main and renderer. Schema for SkillRecord is identical
+// to the Python app's (`~/.claude/skill-manager.json`) — installs from the old
+// app load without migration.
+
+export interface HistorySnapshot {
+  commit: string; // SHA, or `pre-<iso>` for snapshots without a captured commit
+  archived_at: string; // ISO timestamp the snapshot was taken
+}
+
+export interface SkillRecord {
+  url: string | null;
+  commit: string | null;
+  installed_at: string;
+  updated_at: string | null;
+  projects: string[];
+  history?: HistorySnapshot[];
+}
+
+// Maximum snapshots we'll keep per skill — picked so a 30-skill library with
+// modest bundles stays under ~500 MB at the highest retention setting.
+export const MAX_HISTORY_RETENTION = 10;
+
+export const HISTORY_RETENTION_OPTIONS = [0, 1, 2, 5, 10] as const;
+
+export type HistoryRetention = (typeof HISTORY_RETENTION_OPTIONS)[number];
+
+export type Theme = "light" | "dark";
+
+export interface AppSettings {
+  auto_check_updates: boolean;
+  cascade_updates: boolean;
+  confirm_before_remove: boolean;
+  show_resource_only: boolean;
+  default_layout: "cards" | "palette";
+  // 0 = disabled (atomic swap, no rollback). Default 2 covers the common
+  // "undo my last bad update" case without doubling disk cost.
+  update_history_retention: HistoryRetention;
+  theme: Theme;
+}
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  auto_check_updates: false,
+  cascade_updates: true,
+  confirm_before_remove: true,
+  show_resource_only: false,
+  default_layout: "cards",
+  update_history_retention: 2,
+  theme: "light",
+};
+
+export interface SkillManagerConfig {
+  last_project: string;
+  skills: Record<string, SkillRecord>;
+  settings: AppSettings;
+}
+
+export interface SkillFrontmatter {
+  name?: string;
+  description?: string;
+  license?: string;
+  compatibility?: string;
+}
+
+export interface NestedSkill {
+  name: string;
+  path: string;
+}
+
+export interface TreeNode {
+  name: string;
+  /** path relative to the skill root */
+  relativePath: string;
+  isDir: boolean;
+  size?: number;
+  children?: TreeNode[];
+}
+
+export interface SkillDetection {
+  identifiers: string[]; // e.g. ["SKILL.md"]
+  content: string[]; // e.g. ["references/", "scripts/"]
+  nested: NestedSkill[];
+  isSkill: boolean;
+  isBundle: boolean;
+}
+
+// Renderer-facing shape — combines disk + config + detection.
+export interface Skill {
+  name: string;
+  displayName: string;
+  description: string;
+  url: string | null;
+  commit: string | null;
+  installedAt: string;
+  updatedAt: string | null;
+  projects: string[];
+  isSkill: boolean;
+  isBundle: boolean;
+  bundleSize: number;
+  identifiers: string[];
+  contentDirs: string[];
+  isLocal: boolean; // no source URL
+  historyCount: number;
+  nestedSkills: { name: string; relativePath: string }[];
+}
+
+export interface UpdateInfo {
+  current: string | null;
+  remote: string;
+  hasUpdate: boolean;
+}
+
+export interface TrackedProject {
+  path: string;
+  skillCount: number;
+  skillNames: string[];
+  lastDeployedAt: string | null;
+  exists: boolean;
+}
+
+export interface InstallResult {
+  name: string;
+  commit: string | null;
+  isBundle: boolean;
+  bundleSize: number;
+}
+
+export interface UpdateResult {
+  name: string;
+  commit: string | null;
+  cascadedTo: string[];
+  failedProjects: string[];
+}
+
+export interface ExportPayload {
+  markdown: string;
+  count: number;
+}
+
+export interface ImportEntry {
+  name: string;
+  url: string;
+}
+
+export interface ImportSummary {
+  installed: ImportEntry[];
+  failed: { entry: ImportEntry; error: string }[];
+}
+
+export interface HistoryEntry {
+  commit: string;
+  archived_at: string;
+  sizeBytes: number;
+  exists: boolean; // false if snapshot dir was deleted out from under us
+}
+
+export interface RollbackResult {
+  name: string;
+  commit: string;
+  cascadedTo: string[];
+  failedProjects: string[];
+}

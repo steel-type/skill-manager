@@ -1,0 +1,2126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Skill Manager — Wireframes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Kalam:wght@400;700&family=Patrick+Hand&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+/* Wireframe sketchy aesthetic */
+:root {
+  --ink: #2a2a2a;
+  --ink-soft: #555;
+  --ink-faint: #888;
+  --paper: #fdfcf8;
+  --paper-2: #f5f3ec;
+  --line: #2a2a2a;
+  --line-soft: #b8b3a4;
+  --accent: #c96442;     /* terracotta highlight */
+  --accent-2: #3d6e8c;   /* slate blue */
+  --highlight: #fff3a0;  /* yellow highlighter */
+  --note: #fef4a8;
+  --warn: #d97757;
+  --good: #6f8f5e;
+  --hand: 'Caveat', 'Patrick Hand', 'Comic Sans MS', cursive;
+  --read: 'Kalam', 'Patrick Hand', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+body { background: #e8e4d8; margin: 0; font-family: var(--read); color: var(--ink); }
+
+/* shared sketchy element styles */
+.wf {
+  font-family: var(--read);
+  color: var(--ink);
+  letter-spacing: 0.01em;
+}
+.wf .hand { font-family: var(--hand); }
+.wf .mono { font-family: var(--mono); font-size: 11px; }
+
+/* sketch borders use slightly hand-drawn look via box-shadow + border */
+.sk-box {
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  border-radius: 6px;
+  position: relative;
+}
+.sk-box.dashed { border-style: dashed; }
+.sk-box.soft { border-color: var(--line-soft); border-width: 1px; }
+.sk-box.shadow {
+  box-shadow: 3px 3px 0 var(--line);
+}
+.sk-box.tilt-l { transform: rotate(-0.5deg); }
+.sk-box.tilt-r { transform: rotate(0.5deg); }
+
+.sk-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 18px;
+  background: var(--paper);
+  font-family: var(--read);
+  font-size: 13px;
+  color: var(--ink);
+  cursor: default;
+  white-space: nowrap;
+}
+.sk-btn.primary {
+  background: var(--ink);
+  color: var(--paper);
+  box-shadow: 2px 2px 0 var(--line-soft);
+}
+.sk-btn.accent {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.sk-btn.ghost { background: transparent; }
+.sk-btn.sm { padding: 3px 9px; font-size: 11px; border-radius: 14px; }
+
+.sk-input {
+  border: 1.5px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 10px;
+  background: var(--paper);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.sk-tag {
+  display: inline-block;
+  padding: 1px 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--ink-soft);
+  background: var(--paper-2);
+}
+.sk-tag.warn { background: var(--warn); color: white; border-color: var(--warn); }
+.sk-tag.good { background: var(--good); color: white; border-color: var(--good); }
+.sk-tag.update { background: var(--accent); color: white; border-color: var(--accent); }
+
+.sk-divider {
+  height: 1.5px;
+  background: var(--line);
+  margin: 8px 0;
+  position: relative;
+}
+.sk-divider.soft { background: var(--line-soft); height: 1px; }
+
+/* placeholder image / icon boxes */
+.sk-img {
+  background: repeating-linear-gradient(
+    -45deg, transparent, transparent 6px,
+    rgba(0,0,0,0.07) 6px, rgba(0,0,0,0.07) 7px
+  );
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+}
+.sk-circle { border-radius: 50%; }
+
+.sk-line {
+  height: 8px;
+  background: var(--line-soft);
+  border-radius: 4px;
+  opacity: 0.55;
+}
+.sk-line.short { width: 40%; }
+.sk-line.med { width: 70%; }
+.sk-line.dark { background: var(--ink-soft); opacity: 0.7; }
+
+/* annotation callouts */
+.anno {
+  font-family: var(--hand);
+  color: var(--accent);
+  font-size: 16px;
+  line-height: 1.1;
+  position: absolute;
+  pointer-events: none;
+}
+.anno-arrow {
+  position: absolute;
+  pointer-events: none;
+  color: var(--accent);
+}
+.anno-pill {
+  font-family: var(--hand);
+  color: var(--accent);
+  font-size: 14px;
+  background: #fffbe6;
+  border: 1px dashed var(--accent);
+  padding: 2px 8px;
+  border-radius: 12px;
+  display: inline-block;
+}
+
+/* mac window override - keep in canvas */
+.wf-window {
+  background: #fdfcf8;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 4px 4px 0 rgba(42,42,42,0.15);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.wf-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1.5px solid var(--line);
+  background: var(--paper-2);
+  height: 28px;
+  flex-shrink: 0;
+}
+.wf-tlights { display: flex; gap: 6px; }
+.wf-tlights .tl {
+  width: 11px; height: 11px; border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+.wf-title { font-family: var(--hand); font-size: 14px; color: var(--ink-soft); flex: 1; text-align: center; }
+
+/* skills lockup -- a "skill card" used everywhere */
+.skill-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px dashed var(--line-soft);
+}
+.skill-row:last-child { border-bottom: none; }
+.skill-row.selected { background: #fff8d8; }
+.skill-icon {
+  width: 28px; height: 28px;
+  border: 1.5px solid var(--line);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  background: var(--paper);
+  flex-shrink: 0;
+}
+.skill-name { font-family: var(--read); font-size: 13px; font-weight: 600; }
+.skill-desc { font-family: var(--read); font-size: 11px; color: var(--ink-faint); }
+
+/* highlighter swipe over text */
+.hl {
+  background: linear-gradient(180deg, transparent 55%, var(--highlight) 55%, var(--highlight) 90%, transparent 90%);
+  padding: 0 2px;
+}
+
+/* annotation hidden state (tweak) */
+[data-annotations="off"] .anno,
+[data-annotations="off"] .anno-arrow,
+[data-annotations="off"] .anno-pill { display: none !important; }
+
+[data-sketchy="off"] .wf .sk-box,
+[data-sketchy="off"] .wf .skill-icon,
+[data-sketchy="off"] .wf .sk-btn,
+[data-sketchy="off"] .wf .sk-input,
+[data-sketchy="off"] .wf-window {
+  border-style: solid !important;
+}
+[data-sketchy="off"] .wf .sk-box.shadow,
+[data-sketchy="off"] .wf-window { box-shadow: none !important; }
+[data-sketchy="off"] .wf .sk-btn.primary { box-shadow: none !important; }
+[data-sketchy="off"] .wf .tilt-l, [data-sketchy="off"] .wf .tilt-r { transform: none !important; }
+[data-sketchy="off"] .wf .hand { font-family: var(--read) !important; }
+
+/* spec callout used between artboards */
+.spec {
+  font-family: var(--hand);
+  font-size: 16px;
+  color: var(--ink-soft);
+  max-width: 280px;
+  line-height: 1.25;
+}
+.spec b { color: var(--ink); }
+
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" data-name="design-canvas">
+
+// DesignCanvas.jsx — Figma-ish design canvas wrapper
+// Warm gray grid bg + Sections + Artboards + PostIt notes.
+// Artboards are reorderable (grip-drag), deletable, labels/titles are
+// inline-editable, and any artboard can be opened in a fullscreen focus
+// overlay (←/→/Esc). State persists to a .design-canvas.state.json sidecar
+// via the host bridge. No assets, no deps.
+//
+// Usage:
+//   <DesignCanvas>
+//     <DCSection id="onboarding" title="Onboarding" subtitle="First-run variants">
+//       <DCArtboard id="a" label="A · Dusk" width={260} height={480}>…</DCArtboard>
+//       <DCArtboard id="b" label="B · Minimal" width={260} height={480}>…</DCArtboard>
+//     </DCSection>
+//   </DesignCanvas>
+
+const DC = {
+  bg: '#f0eee9',
+  grid: 'rgba(0,0,0,0.06)',
+  label: 'rgba(60,50,40,0.7)',
+  title: 'rgba(40,30,20,0.85)',
+  subtitle: 'rgba(60,50,40,0.6)',
+  postitBg: '#fef4a8',
+  postitText: '#5a4a2a',
+  font: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+};
+
+// One-time CSS injection (classes are dc-prefixed so they don't collide with
+// the hosted design's own styles).
+if (typeof document !== 'undefined' && !document.getElementById('dc-styles')) {
+  const s = document.createElement('style');
+  s.id = 'dc-styles';
+  s.textContent = [
+    '.dc-editable{cursor:text;outline:none;white-space:nowrap;border-radius:3px;padding:0 2px;margin:0 -2px}',
+    '.dc-editable:focus{background:#fff;box-shadow:0 0 0 1.5px #c96442}',
+    '[data-dc-slot]{transition:transform .18s cubic-bezier(.2,.7,.3,1)}',
+    '[data-dc-slot].dc-dragging{transition:none;z-index:10;pointer-events:none}',
+    '[data-dc-slot].dc-dragging .dc-card{box-shadow:0 12px 40px rgba(0,0,0,.25),0 0 0 2px #c96442;transform:scale(1.02)}',
+    // isolation:isolate contains artboard content's z-indexes so a
+    // z-indexed child (sticky navbar etc.) can't paint over .dc-header or
+    // the .dc-menu popover that drops into the top of the card.
+    '.dc-card{isolation:isolate;transition:box-shadow .15s,transform .15s}',
+    '.dc-card *{scrollbar-width:none}',
+    '.dc-card *::-webkit-scrollbar{display:none}',
+    // Per-artboard header: grip + label on the left, delete/expand on the
+    // right. Single flex row; when the artboard's on-screen width is too
+    // narrow for both the label yields (ellipsis, then hidden entirely below
+    // ~4ch via the container query) and the buttons stay on the row.
+    '.dc-header{position:absolute;bottom:100%;left:-4px;margin-bottom:calc(4px * var(--dc-inv-zoom,1));z-index:2;',
+    '  display:flex;align-items:center;container-type:inline-size}',
+    '.dc-labelrow{display:flex;align-items:center;gap:4px;height:24px;flex:1 1 auto;min-width:0}',
+    '.dc-grip{flex:0 0 auto;cursor:grab;display:flex;align-items:center;padding:5px 4px;border-radius:4px;transition:background .12s,opacity .12s}',
+    '.dc-grip:hover{background:rgba(0,0,0,.08)}',
+    '.dc-grip:active{cursor:grabbing}',
+    '.dc-labeltext{flex:1 1 auto;min-width:0;cursor:pointer;border-radius:4px;padding:3px 6px;',
+    '  display:flex;align-items:center;transition:background .12s;overflow:hidden}',
+    // Below ~4ch of label room: hide the label entirely, and drop the grip to
+    // hover-only (same reveal rule as .dc-btns) so a narrow header is clean
+    // until the card is moused.
+    '@container (max-width: 110px){',
+    '  .dc-labeltext{display:none}',
+    '  .dc-grip{opacity:0}',
+    '  [data-dc-slot]:hover .dc-grip{opacity:1}',
+    '}',
+    '.dc-labeltext:hover{background:rgba(0,0,0,.05)}',
+    '.dc-labeltext .dc-editable{overflow:hidden;text-overflow:ellipsis;max-width:100%}',
+    '.dc-labeltext .dc-editable:focus{overflow:visible;text-overflow:clip}',
+    '.dc-btns{flex:0 0 auto;margin-left:auto;display:flex;gap:2px;opacity:0;transition:opacity .12s}',
+    '[data-dc-slot]:hover .dc-btns,.dc-btns:has(.dc-menu){opacity:1}',
+    '.dc-expand,.dc-kebab{width:22px;height:22px;border-radius:5px;border:none;cursor:pointer;padding:0;',
+    '  background:transparent;color:rgba(60,50,40,.7);display:flex;align-items:center;justify-content:center;',
+    '  font:inherit;transition:background .12s,color .12s}',
+    '.dc-expand:hover,.dc-kebab:hover{background:rgba(0,0,0,.06);color:#2a251f}',
+    // Slot hosting an open menu floats above later siblings (which otherwise
+    // paint on top — same z-index:auto, later DOM order) so the popup isn't
+    // clipped by the next card.
+    '[data-dc-slot]:has(.dc-menu){z-index:10}',
+    '.dc-menu{position:absolute;top:100%;right:0;margin-top:4px;background:#fff;border-radius:8px;',
+    '  box-shadow:0 8px 28px rgba(0,0,0,.18),0 0 0 1px rgba(0,0,0,.05);padding:4px;min-width:160px;z-index:10}',
+    '.dc-menu button{display:block;width:100%;padding:7px 10px;border:0;background:transparent;',
+    '  border-radius:5px;font-family:inherit;font-size:13px;font-weight:500;line-height:1.2;',
+    '  color:#29261b;cursor:pointer;text-align:left;transition:background .12s;white-space:nowrap}',
+    '.dc-menu button:hover{background:rgba(0,0,0,.05)}',
+    '.dc-menu hr{border:0;border-top:1px solid rgba(0,0,0,.08);margin:4px 2px}',
+    '.dc-menu .dc-danger{color:#c96442}',
+    '.dc-menu .dc-danger:hover{background:rgba(201,100,66,.1)}',
+    // Chrome (titles / labels / buttons) counter-scales against the viewport
+    // zoom so it stays a constant on-screen size. --dc-inv-zoom is set by
+    // DCViewport on every transform update and inherits to all descendants —
+    // any overlay inside the world (e.g. a TweaksPanel on an artboard) can use
+    // it the same way.
+    //
+    // The header uses transform:scale (out-of-flow, so layout impact doesn't
+    // matter) with its world-space width set to card-width / inv-zoom so that
+    // after counter-scaling its on-screen width exactly matches the card's —
+    // that's what lets the container query + text-overflow behave against the
+    // card's visible edge at every zoom level.
+    //
+    // The section head uses CSS zoom instead of transform so its layout box
+    // grows with the counter-scale, pushing the card row down — otherwise the
+    // constant-screen-size title would overflow into the (shrinking) world-
+    // space gap and overlap the artboard headers at low zoom.
+    '.dc-header{width:calc((100% + 4px) / var(--dc-inv-zoom,1));',
+    '  transform:scale(var(--dc-inv-zoom,1));transform-origin:bottom left}',
+    '.dc-sectionhead{zoom:var(--dc-inv-zoom,1)}',
+  ].join('\n');
+  document.head.appendChild(s);
+}
+
+const DCCtx = React.createContext(null);
+
+// ─────────────────────────────────────────────────────────────
+// DesignCanvas — stateful wrapper around the pan/zoom viewport.
+// Owns runtime state (per-section order, renamed titles/labels, hidden
+// artboards, focused artboard). Order/titles/labels/hidden persist to a
+// .design-canvas.state.json
+// sidecar next to the HTML. Reads go via plain fetch() so the saved
+// arrangement is visible anywhere the HTML + sidecar are served together
+// (omelette preview, direct link, downloaded zip). Writes go through the
+// host's window.omelette bridge — editing requires the omelette runtime.
+// Focus is ephemeral.
+// ─────────────────────────────────────────────────────────────
+const DC_STATE_FILE = '.design-canvas.state.json';
+
+function DesignCanvas({ children, minScale, maxScale, style }) {
+  const [state, setState] = React.useState({ sections: {}, focus: null });
+  // Hold rendering until the sidecar read settles so the saved order/titles
+  // appear on first paint (no source-order flash). didRead gates writes until
+  // the read settles so the empty initial state can't clobber a slow read;
+  // skipNextWrite suppresses the one echo-write that would otherwise follow
+  // hydration.
+  const [ready, setReady] = React.useState(false);
+  const didRead = React.useRef(false);
+  const skipNextWrite = React.useRef(false);
+
+  React.useEffect(() => {
+    let off = false;
+    fetch('./' + DC_STATE_FILE)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((saved) => {
+        if (off || !saved || !saved.sections) return;
+        skipNextWrite.current = true;
+        setState((s) => ({ ...s, sections: saved.sections }));
+      })
+      .catch(() => {})
+      .finally(() => { didRead.current = true; if (!off) setReady(true); });
+    const t = setTimeout(() => { if (!off) setReady(true); }, 150);
+    return () => { off = true; clearTimeout(t); };
+  }, []);
+
+  React.useEffect(() => {
+    if (!didRead.current) return;
+    if (skipNextWrite.current) { skipNextWrite.current = false; return; }
+    const t = setTimeout(() => {
+      window.omelette?.writeFile(DC_STATE_FILE, JSON.stringify({ sections: state.sections })).catch(() => {});
+    }, 250);
+    return () => clearTimeout(t);
+  }, [state.sections]);
+
+  // Build registries synchronously from children so FocusOverlay can read
+  // them in the same render. Only direct DCSection > DCArtboard children are
+  // walked — wrapping them in other elements opts out of focus/reorder.
+  const registry = {};     // slotId -> { sectionId, artboard }
+  const sectionMeta = {};  // sectionId -> { title, subtitle, slotIds[] }
+  const sectionOrder = [];
+  React.Children.forEach(children, (sec) => {
+    if (!sec || sec.type !== DCSection) return;
+    const sid = sec.props.id ?? sec.props.title;
+    if (!sid) return;
+    sectionOrder.push(sid);
+    const persisted = state.sections[sid] || {};
+    const abs = [];
+    React.Children.forEach(sec.props.children, (ab) => {
+      if (!ab || ab.type !== DCArtboard) return;
+      const aid = ab.props.id ?? ab.props.label;
+      if (aid) abs.push([aid, ab]);
+    });
+    // hidden is scoped to one source revision — when the agent regenerates
+    // (artboard-ID set changes), prior deletes don't apply to new content.
+    const srcKey = abs.map(([k]) => k).join('\x1f');
+    const hidden = persisted.srcKey === srcKey ? (persisted.hidden || []) : [];
+    const srcIds = [];
+    abs.forEach(([aid, ab]) => {
+      if (hidden.includes(aid)) return;
+      registry[`${sid}/${aid}`] = { sectionId: sid, artboard: ab };
+      srcIds.push(aid);
+    });
+    const kept = (persisted.order || []).filter((k) => srcIds.includes(k));
+    sectionMeta[sid] = {
+      title: persisted.title ?? sec.props.title,
+      subtitle: sec.props.subtitle,
+      slotIds: [...kept, ...srcIds.filter((k) => !kept.includes(k))],
+    };
+  });
+
+  const api = React.useMemo(() => ({
+    state,
+    section: (id) => state.sections[id] || {},
+    patchSection: (id, p) => setState((s) => ({
+      ...s,
+      sections: { ...s.sections, [id]: { ...s.sections[id], ...(typeof p === 'function' ? p(s.sections[id] || {}) : p) } },
+    })),
+    setFocus: (slotId) => setState((s) => ({ ...s, focus: slotId })),
+  }), [state]);
+
+  // Esc exits focus; any outside pointerdown commits an in-progress rename.
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') api.setFocus(null); };
+    const onPd = (e) => {
+      const ae = document.activeElement;
+      if (ae && ae.isContentEditable && !ae.contains(e.target)) ae.blur();
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPd, true);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPd, true);
+    };
+  }, [api]);
+
+  return (
+    <DCCtx.Provider value={api}>
+      <DCViewport minScale={minScale} maxScale={maxScale} style={style}>{ready && children}</DCViewport>
+      {state.focus && registry[state.focus] && (
+        <DCFocusOverlay entry={registry[state.focus]} sectionMeta={sectionMeta} sectionOrder={sectionOrder} />
+      )}
+    </DCCtx.Provider>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// DCViewport — transform-based pan/zoom (internal)
+//
+// Input mapping (Figma-style):
+//   • trackpad pinch  → zoom   (ctrlKey wheel; Safari gesture* events)
+//   • trackpad scroll → pan    (two-finger)
+//   • mouse wheel     → zoom   (notched; distinguished from trackpad scroll)
+//   • middle-drag / primary-drag-on-bg → pan
+//
+// Transform state lives in a ref and is written straight to the DOM
+// (translate3d + will-change) so wheel ticks don't go through React —
+// keeps pans at 60fps on dense canvases.
+// ─────────────────────────────────────────────────────────────
+function DCViewport({ children, minScale = 0.1, maxScale = 8, style = {} }) {
+  const vpRef = React.useRef(null);
+  const worldRef = React.useRef(null);
+  const tf = React.useRef({ x: 0, y: 0, scale: 1 });
+  // Persist viewport across reloads so the user lands back where they were
+  // after an agent edit or browser refresh. The sandbox origin is already
+  // per-project; pathname keeps multiple canvas files in one project apart.
+  const tfKey = 'dc-viewport:' + location.pathname;
+  const saveT = React.useRef(0);
+
+  const lastPostedScale = React.useRef();
+  const apply = React.useCallback(() => {
+    const { x, y, scale } = tf.current;
+    const el = worldRef.current;
+    if (!el) return;
+    el.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+    // Exposed for zoom-invariant chrome (labels, buttons, TweaksPanel).
+    el.style.setProperty('--dc-inv-zoom', String(1 / scale));
+    // Keep the host toolbar's % readout in sync with the canvas scale. Pan
+    // ticks leave scale unchanged — skip the cross-frame post for those.
+    if (lastPostedScale.current !== scale) {
+      lastPostedScale.current = scale;
+      window.parent.postMessage({ type: '__dc_zoom', scale }, '*');
+    }
+    clearTimeout(saveT.current);
+    saveT.current = setTimeout(() => {
+      try { localStorage.setItem(tfKey, JSON.stringify(tf.current)); } catch {}
+    }, 200);
+  }, [tfKey]);
+
+  React.useLayoutEffect(() => {
+    const flush = () => {
+      clearTimeout(saveT.current);
+      try { localStorage.setItem(tfKey, JSON.stringify(tf.current)); } catch {}
+    };
+    try {
+      const s = JSON.parse(localStorage.getItem(tfKey) || 'null');
+      if (s && Number.isFinite(s.x) && Number.isFinite(s.y) && Number.isFinite(s.scale)) {
+        tf.current = { x: s.x, y: s.y, scale: Math.min(maxScale, Math.max(minScale, s.scale)) };
+        apply();
+      }
+    } catch {}
+    // Flush on pagehide and unmount so a reload within the 200ms debounce
+    // window doesn't drop the last pan/zoom.
+    window.addEventListener('pagehide', flush);
+    return () => { window.removeEventListener('pagehide', flush); flush(); };
+  }, []);
+
+  React.useEffect(() => {
+    const vp = vpRef.current;
+    if (!vp) return;
+
+    const zoomAt = (cx, cy, factor) => {
+      const r = vp.getBoundingClientRect();
+      const px = cx - r.left, py = cy - r.top;
+      const t = tf.current;
+      const next = Math.min(maxScale, Math.max(minScale, t.scale * factor));
+      const k = next / t.scale;
+      // keep the world point under the cursor fixed
+      t.x = px - (px - t.x) * k;
+      t.y = py - (py - t.y) * k;
+      t.scale = next;
+      apply();
+    };
+
+    // Mouse-wheel vs trackpad-scroll heuristic. A physical wheel sends
+    // line-mode deltas (Firefox) or large integer pixel deltas with no X
+    // component (Chrome/Safari, typically multiples of 100/120). Trackpad
+    // two-finger scroll sends small/fractional pixel deltas, often with
+    // non-zero deltaX. ctrlKey is set by the browser for trackpad pinch.
+    const isMouseWheel = (e) =>
+      e.deltaMode !== 0 ||
+      (e.deltaX === 0 && Number.isInteger(e.deltaY) && Math.abs(e.deltaY) >= 40);
+
+    const onWheel = (e) => {
+      e.preventDefault();
+      if (isGesturing) return; // Safari: gesture* owns the pinch — discard concurrent wheels
+      if ((e.ctrlKey || e.metaKey) && !isMouseWheel(e)) {
+        // trackpad pinch, or ctrl/cmd + smooth-scroll mouse. Notched
+        // wheels fall through to the fixed-step branch below.
+        zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.01));
+      } else if (isMouseWheel(e)) {
+        // notched mouse wheel — fixed-ratio step per click
+        zoomAt(e.clientX, e.clientY, Math.exp(-Math.sign(e.deltaY) * 0.18));
+      } else {
+        // trackpad two-finger scroll — pan
+        tf.current.x -= e.deltaX;
+        tf.current.y -= e.deltaY;
+        apply();
+      }
+    };
+
+    // Safari sends native gesture* events for trackpad pinch with a smooth
+    // e.scale; preferring these over the ctrl+wheel fallback gives a much
+    // better feel there. No-ops on other browsers. Safari also fires
+    // ctrlKey wheel events during the same pinch — isGesturing makes
+    // onWheel drop those entirely so they neither zoom nor pan.
+    let gsBase = 1;
+    let isGesturing = false;
+    const onGestureStart = (e) => { e.preventDefault(); isGesturing = true; gsBase = tf.current.scale; };
+    const onGestureChange = (e) => {
+      e.preventDefault();
+      zoomAt(e.clientX, e.clientY, (gsBase * e.scale) / tf.current.scale);
+    };
+    const onGestureEnd = (e) => { e.preventDefault(); isGesturing = false; };
+
+    // Drag-pan: middle button anywhere, or primary button on canvas
+    // background (anything that isn't an artboard or an inline editor).
+    let drag = null;
+    const onPointerDown = (e) => {
+      const onBg = !e.target.closest('[data-dc-slot], .dc-editable');
+      if (!(e.button === 1 || (e.button === 0 && onBg))) return;
+      e.preventDefault();
+      vp.setPointerCapture(e.pointerId);
+      drag = { id: e.pointerId, lx: e.clientX, ly: e.clientY };
+      vp.style.cursor = 'grabbing';
+    };
+    const onPointerMove = (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      tf.current.x += e.clientX - drag.lx;
+      tf.current.y += e.clientY - drag.ly;
+      drag.lx = e.clientX; drag.ly = e.clientY;
+      apply();
+    };
+    const onPointerUp = (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      vp.releasePointerCapture(e.pointerId);
+      drag = null;
+      vp.style.cursor = '';
+    };
+
+    // Host-driven zoom (toolbar % menu). Zooms around viewport centre so the
+    // visible midpoint stays fixed — matching the host's iframe-zoom feel.
+    const onHostMsg = (e) => {
+      const d = e.data;
+      if (d && d.type === '__dc_set_zoom' && typeof d.scale === 'number') {
+        const r = vp.getBoundingClientRect();
+        zoomAt(r.left + r.width / 2, r.top + r.height / 2, d.scale / tf.current.scale);
+      } else if (d && d.type === '__dc_probe') {
+        // Host's [readyGen] reset asks whether a canvas is present; it
+        // fires on the iframe's native 'load', which for canvases with
+        // images/fonts is after our mount-time announce, so re-announce.
+        // Clear the pan-tick guard so apply() re-posts the current scale
+        // even if it's unchanged — the host just reset dcScale to 1.
+        window.parent.postMessage({ type: '__dc_present' }, '*');
+        lastPostedScale.current = undefined;
+        apply();
+      }
+    };
+    window.addEventListener('message', onHostMsg);
+    // Announce canvas mode so the host toolbar proxies its % control here
+    // instead of scaling the iframe element (which would just shrink the
+    // viewport window of an infinite canvas). The apply() that follows emits
+    // the initial __dc_zoom so the toolbar % is correct before first pinch.
+    // lastPostedScale reset mirrors the __dc_probe handler: the layout
+    // effect's restore-path apply() may already have posted the restored
+    // scale (before __dc_present), so clear the guard to re-post it in order.
+    window.parent.postMessage({ type: '__dc_present' }, '*');
+    lastPostedScale.current = undefined;
+    apply();
+
+    vp.addEventListener('wheel', onWheel, { passive: false });
+    vp.addEventListener('gesturestart', onGestureStart, { passive: false });
+    vp.addEventListener('gesturechange', onGestureChange, { passive: false });
+    vp.addEventListener('gestureend', onGestureEnd, { passive: false });
+    vp.addEventListener('pointerdown', onPointerDown);
+    vp.addEventListener('pointermove', onPointerMove);
+    vp.addEventListener('pointerup', onPointerUp);
+    vp.addEventListener('pointercancel', onPointerUp);
+    return () => {
+      window.removeEventListener('message', onHostMsg);
+      vp.removeEventListener('wheel', onWheel);
+      vp.removeEventListener('gesturestart', onGestureStart);
+      vp.removeEventListener('gesturechange', onGestureChange);
+      vp.removeEventListener('gestureend', onGestureEnd);
+      vp.removeEventListener('pointerdown', onPointerDown);
+      vp.removeEventListener('pointermove', onPointerMove);
+      vp.removeEventListener('pointerup', onPointerUp);
+      vp.removeEventListener('pointercancel', onPointerUp);
+    };
+  }, [apply, minScale, maxScale]);
+
+  const gridSvg = `url("data:image/svg+xml,%3Csvg width='120' height='120' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M120 0H0v120' fill='none' stroke='${encodeURIComponent(DC.grid)}' stroke-width='1'/%3E%3C/svg%3E")`;
+  return (
+    <div
+      ref={vpRef}
+      className="design-canvas"
+      style={{
+        height: '100vh', width: '100vw',
+        background: DC.bg,
+        overflow: 'hidden',
+        overscrollBehavior: 'none',
+        touchAction: 'none',
+        position: 'relative',
+        fontFamily: DC.font,
+        boxSizing: 'border-box',
+        ...style,
+      }}
+    >
+      <div
+        ref={worldRef}
+        style={{
+          position: 'absolute', top: 0, left: 0,
+          transformOrigin: '0 0',
+          willChange: 'transform',
+          width: 'max-content', minWidth: '100%',
+          minHeight: '100%',
+          padding: '60px 0 80px',
+        }}
+      >
+        <div style={{ position: 'absolute', inset: -6000, backgroundImage: gridSvg, backgroundSize: '120px 120px', pointerEvents: 'none', zIndex: -1 }} />
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// DCSection — editable title + h-row of artboards in persisted order
+// ─────────────────────────────────────────────────────────────
+function DCSection({ id, title, subtitle, children, gap = 48 }) {
+  const ctx = React.useContext(DCCtx);
+  const sid = id ?? title;
+  const all = React.Children.toArray(children);
+  const artboards = all.filter((c) => c && c.type === DCArtboard);
+  const rest = all.filter((c) => !(c && c.type === DCArtboard));
+  const sec = (ctx && sid && ctx.section(sid)) || {};
+  // Must match DesignCanvas's srcKey computation exactly (it filters falsy
+  // IDs), or onDelete persists a srcKey that DesignCanvas never recognizes.
+  const allIds = artboards.map((a) => a.props.id ?? a.props.label).filter(Boolean);
+  const srcKey = allIds.join('\x1f');
+  const hidden = sec.srcKey === srcKey ? (sec.hidden || []) : [];
+  const srcOrder = allIds.filter((k) => !hidden.includes(k));
+
+  const order = React.useMemo(() => {
+    const kept = (sec.order || []).filter((k) => srcOrder.includes(k));
+    return [...kept, ...srcOrder.filter((k) => !kept.includes(k))];
+  }, [sec.order, srcOrder.join('|')]);
+
+  const byId = Object.fromEntries(artboards.map((a) => [a.props.id ?? a.props.label, a]));
+
+  // marginBottom counter-scales so the on-screen gap between sections stays
+  // constant — otherwise at low zoom the (world-space) gap collapses while
+  // the screen-constant sectionhead below it doesn't, and the title reads as
+  // belonging to the section above. paddingBottom below is just enough for
+  // the 24px artboard-header (abs-positioned above each card) plus ~8px, so
+  // the title sits tight against its own row at every zoom.
+  return (
+    <div data-dc-section={sid}
+      style={{ marginBottom: 'calc(80px * var(--dc-inv-zoom, 1))', position: 'relative' }}>
+      <div style={{ padding: '0 60px' }}>
+        <div className="dc-sectionhead" style={{ paddingBottom: 36 }}>
+          <DCEditable tag="div" value={sec.title ?? title}
+            onChange={(v) => ctx && sid && ctx.patchSection(sid, { title: v })}
+            style={{ fontSize: 28, fontWeight: 600, color: DC.title, letterSpacing: -0.4, marginBottom: 6, display: 'inline-block' }} />
+          {subtitle && <div style={{ fontSize: 16, color: DC.subtitle }}>{subtitle}</div>}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap, padding: '0 60px', alignItems: 'flex-start', width: 'max-content' }}>
+        {order.map((k) => (
+          <DCArtboardFrame key={k} sectionId={sid} artboard={byId[k]} order={order}
+            label={(sec.labels || {})[k] ?? byId[k].props.label}
+            onRename={(v) => ctx && ctx.patchSection(sid, (x) => ({ labels: { ...x.labels, [k]: v } }))}
+            onReorder={(next) => ctx && ctx.patchSection(sid, { order: next })}
+            onDelete={() => ctx && ctx.patchSection(sid, (x) => ({
+              hidden: [...(x.srcKey === srcKey ? (x.hidden || []) : []), k],
+              srcKey,
+            }))}
+            onFocus={() => ctx && ctx.setFocus(`${sid}/${k}`)} />
+        ))}
+      </div>
+      {rest}
+    </div>
+  );
+}
+
+// DCArtboard — marker; rendered by DCArtboardFrame via DCSection.
+function DCArtboard() { return null; }
+
+// Per-artboard export (kind: 'png' | 'html'). Both paths share the same
+// self-contained clone: computed styles baked in, @font-face / <img> /
+// inline-style background-image urls inlined as data URIs. PNG wraps the
+// clone in foreignObject→canvas at 3× the artboard's natural width×height
+// (same pipeline the host uses for page captures); HTML wraps it in a
+// minimal standalone document. Both are independent of viewport zoom.
+async function dcExport(node, w, h, name, kind) {
+  try { await document.fonts.ready; } catch {}
+  const toDataURL = (url) => fetch(url).then((r) => r.blob()).then((b) => new Promise((res) => {
+    const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(url); fr.readAsDataURL(b);
+  })).catch(() => url);
+
+  // Collect @font-face rules. ss.cssRules throws SecurityError on
+  // cross-origin sheets (e.g. fonts.googleapis.com) — in that case fetch
+  // the CSS text directly (those endpoints send ACAO:*) and regex-extract
+  // the blocks. @import and @media/@supports are walked so nested
+  // @font-face rules aren't missed.
+  const fontRules = [], pending = [], seen = new Set();
+  const scrapeCss = (href) => {
+    if (seen.has(href)) return; seen.add(href);
+    pending.push(fetch(href).then((r) => r.text()).then((css) => {
+      for (const m of css.match(/@font-face\s*{[^}]*}/g) || []) fontRules.push({ css: m, base: href });
+      for (const m of css.matchAll(/@import\s+(?:url\()?['"]?([^'")\s;]+)/g))
+        scrapeCss(new URL(m[1], href).href);
+    }).catch(() => {}));
+  };
+  const walk = (rules, base) => {
+    for (const r of rules) {
+      if (r.type === CSSRule.FONT_FACE_RULE) fontRules.push({ css: r.cssText, base });
+      else if (r.type === CSSRule.IMPORT_RULE && r.styleSheet) {
+        const ibase = r.styleSheet.href || base;
+        try { walk(r.styleSheet.cssRules, ibase); } catch { scrapeCss(ibase); }
+      } else if (r.cssRules) walk(r.cssRules, base);
+    }
+  };
+  for (const ss of document.styleSheets) {
+    const base = ss.href || location.href;
+    try { walk(ss.cssRules, base); } catch { if (ss.href) scrapeCss(ss.href); }
+  }
+  while (pending.length) await pending.shift();
+  const fontCss = (await Promise.all(fontRules.map(async (rule) => {
+    let out = rule.css, m; const re = /url\((['"]?)([^'")]+)\1\)/g;
+    while ((m = re.exec(rule.css))) {
+      if (m[2].indexOf('data:') === 0) continue;
+      let abs; try { abs = new URL(m[2], rule.base).href; } catch { continue; }
+      out = out.split(m[0]).join('url("' + await toDataURL(abs) + '")');
+    }
+    return out;
+  }))).join('\n');
+
+  const cloneStyled = (src) => {
+    if (src.nodeType === 8 || (src.nodeType === 1 && src.tagName === 'SCRIPT')) return document.createTextNode('');
+    const dst = src.cloneNode(false);
+    if (src.nodeType === 1) {
+      const cs = getComputedStyle(src); let txt = '';
+      for (let i = 0; i < cs.length; i++) txt += cs[i] + ':' + cs.getPropertyValue(cs[i]) + ';';
+      dst.setAttribute('style', txt + 'animation:none;transition:none;');
+      if (src.tagName === 'CANVAS') try { const im = document.createElement('img'); im.src = src.toDataURL(); im.setAttribute('style', txt); return im; } catch {}
+    }
+    for (let c = src.firstChild; c; c = c.nextSibling) dst.appendChild(cloneStyled(c));
+    return dst;
+  };
+  const clone = cloneStyled(node);
+  clone.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+  // Drop the card's own shadow/radius so the export is a flush w×h rect;
+  // the artboard's own background (if any) is already in the computed style.
+  clone.style.boxShadow = 'none'; clone.style.borderRadius = '0';
+
+  const jobs = [];
+  clone.querySelectorAll('img').forEach((el) => {
+    const s = el.getAttribute('src');
+    if (s && s.indexOf('data:') !== 0) jobs.push(toDataURL(el.src).then((d) => el.setAttribute('src', d)));
+  });
+  [clone, ...clone.querySelectorAll('*')].forEach((el) => {
+    const bg = el.style.backgroundImage; if (!bg) return;
+    let m; const re = /url\(["']?([^"')]+)["']?\)/g;
+    while ((m = re.exec(bg))) {
+      const tok = m[0], url = m[1];
+      if (url.indexOf('data:') === 0) continue;
+      jobs.push(toDataURL(url).then((d) => { el.style.backgroundImage = el.style.backgroundImage.split(tok).join('url("' + d + '")'); }));
+    }
+  });
+  await Promise.all(jobs);
+
+  const xml = new XMLSerializer().serializeToString(clone);
+  const save = (blob, ext) => {
+    if (!blob) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name + '.' + ext; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+
+  if (kind === 'html') {
+    const html = '<!doctype html><html><head><meta charset="utf-8"><title>' + name + '</title>' +
+      (fontCss ? '<style>' + fontCss + '</style>' : '') +
+      '</head><body style="margin:0">' + xml + '</body></html>';
+    return save(new Blob([html], { type: 'text/html' }), 'html');
+  }
+
+  // PNG: the SVG's own width/height must be the output resolution — an
+  // <img>-loaded SVG rasterizes at its intrinsic size, so sizing it at 1×
+  // and ctx.scale()-ing up would just upscale a 1× bitmap. viewBox maps the
+  // w×h foreignObject onto the px·w × px·h SVG canvas so the browser renders
+  // the HTML at full resolution.
+  const px = 3;
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w * px + '" height="' + h * px +
+    '" viewBox="0 0 ' + w + ' ' + h + '"><foreignObject width="' + w + '" height="' + h + '">' +
+    (fontCss ? '<style><![CDATA[' + fontCss + ']]></style>' : '') + xml + '</foreignObject></svg>';
+  const img = new Image();
+  await new Promise((res, rej) => {
+    img.onload = res; img.onerror = () => rej(new Error('svg load failed'));
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  });
+  const cv = document.createElement('canvas');
+  cv.width = w * px; cv.height = h * px;
+  cv.getContext('2d').drawImage(img, 0, 0);
+  cv.toBlob((blob) => save(blob, 'png'), 'image/png');
+}
+
+function DCArtboardFrame({ sectionId, artboard, label, order, onRename, onReorder, onFocus, onDelete }) {
+  const { id: rawId, label: rawLabel, width = 260, height = 480, children, style = {} } = artboard.props;
+  const id = rawId ?? rawLabel;
+  const ref = React.useRef(null);
+  const cardRef = React.useRef(null);
+  const menuRef = React.useRef(null);
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const [confirming, setConfirming] = React.useState(false);
+
+  // ⋯ menu: close on any outside pointerdown. Two-click delete lives inside
+  // the menu — first click arms the row, second commits; closing disarms.
+  React.useEffect(() => {
+    if (!menuOpen) { setConfirming(false); return; }
+    const off = (e) => { if (!menuRef.current || !menuRef.current.contains(e.target)) setMenuOpen(false); };
+    document.addEventListener('pointerdown', off, true);
+    return () => document.removeEventListener('pointerdown', off, true);
+  }, [menuOpen]);
+
+  const doExport = (kind) => {
+    setMenuOpen(false);
+    if (!cardRef.current) return;
+    const name = String(label || id || 'artboard').replace(/[^\w\s.-]+/g, '_');
+    dcExport(cardRef.current, width, height, name, kind)
+      .catch((e) => console.error('[design-canvas] export failed:', e));
+  };
+
+  // Live drag-reorder: dragged card sticks to cursor; siblings slide into
+  // their would-be slots in real time via transforms. DOM order only
+  // changes on drop.
+  const onGripDown = (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const me = ref.current;
+    // translateX is applied in local (pre-scale) space but pointer deltas and
+    // getBoundingClientRect().left are screen-space — divide by the viewport's
+    // current scale so the dragged card tracks the cursor at any zoom level.
+    const scale = me.getBoundingClientRect().width / me.offsetWidth || 1;
+    const peers = Array.from(document.querySelectorAll(`[data-dc-section="${sectionId}"] [data-dc-slot]`));
+    const homes = peers.map((el) => ({ el, id: el.dataset.dcSlot, x: el.getBoundingClientRect().left }));
+    const slotXs = homes.map((h) => h.x);
+    const startIdx = order.indexOf(id);
+    const startX = e.clientX;
+    let liveOrder = order.slice();
+    me.classList.add('dc-dragging');
+
+    const layout = () => {
+      for (const h of homes) {
+        if (h.id === id) continue;
+        const slot = liveOrder.indexOf(h.id);
+        h.el.style.transform = `translateX(${(slotXs[slot] - h.x) / scale}px)`;
+      }
+    };
+
+    const move = (ev) => {
+      const dx = ev.clientX - startX;
+      me.style.transform = `translateX(${dx / scale}px)`;
+      const cur = homes[startIdx].x + dx;
+      let nearest = 0, best = Infinity;
+      for (let i = 0; i < slotXs.length; i++) {
+        const d = Math.abs(slotXs[i] - cur);
+        if (d < best) { best = d; nearest = i; }
+      }
+      if (liveOrder.indexOf(id) !== nearest) {
+        liveOrder = order.filter((k) => k !== id);
+        liveOrder.splice(nearest, 0, id);
+        layout();
+      }
+    };
+
+    const up = () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      const finalSlot = liveOrder.indexOf(id);
+      me.classList.remove('dc-dragging');
+      me.style.transform = `translateX(${(slotXs[finalSlot] - homes[startIdx].x) / scale}px)`;
+      // After the settle transition, kill transitions + clear transforms +
+      // commit the reorder in the same frame so there's no visual snap-back.
+      setTimeout(() => {
+        for (const h of homes) { h.el.style.transition = 'none'; h.el.style.transform = ''; }
+        if (liveOrder.join('|') !== order.join('|')) onReorder(liveOrder);
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          for (const h of homes) h.el.style.transition = '';
+        }));
+      }, 180);
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+  };
+
+  return (
+    <div ref={ref} data-dc-slot={id} style={{ position: 'relative', flexShrink: 0 }}>
+      <div className="dc-header" style={{ color: DC.label }} onPointerDown={(e) => e.stopPropagation()}>
+        <div className="dc-labelrow">
+          <div className="dc-grip" onPointerDown={onGripDown} title="Drag to reorder">
+            <svg width="9" height="13" viewBox="0 0 9 13" fill="currentColor"><circle cx="2" cy="2" r="1.1"/><circle cx="7" cy="2" r="1.1"/><circle cx="2" cy="6.5" r="1.1"/><circle cx="7" cy="6.5" r="1.1"/><circle cx="2" cy="11" r="1.1"/><circle cx="7" cy="11" r="1.1"/></svg>
+          </div>
+          <div className="dc-labeltext" onClick={onFocus} title="Click to focus">
+            <DCEditable value={label} onChange={onRename} onClick={(e) => e.stopPropagation()}
+              style={{ fontSize: 15, fontWeight: 500, color: DC.label, lineHeight: 1 }} />
+          </div>
+        </div>
+        <div className="dc-btns">
+          <div ref={menuRef} style={{ position: 'relative' }}>
+            <button className="dc-kebab" title="More" onClick={() => setMenuOpen((o) => !o)}>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><circle cx="2.5" cy="6" r="1.1"/><circle cx="6" cy="6" r="1.1"/><circle cx="9.5" cy="6" r="1.1"/></svg>
+            </button>
+            {menuOpen && (
+              <div className="dc-menu" onPointerDown={(e) => e.stopPropagation()}>
+                <button onClick={() => doExport('png')}>Download PNG</button>
+                <button onClick={() => doExport('html')}>Download HTML</button>
+                <hr />
+                <button className="dc-danger"
+                  onClick={() => { if (confirming) { setMenuOpen(false); onDelete(); } else setConfirming(true); }}>
+                  {confirming ? 'Click again to delete' : 'Delete'}
+                </button>
+              </div>
+            )}
+          </div>
+          <button className="dc-expand" onClick={onFocus} title="Focus">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M7 1h4v4M5 11H1V7M11 1L7.5 4.5M1 11l3.5-3.5"/></svg>
+          </button>
+        </div>
+      </div>
+      <div ref={cardRef} className="dc-card"
+        style={{ borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06)', overflow: 'hidden', width, height, background: '#fff', ...style }}>
+        {children || <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 13, fontFamily: DC.font }}>{id}</div>}
+      </div>
+    </div>
+  );
+}
+
+// Inline rename — commits on blur or Enter.
+function DCEditable({ value, onChange, style, tag = 'span', onClick }) {
+  const T = tag;
+  return (
+    <T className="dc-editable" contentEditable suppressContentEditableWarning
+      onClick={onClick}
+      onPointerDown={(e) => e.stopPropagation()}
+      onBlur={(e) => onChange && onChange(e.currentTarget.textContent)}
+      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}
+      style={style}>{value}</T>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Focus mode — overlay one artboard; ←/→ within section, ↑/↓ across
+// sections, Esc or backdrop click to exit.
+// ─────────────────────────────────────────────────────────────
+function DCFocusOverlay({ entry, sectionMeta, sectionOrder }) {
+  const ctx = React.useContext(DCCtx);
+  const { sectionId, artboard } = entry;
+  const sec = ctx.section(sectionId);
+  const meta = sectionMeta[sectionId];
+  const peers = meta.slotIds;
+  const aid = artboard.props.id ?? artboard.props.label;
+  const idx = peers.indexOf(aid);
+  const secIdx = sectionOrder.indexOf(sectionId);
+
+  const go = (d) => { const n = peers[(idx + d + peers.length) % peers.length]; if (n) ctx.setFocus(`${sectionId}/${n}`); };
+  const goSection = (d) => {
+    // Sections whose artboards are all deleted have slotIds:[] — step past
+    // them to the next non-empty section so ↑/↓ doesn't dead-end.
+    const n = sectionOrder.length;
+    for (let i = 1; i < n; i++) {
+      const ns = sectionOrder[(((secIdx + d * i) % n) + n) % n];
+      const first = sectionMeta[ns] && sectionMeta[ns].slotIds[0];
+      if (first) { ctx.setFocus(`${ns}/${first}`); return; }
+    }
+  };
+
+  React.useEffect(() => {
+    const k = (e) => {
+      if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); go(1); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); goSection(-1); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); goSection(1); }
+    };
+    document.addEventListener('keydown', k);
+    return () => document.removeEventListener('keydown', k);
+  });
+
+  const { width = 260, height = 480, children } = artboard.props;
+  const [vp, setVp] = React.useState({ w: window.innerWidth, h: window.innerHeight });
+  React.useEffect(() => { const r = () => setVp({ w: window.innerWidth, h: window.innerHeight }); window.addEventListener('resize', r); return () => window.removeEventListener('resize', r); }, []);
+  const scale = Math.max(0.1, Math.min((vp.w - 200) / width, (vp.h - 260) / height, 2));
+
+  const [ddOpen, setDd] = React.useState(false);
+  const Arrow = ({ dir, onClick }) => (
+    <button onClick={(e) => { e.stopPropagation(); onClick(); }}
+      style={{ position: 'absolute', top: '50%', [dir]: 28, transform: 'translateY(-50%)',
+        border: 'none', background: 'rgba(255,255,255,.08)', color: 'rgba(255,255,255,.9)',
+        width: 44, height: 44, borderRadius: 22, fontSize: 18, cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .15s' }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,.18)')}
+      onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,.08)')}>
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <path d={dir === 'left' ? 'M11 3L5 9l6 6' : 'M7 3l6 6-6 6'} /></svg>
+    </button>
+  );
+
+  // Portal to body so position:fixed is the real viewport regardless of any
+  // transform on DesignCanvas's ancestors (including the canvas zoom itself).
+  return ReactDOM.createPortal(
+    <div onClick={() => ctx.setFocus(null)}
+      onWheel={(e) => e.preventDefault()}
+      style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(24,20,16,.6)', backdropFilter: 'blur(14px)',
+        fontFamily: DC.font, color: '#fff' }}>
+
+      {/* top bar: section dropdown (left) · close (right) */}
+      <div onClick={(e) => e.stopPropagation()}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 72, display: 'flex', alignItems: 'flex-start', padding: '16px 20px 0', gap: 16 }}>
+        <div style={{ position: 'relative' }}>
+          <button onClick={() => setDd((o) => !o)}
+            style={{ border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', padding: '6px 8px',
+              borderRadius: 6, textAlign: 'left', fontFamily: 'inherit' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 18, fontWeight: 600, letterSpacing: -0.3 }}>{meta.title}</span>
+              <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" style={{ opacity: .7 }}><path d="M2 4l3.5 3.5L9 4"/></svg>
+            </span>
+            {meta.subtitle && <span style={{ display: 'block', fontSize: 13, opacity: .6, fontWeight: 400, marginTop: 2 }}>{meta.subtitle}</span>}
+          </button>
+          {ddOpen && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#2a251f', borderRadius: 8,
+              boxShadow: '0 8px 32px rgba(0,0,0,.4)', padding: 4, minWidth: 200, zIndex: 10 }}>
+              {sectionOrder.filter((sid) => sectionMeta[sid].slotIds.length).map((sid) => (
+                <button key={sid} onClick={() => { setDd(false); const f = sectionMeta[sid].slotIds[0]; if (f) ctx.setFocus(`${sid}/${f}`); }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
+                    background: sid === sectionId ? 'rgba(255,255,255,.1)' : 'transparent', color: '#fff',
+                    padding: '8px 12px', borderRadius: 5, fontSize: 14, fontWeight: sid === sectionId ? 600 : 400, fontFamily: 'inherit' }}>
+                  {sectionMeta[sid].title}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{ flex: 1 }} />
+        <button onClick={() => ctx.setFocus(null)}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,.12)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          style={{ border: 'none', background: 'transparent', color: 'rgba(255,255,255,.7)', width: 32, height: 32,
+            borderRadius: 16, fontSize: 20, cursor: 'pointer', lineHeight: 1, transition: 'background .12s' }}>×</button>
+      </div>
+
+      {/* card centered, label + index below — only the card itself stops
+          propagation so any backdrop click (including the margins around
+          the card) exits focus */}
+      <div
+        style={{ position: 'absolute', top: 64, bottom: 56, left: 100, right: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ width: width * scale, height: height * scale, position: 'relative' }}>
+          <div style={{ width, height, transform: `scale(${scale})`, transformOrigin: 'top left', background: '#fff', borderRadius: 2, overflow: 'hidden',
+            boxShadow: '0 20px 80px rgba(0,0,0,.4)' }}>
+            {children || <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb' }}>{aid}</div>}
+          </div>
+        </div>
+        <div onClick={(e) => e.stopPropagation()} style={{ fontSize: 14, fontWeight: 500, opacity: .85, textAlign: 'center' }}>
+          {(sec.labels || {})[aid] ?? artboard.props.label}
+          <span style={{ opacity: .5, marginLeft: 10, fontVariantNumeric: 'tabular-nums' }}>{idx + 1} / {peers.length}</span>
+        </div>
+      </div>
+
+      <Arrow dir="left" onClick={() => go(-1)} />
+      <Arrow dir="right" onClick={() => go(1)} />
+
+      {/* dots */}
+      <div onClick={(e) => e.stopPropagation()}
+        style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 8 }}>
+        {peers.map((p, i) => (
+          <button key={p} onClick={() => ctx.setFocus(`${sectionId}/${p}`)}
+            style={{ border: 'none', padding: 0, cursor: 'pointer', width: 6, height: 6, borderRadius: 3,
+              background: i === idx ? '#fff' : 'rgba(255,255,255,.3)' }} />
+        ))}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Post-it — absolute-positioned sticky note
+// ─────────────────────────────────────────────────────────────
+function DCPostIt({ children, top, left, right, bottom, rotate = -2, width = 180 }) {
+  return (
+    <div style={{
+      position: 'absolute', top, left, right, bottom, width,
+      background: DC.postitBg, padding: '14px 16px',
+      fontFamily: '"Comic Sans MS", "Marker Felt", "Segoe Print", cursive',
+      fontSize: 14, lineHeight: 1.4, color: DC.postitText,
+      boxShadow: '0 2px 8px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08)',
+      transform: `rotate(${rotate}deg)`,
+      zIndex: 5,
+    }}>{children}</div>
+  );
+}
+
+Object.assign(window, { DesignCanvas, DCSection, DCArtboard, DCPostIt });
+
+</script>
+<script type="text/babel" data-name="view-switcher">
+// View switcher — 3 tabs (Library / Deploy / Settings) with sliding orange
+// square indicator. Lives at top-right of every main window for consistency.
+function ViewSwitcher({ active = 'library' }) {
+  const tabs = [
+    { id: 'library',  label: 'Library',  icon: (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+        <rect x="2" y="2" width="3" height="10"/><rect x="6" y="2" width="3" height="10"/><rect x="10" y="3" width="2.5" height="9" transform="rotate(8 11 7.5)"/>
+      </svg>
+    )},
+    { id: 'deploy',   label: 'Deploy',   icon: (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M7 1.5v8M3.5 6L7 9.5 10.5 6M2 12h10"/>
+      </svg>
+    )},
+    { id: 'settings', label: 'Settings', icon: (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <circle cx="7" cy="7" r="2"/>
+        <path d="M7 1v2M7 11v2M1 7h2M11 7h2M2.8 2.8l1.4 1.4M9.8 9.8l1.4 1.4M2.8 11.2l1.4-1.4M9.8 4.2l1.4-1.4"/>
+      </svg>
+    )},
+  ];
+  const idx = Math.max(0, tabs.findIndex(t => t.id === active));
+  const TAB_W = 70;
+  return (
+    <div style={{ position: 'relative', display: 'inline-flex', padding: 3,
+      border: '1.5px solid var(--line)', borderRadius: 22, background: 'var(--paper-2)',
+      boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.04)' }}>
+      {/* sliding orange square */}
+      <div style={{
+        position: 'absolute', top: 3, left: 3 + idx * TAB_W, width: TAB_W, height: 26,
+        background: 'var(--accent)', borderRadius: 18,
+        transition: 'left 0.32s cubic-bezier(.6,.2,.2,1)',
+        boxShadow: '0 1px 3px rgba(201,100,66,0.35)',
+      }}/>
+      {tabs.map((t, i) => (
+        <div key={t.id} style={{
+          position: 'relative', width: TAB_W, height: 26, display: 'flex',
+          alignItems: 'center', justifyContent: 'center', gap: 5,
+          fontSize: 11, fontWeight: i === idx ? 700 : 500,
+          fontFamily: 'var(--read)',
+          color: i === idx ? 'white' : 'var(--ink-soft)',
+          cursor: 'pointer', userSelect: 'none', zIndex: 1,
+          transition: 'color 0.2s',
+        }}>
+          {t.icon}<span>{t.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+window.ViewSwitcher = ViewSwitcher;
+
+</script>
+
+<script type="text/babel" data-name="library">
+// Library variations — C is default, B and D are alternatives
+// switched via Tweaks panel
+
+const LibSkillRow = ({ name, desc, badge, selected, mono }) => (
+  <div className={`skill-row ${selected ? 'selected' : ''}`}>
+    <div className="skill-icon">{name.slice(0,1).toUpperCase()}</div>
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div className="skill-name">{name}</div>
+      {desc && <div className="skill-desc" style={{ fontFamily: mono ? 'var(--mono)' : undefined, fontSize: mono ? 10 : 11 }}>{desc}</div>}
+    </div>
+    {badge && <span className={`sk-tag ${badge.kind || ''}`}>{badge.label}</span>}
+  </div>
+);
+
+// Update banner that pops on launch — used by all library variants
+const UpdateBanner = ({ count = 3 }) => (
+  <div className="sk-box shadow tilt-l" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12, background: '#fff3a0', borderColor: 'var(--accent)', borderWidth: 2 }}>
+    <div style={{ fontSize: 18 }}>⚡</div>
+    <div style={{ flex: 1 }}>
+      <div style={{ fontSize: 13, fontWeight: 700 }}><span className="hl">{count} updates</span> available</div>
+      <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>cascades to 6 project deployments</div>
+    </div>
+    <span className="sk-btn accent">Review updates →</span>
+  </div>
+);
+
+// Variation C — Card grid (DEFAULT)
+function LibraryC() {
+  const Card = ({ name, desc, badge, accent, selected }) => (
+    <div className={`sk-box ${selected ? 'shadow' : ''}`} style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', background: selected ? '#fff8d8' : 'var(--paper)' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="skill-icon" style={{ width: 36, height: 36, fontSize: 14, background: accent || 'var(--paper-2)' }}>{name.slice(0,1).toUpperCase()}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="skill-name" style={{ fontSize: 13 }}>{name}</div>
+          <div className="skill-desc">{desc}</div>
+        </div>
+      </div>
+      <div className="sk-line med"/>
+      <div className="sk-line short"/>
+      <div style={{ display: 'flex', gap: 4, marginTop: 'auto', alignItems: 'center' }}>
+        {badge && <span className={`sk-tag ${badge.kind || ''}`}>{badge.label}</span>}
+        <div style={{ flex: 1 }}/>
+        <span className="sk-btn sm">Deploy</span>
+      </div>
+    </div>
+  );
+  return (
+    <div className="wf-window wf" style={{ width: 820, height: 640 }}>
+      <div className="wf-titlebar">
+        <div className="wf-tlights"><div className="tl"/><div className="tl"/><div className="tl"/></div>
+        <div className="wf-title">Skill Library</div>
+        <div style={{ width: 30 }}/>
+      </div>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <div style={{ width: 170, borderRight: '1.5px solid var(--line-soft)', padding: 12, display: 'flex', flexDirection: 'column', gap: 4, background: 'var(--paper-2)' }}>
+          <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Library</div>
+          <div style={{ padding: '5px 8px', borderRadius: 5, background: 'var(--ink)', color: 'white', fontSize: 12 }}>All · 14</div>
+          <div style={{ padding: '5px 8px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            Updates · 3 <span className="sk-tag update" style={{ fontSize: 9, padding: '0 5px' }}>NEW</span>
+          </div>
+          <div style={{ padding: '5px 8px', fontSize: 12 }}>Bundles · 2</div>
+          <div style={{ padding: '5px 8px', fontSize: 12 }}>Local · 3</div>
+          <div style={{ padding: '5px 8px', fontSize: 12 }}>Deployed · 11</div>
+          <div className="sk-divider soft"/>
+          <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Projects</div>
+          <div style={{ padding: '4px 8px', fontSize: 11, fontFamily: 'var(--mono)' }}>~/code/myapp</div>
+          <div style={{ padding: '4px 8px', fontSize: 11, fontFamily: 'var(--mono)' }}>~/code/landing</div>
+          <div style={{ padding: '4px 8px', fontSize: 11, fontFamily: 'var(--mono)' }}>~/work/agents</div>
+          <div style={{ flex: 1 }}/>
+          <span className="sk-btn sm ghost" style={{ justifyContent: 'center' }}>⚙ Settings</span>
+        </div>
+        <div style={{ flex: 1, padding: 14, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <UpdateBanner count={3}/>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <div className="sk-input" style={{ flex: 1, fontFamily: 'var(--read)', fontSize: 12 }}>+ Paste GitHub URL or skill name…</div>
+            <span className="sk-btn primary">Install</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+            <Card name="pdf-tools" desc="parse + render PDFs" />
+            <Card name="make-deck" desc="slide decks in HTML" badge={{ kind: 'update', label: 'UPDATE' }} accent="#fef4a8" />
+            <Card name="frontend-design" desc="aesthetic direction" selected/>
+            <Card name="anthropic-skills" desc="bundle · 12 skills" badge={{ label: 'bundle' }} />
+            <Card name="napkin-reader" desc="parse .napkin files" />
+            <Card name="wireframe" desc="explore design space" badge={{ kind: 'update', label: 'UPDATE' }} accent="#fef4a8" />
+            <Card name="pptx-export" desc="native PowerPoint" badge={{ label: 'local' }} />
+            <Card name="canvas-export" desc="send to Canva" badge={{ kind: 'update', label: 'UPDATE' }} accent="#fef4a8" />
+            <Card name="claude-handoff" desc="dev package" />
+          </div>
+        </div>
+      </div>
+      <div className="anno" style={{ top: 90, right: -150, width: 140 }}>
+        update banner pops<br/>on launch — primary<br/>colored CTA
+        <svg width="40" height="20" style={{ position: 'absolute', left: -45, top: -6 }}>
+          <path d="M40 5 Q 20 -5 5 8" stroke="var(--accent)" strokeWidth="1.5" fill="none"/>
+          <path d="M5 8 L 14 4 M 5 8 L 12 13" stroke="var(--accent)" strokeWidth="1.5" fill="none"/>
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+// Variation B — two pane (alternate)
+function LibraryB() {
+  return (
+    <div className="wf-window wf" style={{ width: 820, height: 580 }}>
+      <div className="wf-titlebar">
+        <div className="wf-tlights"><div className="tl"/><div className="tl"/><div className="tl"/></div>
+        <div className="wf-title">Skill Manager — Library</div>
+        <div style={{ width: 30 }}/>
+      </div>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <div style={{ width: 320, borderRight: '1.5px solid var(--line)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: 10, borderBottom: '1.5px solid var(--line-soft)', display: 'flex', gap: 6, flexDirection: 'column' }}>
+            <div className="sk-input" style={{ fontFamily: 'var(--read)', fontSize: 12 }}>🔍 search 14 skills</div>
+          </div>
+          <div style={{ padding: 8 }}>
+            <UpdateBanner count={3}/>
+          </div>
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            <div style={{ padding: '6px 10px', fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: 1 }}>All · 14</div>
+            <LibSkillRow name="make-deck" desc="3d ago · @anthropic" badge={{ kind: 'update', label: 'UPDATE' }} />
+            <LibSkillRow name="pdf-tools" desc="2w ago · 4 deploys" />
+            <LibSkillRow name="anthropic-skills" desc="bundle · 12 inside" />
+            <LibSkillRow name="frontend-design" desc="updated today" selected />
+            <LibSkillRow name="napkin-reader" desc="1mo" />
+            <LibSkillRow name="pptx-export" desc="local · never deployed" badge={{ label: 'local' }} />
+            <LibSkillRow name="wireframe" desc="updated today" badge={{ kind: 'update', label: 'UPDATE' }} />
+          </div>
+        </div>
+        <div style={{ flex: 1, padding: 18, display: 'flex', flexDirection: 'column', gap: 12, overflow: 'auto' }}>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 700 }}>frontend-design</div>
+            <div style={{ fontSize: 12, fontFamily: 'var(--mono)', color: 'var(--ink-faint)' }}>github.com/anthropic/skills/frontend-design @ 8a2c1f3</div>
+          </div>
+          <div className="sk-box" style={{ padding: 10, background: 'var(--paper-2)' }}>
+            <div className="sk-line med"/><div style={{ height: 4 }}/>
+            <div className="sk-line"/><div style={{ height: 4 }}/>
+            <div className="sk-line short"/>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <span className="sk-tag">SKILL.md</span>
+            <span className="sk-tag">references/</span>
+            <span className="sk-tag">scripts/</span>
+            <span className="sk-tag good">up to date</span>
+          </div>
+          <div className="sk-divider soft"/>
+          <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Deployed (3)</div>
+          {['~/code/myapp', '~/code/landing', '~/work/agents'].map(p => (
+            <div key={p} style={{ fontSize: 12, fontFamily: 'var(--mono)' }}>{p}</div>
+          ))}
+          <div style={{ display: 'flex', gap: 6, marginTop: 'auto' }}>
+            <span className="sk-btn primary">Deploy</span>
+            <span className="sk-btn">Update</span>
+            <span className="sk-btn ghost">Browse</span>
+            <div style={{ flex: 1 }}/>
+            <span className="sk-btn ghost" style={{ color: 'var(--warn)' }}>Remove</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Variation D — command palette (alternate, power user)
+function LibraryD() {
+  return (
+    <div className="wf-window wf" style={{ width: 660, height: 540 }}>
+      <div className="wf-titlebar">
+        <div className="wf-tlights"><div className="tl"/><div className="tl"/><div className="tl"/></div>
+        <div className="wf-title">⌘K Skill Manager</div>
+        <div style={{ width: 30 }}/>
+      </div>
+      <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+        <UpdateBanner count={3}/>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', border: '1.5px solid var(--line)', borderRadius: 6, background: 'var(--paper-2)' }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)' }}>›</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 13, flex: 1 }}>install <span style={{ color: 'var(--ink-faint)' }}>github.com/anthropic/skills</span><span className="hand" style={{ marginLeft: 4, color: 'var(--accent)' }}>|</span></div>
+          <span className="sk-tag mono">⏎ run</span>
+        </div>
+        <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase', padding: '4px 4px 0' }}>Suggestions</div>
+        <div className="sk-box" style={{ padding: 0, overflow: 'hidden' }}>
+          {[
+            ['install <url>', 'clone a repo into library'],
+            ['deploy <skill> → <project>', 'copy to .claude/skills/'],
+            ['update --all', 'check + cascade'],
+            ['list --updates', 'show stale skills'],
+            ['rm pptx-export', 'remove from library'],
+          ].map(([cmd, desc], i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '6px 12px', borderBottom: i < 4 ? '1px dashed var(--line-soft)' : 'none', background: i === 0 ? '#fff8d8' : 'transparent' }}>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 12, flex: 1 }}>{cmd}</div>
+              <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{desc}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase', padding: '4px 4px 0' }}>Library · 14</div>
+        <div style={{ flex: 1, overflow: 'auto', fontFamily: 'var(--mono)', fontSize: 11, lineHeight: 1.7, color: 'var(--ink-soft)' }}>
+          <div>pdf-tools           <span style={{ color: 'var(--ink-faint)' }}>2w</span>  4 deploys</div>
+          <div>make-deck           <span style={{ color: 'var(--accent)' }}>UPDATE</span>  3 deploys</div>
+          <div>frontend-design     <span style={{ color: 'var(--ink-faint)' }}>today</span> 3 deploys</div>
+          <div>anthropic-skills    <span style={{ color: 'var(--ink-faint)' }}>bundle</span> 12 inside</div>
+          <div>napkin-reader       <span style={{ color: 'var(--ink-faint)' }}>1mo</span>  1 deploy</div>
+          <div>pptx-export         <span style={{ color: 'var(--ink-faint)' }}>local</span> —</div>
+          <div>wireframe           <span style={{ color: 'var(--accent)' }}>UPDATE</span> 2 deploys</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', borderTop: '1px solid var(--line-soft)', paddingTop: 6 }}>
+          <span>↑↓ navigate</span><span>⏎ run</span><span>tab autocomplete</span><span>esc close</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+window.LibraryB = LibraryB;
+window.LibraryC = LibraryC;
+window.LibraryD = LibraryD;
+window.UpdateBanner = UpdateBanner;
+
+</script>
+
+<script type="text/babel" data-name="flows">
+// Flows: install (cloning state primary), skill detail with bundle sub-rail,
+// update flow with re-deploy, settings
+
+const TitleBar = ({ title }) => (
+  <div className="wf-titlebar">
+    <div className="wf-tlights"><div className="tl"/><div className="tl"/><div className="tl"/></div>
+    <div className="wf-title">{title}</div>
+    <div style={{ width: 30 }}/>
+  </div>
+);
+
+// ───── Install — cloning state (primary) ─────
+function InstallFlow() {
+  return (
+    <div className="wf-window wf" style={{ width: 540, height: 480 }}>
+      <TitleBar title="Install Skill — installing…"/>
+      <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
+        <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>cloning</div>
+        <div style={{ fontSize: 18, fontWeight: 700 }}>Installing anthropic-skills</div>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink-faint)' }}>from github.com/anthropic/anthropic-skills</div>
+
+        <div style={{ height: 8, background: 'var(--paper-2)', borderRadius: 4, border: '1px solid var(--line)', overflow: 'hidden' }}>
+          <div style={{ width: '65%', height: '100%', background: 'var(--accent)' }}/>
+        </div>
+        <div className="hand" style={{ color: 'var(--ink-faint)' }}>cloning · 65% · ~3s remaining</div>
+
+        <div className="sk-box" style={{ padding: 10, fontFamily: 'var(--mono)', fontSize: 11, lineHeight: 1.7, background: '#1c1c1c', color: '#d8d8d8', borderColor: '#333' }}>
+          <div>$ git clone --depth 1 …anthropic-skills</div>
+          <div>Cloning into '/tmp/skill-…</div>
+          <div>remote: Enumerating objects: 248</div>
+          <div style={{ color: 'var(--good)' }}>✓ Cloned · 8a2c1f3</div>
+          <div>$ scanning for SKILL.md…</div>
+          <div style={{ color: '#fff' }}>found 12 skills <span style={{ color: 'var(--accent)' }}>▌</span></div>
+        </div>
+        <div className="sk-box" style={{ padding: 10, background: '#f7f6ee', borderStyle: 'dashed' }}>
+          <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--ink-faint)' }}>BUNDLE — 12 skills inside</div>
+          <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--ink-soft)', lineHeight: 1.6, marginTop: 4 }}>
+            ├ pdf-tools  ├ make-deck  ├ napkin-reader<br/>└ + 9 more (cherry-pick from detail)
+          </div>
+        </div>
+        <div style={{ flex: 1 }}/>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <span className="sk-btn ghost">Cancel</span>
+          <div style={{ flex: 1 }}/>
+          <span className="sk-btn" style={{ opacity: 0.5 }}>Done</span>
+        </div>
+      </div>
+      <div className="anno" style={{ top: 240, right: -130, width: 120 }}>
+        live log + bundle<br/>preview while<br/>cloning
+      </div>
+    </div>
+  );
+}
+
+// ───── Skill detail with deployments rail + bundle sub-option ─────
+function SkillDetail() {
+  return (
+    <div className="wf-window wf" style={{ width: 800, height: 660 }}>
+      <TitleBar title="anthropic-skills"/>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <div style={{ flex: 1, padding: 18, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <div className="skill-icon" style={{ width: 52, height: 52, fontSize: 22, background: 'var(--paper-2)' }}>📦</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 22, fontWeight: 700 }}>anthropic-skills</div>
+              <div className="hand" style={{ color: 'var(--ink-soft)', fontSize: 16 }}>
+                Bundle of 12 first-party skills
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                <span className="sk-tag">bundle · 12 inside</span>
+                <span className="sk-tag good">up to date</span>
+                <span className="sk-tag">@ 8a2c1f3</span>
+              </div>
+            </div>
+          </div>
+          <div className="sk-divider soft"/>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase', marginBottom: 4 }}>Source</div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>github.com/anthropic/<br/>anthropic-skills</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase', marginBottom: 4 }}>Installed</div>
+              <div style={{ fontSize: 12 }}>2 weeks ago · updated today</div>
+            </div>
+          </div>
+          <div className="sk-divider soft"/>
+          {/* SKILLS INSIDE BUNDLE — shown inline as it's a bundle */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+              <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Skills inside · 12</div>
+              <div className="hand" style={{ color: 'var(--ink-faint)', fontSize: 13 }}>tick to deploy in batch</div>
+              <div style={{ flex: 1 }}/>
+              <span className="sk-btn sm">Select all</span>
+            </div>
+            <div className="sk-box" style={{ padding: 0, maxHeight: 220, overflow: 'auto' }}>
+              {[
+                ['pdf-tools', 'parse + render PDFs', true],
+                ['make-deck', 'slide decks in HTML', true],
+                ['frontend-design', 'aesthetic direction', true],
+                ['napkin-reader', 'parse .napkin sketches', false],
+                ['wireframe', 'explore design space', false],
+                ['pptx-editable', 'native PowerPoint', false],
+                ['pdf-export', 'print-ready PDF', false],
+              ].map(([n, d, on], i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '7px 12px', borderBottom: i < 6 ? '1px dashed var(--line-soft)' : 'none', gap: 10 }}>
+                  <div style={{ width: 14, height: 14, borderRadius: 3, border: '1.5px solid var(--line)', background: on ? 'var(--ink)' : 'var(--paper)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 10 }}>{on && '✓'}</div>
+                  <div className="skill-icon" style={{ width: 22, height: 22, fontSize: 9 }}>{n.slice(0,1).toUpperCase()}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600 }}>{n}</div>
+                    <div style={{ fontSize: 10, color: 'var(--ink-faint)' }}>{d}</div>
+                  </div>
+                  <span className="sk-btn sm ghost">›</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        {/* DEPLOYMENTS RAIL with bundle sub-option */}
+        <div style={{ width: 240, borderLeft: '1.5px solid var(--line-soft)', padding: 14, background: 'var(--paper-2)', display: 'flex', flexDirection: 'column', gap: 8, overflow: 'auto' }}>
+          <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Deployed (3)</div>
+          {[
+            ['~/code/myapp', 'all 12 skills'],
+            ['~/code/landing', '3 skills'],
+            ['~/work/agents', '7 skills'],
+          ].map(([p, sub]) => (
+            <div key={p} className="sk-box" style={{ padding: 8, fontSize: 11, fontFamily: 'var(--mono)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{p}</span>
+                <span style={{ fontSize: 14, color: 'var(--ink-faint)' }}>×</span>
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--accent)', marginTop: 2, fontFamily: 'var(--read)' }}>{sub}</div>
+            </div>
+          ))}
+
+          <div className="sk-divider soft"/>
+          {/* BUNDLE SUB-OPTION FROM RAIL */}
+          <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Deploy bundle as</div>
+          <div className="sk-box" style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 4, background: 'var(--paper)' }}>
+            <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 12, height: 12, borderRadius: '50%', border: '1.5px solid var(--line)', background: 'var(--ink)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'white' }}/>
+              </span>
+              All skills (full bundle)
+            </label>
+            <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-soft)' }}>
+              <span style={{ width: 12, height: 12, borderRadius: '50%', border: '1.5px solid var(--line-soft)' }}/>
+              Selected (3 ticked)
+            </label>
+            <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-soft)' }}>
+              <span style={{ width: 12, height: 12, borderRadius: '50%', border: '1.5px solid var(--line-soft)' }}/>
+              Custom bundle… (save as)
+            </label>
+          </div>
+          <span className="sk-btn sm ghost" style={{ justifyContent: 'center' }}>+ Deploy to project</span>
+          <div style={{ flex: 1 }}/>
+          <span className="sk-btn">Update from GitHub</span>
+          <span className="sk-btn ghost">Browse files</span>
+          <span className="sk-btn ghost" style={{ color: 'var(--warn)' }}>Remove</span>
+        </div>
+      </div>
+      <div className="anno" style={{ top: 240, right: -150, width: 140 }}>
+        bundle deploy options<br/>live IN the rail —<br/>full / selected / custom
+      </div>
+    </div>
+  );
+}
+
+// ───── Updates flow: review → updating → re-deploy ─────
+function UpdateReview() {
+  const Row = ({ name, from, to, projects, last }) => (
+    <div style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', borderBottom: last ? 'none' : '1px dashed var(--line-soft)', gap: 10 }}>
+      <div style={{ width: 16, height: 16, borderRadius: 4, border: '1.5px solid var(--line)', background: 'var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 11 }}>✓</div>
+      <div className="skill-icon" style={{ width: 24, height: 24, fontSize: 10 }}>{name.slice(0,1).toUpperCase()}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>{name}</div>
+        <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--ink-faint)' }}>{from} → <span style={{ color: 'var(--accent)' }}>{to}</span></div>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--ink-soft)', fontFamily: 'var(--mono)', textAlign: 'right' }}>cascades to<br/>{projects} projects</div>
+    </div>
+  );
+  return (
+    <div className="wf-window wf" style={{ width: 600, height: 580 }}>
+      <TitleBar title="Updates available"/>
+      <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 10, flex: 1, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <div style={{ fontSize: 18, fontWeight: 700 }}><span className="hl">3 updates</span> ready</div>
+          <span className="sk-tag mono">step 1 of 3</span>
+        </div>
+        <div className="hand" style={{ color: 'var(--ink-soft)', fontSize: 16 }}>
+          all safe — depth-1 git pulls, will cascade to project copies
+        </div>
+        <div className="sk-box" style={{ flex: 1, overflow: 'auto', padding: 0 }}>
+          <Row name="make-deck" from="3a1f9c2" to="8b4d7e1" projects={3} />
+          <Row name="wireframe" from="6b8c2d5" to="7e9f1a3" projects={2} />
+          <Row name="canvas-export" from="4e2a8b1" to="9c1d3f4" projects={1} last/>
+        </div>
+        <div className="sk-box" style={{ padding: 10, background: '#f7f6ee', borderStyle: 'dashed' }}>
+          <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Will affect 6 deployments across</div>
+          <div style={{ fontSize: 12, marginTop: 4 }}>
+            <span className="sk-tag">~/code/myapp</span>{' '}
+            <span className="sk-tag">~/code/landing</span>{' '}
+            <span className="sk-tag">~/work/agents</span>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <span className="sk-btn ghost">Skip all</span>
+          <div style={{ flex: 1 }}/>
+          <span className="sk-btn">Update only</span>
+          <span className="sk-btn primary">Update + re-deploy →</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UpdateProgress() {
+  const Step = ({ label, state, sub }) => (
+    <div style={{ display: 'flex', alignItems: 'center', padding: '8px 0', gap: 10, borderBottom: '1px dashed var(--line-soft)' }}>
+      <div style={{ width: 18, height: 18, borderRadius: '50%', border: '1.5px solid var(--line)', background: state === 'done' ? 'var(--good)' : state === 'now' ? 'var(--accent)' : 'var(--paper)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 11 }}>
+        {state === 'done' && '✓'}
+        {state === 'now' && '●'}
+      </div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 13, fontWeight: state === 'now' ? 700 : 600, color: state === 'pending' ? 'var(--ink-faint)' : 'var(--ink)' }}>{label}</div>
+        {sub && <div style={{ fontSize: 11, color: 'var(--ink-faint)', fontFamily: 'var(--mono)' }}>{sub}</div>}
+      </div>
+    </div>
+  );
+  return (
+    <div className="wf-window wf" style={{ width: 600, height: 580 }}>
+      <TitleBar title="Updating…"/>
+      <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 10, flex: 1, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>Updating + re-deploying</div>
+          <span className="sk-tag mono">step 2 of 3</span>
+        </div>
+        <div style={{ height: 8, background: 'var(--paper-2)', borderRadius: 4, border: '1px solid var(--line)', overflow: 'hidden' }}>
+          <div style={{ width: '55%', height: '100%', background: 'var(--accent)' }}/>
+        </div>
+        <div className="hand" style={{ color: 'var(--ink-faint)' }}>5 of 9 steps · re-deploying to ~/code/landing…</div>
+        <div className="sk-box" style={{ padding: '4px 14px', overflow: 'auto', flex: 1 }}>
+          <Step label="Pull make-deck" state="done" sub="@ 8b4d7e1 · 1.2s"/>
+          <Step label="Pull wireframe" state="done" sub="@ 7e9f1a3 · 0.8s"/>
+          <Step label="Pull canvas-export" state="done" sub="@ 9c1d3f4 · 1.0s"/>
+          <Step label="Re-deploy → ~/code/myapp" state="done" sub="3 skills replaced"/>
+          <Step label="Re-deploy → ~/code/landing" state="now" sub="syncing make-deck, wireframe…"/>
+          <Step label="Re-deploy → ~/work/agents" state="pending"/>
+          <Step label="Validate SKILL.md frontmatter" state="pending"/>
+          <Step label="Save config snapshot" state="pending"/>
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <span className="sk-btn ghost">Cancel after current step</span>
+          <div style={{ flex: 1 }}/>
+          <span className="sk-btn" style={{ opacity: 0.5 }}>Done</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UpdateDone() {
+  return (
+    <div className="wf-window wf" style={{ width: 600, height: 580 }}>
+      <TitleBar title="Update complete"/>
+      <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12, flex: 1, overflow: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>Done — 3 updated, 6 deployments synced</div>
+          <span className="sk-tag mono">step 3 of 3</span>
+        </div>
+        <div className="hand" style={{ color: 'var(--good)', fontSize: 16 }}>✓ all clean — agents will pick up new skills on next run</div>
+
+        <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Updated</div>
+        <div className="sk-box" style={{ padding: 0 }}>
+          {[
+            ['make-deck', '3a1f9c2 → 8b4d7e1', '3 deploys synced'],
+            ['wireframe', '6b8c2d5 → 7e9f1a3', '2 deploys synced'],
+            ['canvas-export', '4e2a8b1 → 9c1d3f4', '1 deploy synced'],
+          ].map(([n, c, d], i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', borderBottom: i < 2 ? '1px dashed var(--line-soft)' : 'none', gap: 10 }}>
+              <span style={{ color: 'var(--good)', fontSize: 14 }}>✓</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>{n}</div>
+                <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-faint)' }}>{c}</div>
+              </div>
+              <span style={{ fontSize: 11, color: 'var(--good)' }}>{d}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* RE-DEPLOY EXTENSION — create new bundle from updated skills */}
+        <div className="sk-box shadow" style={{ padding: 12, background: '#fff8d8', borderColor: 'var(--accent)' }}>
+          <div className="hand" style={{ fontSize: 18, color: 'var(--accent)', marginBottom: 4 }}>+ create bundle from updates?</div>
+          <div style={{ fontSize: 12, marginBottom: 8 }}>Save these 3 freshly-updated skills as a named bundle to push to other projects.</div>
+          <div className="sk-input" style={{ marginBottom: 8, fontSize: 12, fontFamily: 'var(--read)' }}>my-may-2026-update</div>
+          <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', marginBottom: 6 }}>Push to:</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: 3, border: '1.5px solid var(--line)', background: 'var(--ink)', color: 'white', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>✓</span>~/code/sketches</label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 14, borderRadius: 3, border: '1.5px solid var(--line)', background: 'var(--ink)', color: 'white', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>✓</span>~/work/dashboard</label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-soft)' }}><span style={{ width: 14, height: 14, borderRadius: 3, border: '1.5px solid var(--line-soft)' }}/>~/sketch/proto-7</label>
+          </div>
+        </div>
+
+        <div style={{ flex: 1 }}/>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <span className="sk-btn ghost">Skip</span>
+          <div style={{ flex: 1 }}/>
+          <span className="sk-btn">Save bundle only</span>
+          <span className="sk-btn primary">Save + push to 2 →</span>
+        </div>
+      </div>
+      <div className="anno" style={{ top: 320, right: -160, width: 150 }}>
+        re-deploy extension —<br/>turn fresh updates into<br/>a new bundle, push<br/>to extra projects
+      </div>
+    </div>
+  );
+}
+
+// ───── Deploy view: manage projects (add/remove) + remove flow ─────
+function DeployFlow() {
+  const Project = ({ path, count, last }) => (
+    <div className="sk-box" style={{ padding: 10, marginBottom: 8, background: 'var(--paper)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 14 }}>📁</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{path}</div>
+          <div style={{ fontSize: 10, color: 'var(--ink-faint)' }}>{count} skills · {last}</div>
+        </div>
+        <span className="sk-btn sm ghost">Open</span>
+        <span className="sk-btn sm ghost" style={{ color: 'var(--warn)' }}>Remove…</span>
+      </div>
+    </div>
+  );
+  return (
+    <div className="wf-window wf" style={{ width: 600, height: 580 }}>
+      <TitleBar title="Deploy"/>
+      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10, flex: 1, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>Tracked projects</div>
+            <div className="hand" style={{ color: 'var(--ink-soft)', fontSize: 15 }}>add or remove projects, manage their <span style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>.claude/skills/</span></div>
+          </div>
+          {window.ViewSwitcher && <window.ViewSwitcher active="deploy"/>}
+        </div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <div className="sk-input" style={{ flex: 1, fontFamily: 'var(--read)', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>+</span>
+            <span style={{ color: 'var(--ink-faint)' }}>~/code/new-project</span>
+          </div>
+          <span className="sk-btn">Browse…</span>
+          <span className="sk-btn primary">Add project</span>
+        </div>
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase', margin: '4px 0' }}>Tracked · 4</div>
+          <Project path="~/code/myapp" count="3" last="deployed today"/>
+          <Project path="~/code/landing" count="2" last="updated 3d ago"/>
+          <Project path="~/work/agents" count="5" last="updated today"/>
+          <Project path="~/sketch/proto-7" count="1" last="2w ago"/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ───── Remove project confirmation: leave or clean ─────
+function DeployRemoveConfirm() {
+  return (
+    <div className="wf-window wf" style={{ width: 580, height: 580 }}>
+      <TitleBar title="Remove project — confirm"/>
+      <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12, flex: 1, overflow: 'auto' }}>
+        <div style={{ fontSize: 18, fontWeight: 700 }}>Remove <span style={{ fontFamily: 'var(--mono)', fontSize: 14 }}>~/code/myapp</span> from tracking?</div>
+        <div className="hand" style={{ color: 'var(--ink-soft)', fontSize: 15 }}>
+          stops cascading updates. doesn't touch the project itself unless you ask.
+        </div>
+        <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>What about installed skills?</div>
+        <div className="sk-box" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', cursor: 'default' }}>
+            <span style={{ width: 14, height: 14, borderRadius: '50%', border: '1.5px solid var(--line)', background: 'var(--paper)', marginTop: 2, flexShrink: 0 }}/>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>Leave skills installed</div>
+              <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>files in <span style={{ fontFamily: 'var(--mono)' }}>.claude/skills/</span> stay put — useful if you migrated the project</div>
+            </div>
+          </label>
+          <div className="sk-divider soft"/>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', cursor: 'default', background: '#fff3a0', margin: -8, padding: 8, borderRadius: 6 }}>
+            <span style={{ width: 14, height: 14, borderRadius: '50%', border: '1.5px solid var(--line)', background: 'var(--ink)', marginTop: 2, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'white' }}/>
+            </span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>Remove deployed skills <span style={{ color: 'var(--warn)' }}>and clean directory</span></div>
+              <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>delete the listed folders below from disk</div>
+            </div>
+          </label>
+        </div>
+        <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Will delete · 3 folders</div>
+        <div className="sk-box" style={{ padding: 0, fontFamily: 'var(--mono)', fontSize: 11 }}>
+          {[
+            ['~/code/myapp/.claude/skills/frontend-design', '8 files · 24 KB'],
+            ['~/code/myapp/.claude/skills/make-deck', '12 files · 41 KB'],
+            ['~/code/myapp/.claude/skills/pdf-tools', '6 files · 18 KB'],
+          ].map(([p, s], i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', borderBottom: i < 2 ? '1px dashed var(--line-soft)' : 'none', gap: 8 }}>
+              <span style={{ width: 14, height: 14, borderRadius: 3, border: '1.5px solid var(--line)', background: 'var(--ink)', color: 'white', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>✓</span>
+              <span style={{ flex: 1 }}>{p}</span>
+              <span style={{ color: 'var(--ink-faint)', fontFamily: 'var(--read)' }}>{s}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--warn)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span>⚠</span> tick each to confirm — these are permanent deletes
+        </div>
+        <div style={{ flex: 1 }}/>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <span className="sk-btn ghost">Cancel</span>
+          <div style={{ flex: 1 }}/>
+          <span className="sk-btn">Untrack only</span>
+          <span className="sk-btn" style={{ background: 'var(--warn)', color: 'white', borderColor: 'var(--warn)' }}>Untrack + delete 3 →</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ───── Settings (kept) ─────
+function SettingsView() {
+  const Row = ({ label, value, hint, control = 'value' }) => (
+    <div style={{ display: 'flex', alignItems: 'flex-start', padding: '12px 0', borderBottom: '1px dashed var(--line-soft)', gap: 14 }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
+        {hint && <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{hint}</div>}
+      </div>
+      {control === 'toggle' ? (
+        <div style={{ width: 32, height: 18, borderRadius: 9, border: '1.5px solid var(--line)', background: value ? 'var(--ink)' : 'var(--paper)', position: 'relative', flexShrink: 0 }}>
+          <div style={{ position: 'absolute', top: 1, left: value ? 15 : 1, width: 12, height: 12, borderRadius: '50%', background: value ? 'white' : 'var(--ink-soft)' }}/>
+        </div>
+      ) : (
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink-soft)' }}>{value}</div>
+      )}
+    </div>
+  );
+  return (
+    <div className="wf-window wf" style={{ width: 600, height: 600 }}>
+      <TitleBar title="Settings"/>
+      <div style={{ padding: 22, display: 'flex', flexDirection: 'column', flex: 1, overflow: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 20, fontWeight: 700 }}>Settings</div>
+          {window.ViewSwitcher && <window.ViewSwitcher active="settings"/>}
+        </div>
+        <div className="hand" style={{ color: 'var(--ink-faint)', fontSize: 14, marginBottom: 6 }}>local install — no accounts, no sync</div>
+        <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase', marginTop: 10 }}>Paths</div>
+        <Row label="Library folder" value="~/.claude/skills" hint="where skills live on disk"/>
+        <Row label="Config" value="~/.claude/skill-manager.json" hint="tracked sources, deployments"/>
+        <Row label="Project root default" value="~/code"/>
+        <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase', marginTop: 16 }}>Behavior</div>
+        <Row label="Auto-check updates on launch" value={true} control="toggle" hint="git ls-remote, parallel"/>
+        <Row label="Cascade updates to projects" value={true} control="toggle" hint="re-copy on update"/>
+        <Row label="Confirm before remove" value={true} control="toggle"/>
+        <Row label="Show resource-only entries" value={false} control="toggle" hint="folders without SKILL.md"/>
+        <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-faint)', textTransform: 'uppercase', marginTop: 16 }}>About</div>
+        <Row label="Version" value="0.4.1"/>
+        <Row label="Git binary" value="/opt/homebrew/bin/git" hint="from PATH"/>
+        <div style={{ flex: 1, minHeight: 8 }}/>
+        <div style={{ display: 'flex', gap: 6, paddingTop: 12 }}>
+          <span className="sk-btn ghost">Open library folder</span>
+          <span className="sk-btn ghost">Edit config.json</span>
+          <div style={{ flex: 1 }}/>
+          <span className="sk-btn ghost" style={{ color: 'var(--warn)' }}>Reset config</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+window.InstallFlow = InstallFlow;
+window.SkillDetail = SkillDetail;
+window.UpdateReview = UpdateReview;
+window.UpdateProgress = UpdateProgress;
+window.UpdateDone = UpdateDone;
+window.DeployFlow = DeployFlow;
+window.DeployRemoveConfirm = DeployRemoveConfirm;
+window.SettingsView = SettingsView;
+
+</script>
+
+<script type="text/babel">
+// (placeholder kept so structure mirrors prior file)
+
+</script>
+
+<script type="text/babel">
+const TWEAKS = /*EDITMODE-BEGIN*/{
+  "sketchy": "on",
+  "annotations": "on",
+  "density": "comfy",
+  "library": "C"
+}/*EDITMODE-END*/;
+
+function App() {
+  const [tweaks, setTweaks] = React.useState(TWEAKS);
+  const [open, setOpen] = React.useState(false);
+  const [bannerOpen, setBannerOpen] = React.useState(true);
+
+  React.useEffect(() => {
+    document.body.dataset.sketchy = tweaks.sketchy;
+    document.body.dataset.annotations = tweaks.annotations;
+    document.body.dataset.density = tweaks.density;
+  }, [tweaks]);
+
+  React.useEffect(() => {
+    const onMsg = (e) => {
+      const t = e.data && e.data.type;
+      if (t === '__activate_edit_mode') setOpen(true);
+      else if (t === '__deactivate_edit_mode') setOpen(false);
+    };
+    window.addEventListener('message', onMsg);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  const setTweak = (k, v) => {
+    setTweaks((p) => ({ ...p, [k]: v }));
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [k]: v } }, '*');
+  };
+
+  const Seg = ({ tkey, options }) => (
+    <div style={{ display: 'flex', gap: 0, border: '1px solid #2a2a2a', borderRadius: 6, overflow: 'hidden', marginTop: 6 }}>
+      {options.map((o) => (
+        <button key={o.value}
+          onClick={() => setTweak(tkey, o.value)}
+          style={{
+            flex: 1, padding: '6px 10px', fontFamily: 'inherit', fontSize: 12,
+            background: tweaks[tkey] === o.value ? '#2a2a2a' : '#fdfcf8',
+            color: tweaks[tkey] === o.value ? '#fff' : '#2a2a2a',
+            border: 'none', cursor: 'pointer',
+          }}>{o.label}</button>
+      ))}
+    </div>
+  );
+
+  // Library variant chosen by tweak — C default, also B and D
+  const LibVariant = (
+    tweaks.library === 'B' ? window.LibraryB :
+    tweaks.library === 'D' ? window.LibraryD :
+    window.LibraryC
+  );
+
+  return (
+    <>
+      <window.DesignCanvas>
+        <window.DCSection id="library" title="Library — main view"
+          subtitle={`Default direction: C (card grid). Switch to B / D via Tweaks → currently ${tweaks.library || 'C'}.`}>
+
+          <window.DCArtboard id="lib-default" label={`Default · variant ${tweaks.library || 'C'}`} width={880} height={700}>
+            <div style={{ padding: 30, background: 'var(--paper-2, #f5f3ec)', minHeight: '100%' }}>
+              {LibVariant && <LibVariant/>}
+            </div>
+          </window.DCArtboard>
+
+          <window.DCArtboard id="lib-launch" label="On launch — update banner pops" width={880} height={700}>
+            <div style={{ padding: 30, background: 'var(--paper-2, #f5f3ec)', minHeight: '100%', position: 'relative' }}>
+              {LibVariant && <LibVariant/>}
+              <div className="anno" style={{ top: 20, left: 30, color: 'var(--accent)', fontSize: 18 }}>
+                ↑ colored CTA — primary
+              </div>
+            </div>
+          </window.DCArtboard>
+
+          <window.DCArtboard id="lib-alt-b" label="Alt · B two-pane" width={880} height={620}>
+            <div style={{ padding: 30, background: 'var(--paper-2, #f5f3ec)', minHeight: '100%' }}>
+              <window.LibraryB/>
+            </div>
+          </window.DCArtboard>
+
+          <window.DCArtboard id="lib-alt-d" label="Alt · D power-user palette" width={720} height={580}>
+            <div style={{ padding: 30, background: 'var(--paper-2, #f5f3ec)', minHeight: '100%' }}>
+              <window.LibraryD/>
+            </div>
+          </window.DCArtboard>
+        </window.DCSection>
+
+        <window.DCSection id="install" title="Install from GitHub" subtitle="Cloning is the canonical state — paste, then immediately progress + log + bundle preview">
+          <window.DCArtboard id="install-clone" label="Cloning — paste → log → bundle preview" width={600} height={520}>
+            <div style={{ padding: 30, background: 'var(--paper-2, #f5f3ec)', minHeight: '100%' }}>
+              <window.InstallFlow/>
+            </div>
+          </window.DCArtboard>
+        </window.DCSection>
+
+        <window.DCSection id="detail" title="Skill detail" subtitle="Deployments rail on the right — deploy bundle as full / selected / custom">
+          <window.DCArtboard id="skill-detail" label="Bundle skill detail · deployments rail · sub-option" width={860} height={720}>
+            <div style={{ padding: 30, background: 'var(--paper-2, #f5f3ec)', minHeight: '100%' }}>
+              <window.SkillDetail/>
+            </div>
+          </window.DCArtboard>
+        </window.DCSection>
+
+        <window.DCSection id="updates" title="Updates" subtitle="Pops on launch (banner above) → review → update + re-deploy → bundle as new">
+          <window.DCArtboard id="upd-1" label="1 · Review (cascades preview)" width={660} height={620}>
+            <div style={{ padding: 30, background: 'var(--paper-2, #f5f3ec)', minHeight: '100%' }}>
+              <window.UpdateReview/>
+            </div>
+          </window.DCArtboard>
+          <window.DCArtboard id="upd-2" label="2 · Updating + cascading" width={660} height={620}>
+            <div style={{ padding: 30, background: 'var(--paper-2, #f5f3ec)', minHeight: '100%' }}>
+              <window.UpdateProgress/>
+            </div>
+          </window.DCArtboard>
+          <window.DCArtboard id="upd-3" label="3 · Done · create bundle from updates · push" width={660} height={620}>
+            <div style={{ padding: 30, background: 'var(--paper-2, #f5f3ec)', minHeight: '100%' }}>
+              <window.UpdateDone/>
+            </div>
+          </window.DCArtboard>
+        </window.DCSection>
+
+        <window.DCSection id="other" title="Deploy + Settings" subtitle="Project picker; settings (kept verbatim from prior round)">
+          <window.DCArtboard id="deploy" label="Deploy — manage tracked projects" width={600} height={580}>
+            <div style={{ padding: 30, background: 'var(--paper-2, #f5f3ec)', minHeight: '100%' }}>
+              <window.DeployFlow/>
+            </div>
+          </window.DCArtboard>
+          <window.DCArtboard id="deploy-remove" label="Remove project · leave-or-clean" width={580} height={580}>
+            <div style={{ padding: 30, background: 'var(--paper-2, #f5f3ec)', minHeight: '100%' }}>
+              <window.DeployRemoveConfirm/>
+            </div>
+          </window.DCArtboard>
+          <window.DCArtboard id="settings" label="Settings" width={660} height={640}>
+            <div style={{ padding: 30, background: 'var(--paper-2, #f5f3ec)', minHeight: '100%' }}>
+              <window.SettingsView/>
+            </div>
+          </window.DCArtboard>
+        </window.DCSection>
+      </window.DesignCanvas>
+
+      {open && (
+        <div style={{
+          position: 'fixed', bottom: 16, right: 16, width: 260,
+          background: '#fdfcf8', border: '1.5px solid #2a2a2a', borderRadius: 10,
+          boxShadow: '4px 4px 0 rgba(0,0,0,0.15)', padding: 14, zIndex: 9999,
+          fontFamily: 'Kalam, system-ui, sans-serif', color: '#2a2a2a',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ fontFamily: 'Caveat, cursive', fontSize: 22, fontWeight: 700 }}>Tweaks</div>
+            <button onClick={() => { setOpen(false); window.parent.postMessage({ type: '__edit_mode_dismissed' }, '*'); }}
+              style={{ border: 'none', background: 'transparent', fontSize: 18, cursor: 'pointer' }}>×</button>
+          </div>
+          <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#888', letterSpacing: 1 }}>Library variant (default · alt)</div>
+          <Seg tkey="library" options={[{value:'C',label:'C grid'},{value:'B',label:'B two-pane'},{value:'D',label:'D palette'}]}/>
+          <div style={{ height: 12 }}/>
+          <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#888', letterSpacing: 1 }}>Wireframe vibe</div>
+          <Seg tkey="sketchy" options={[{value:'on',label:'Sketchy'},{value:'off',label:'Clean'}]}/>
+          <div style={{ height: 12 }}/>
+          <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#888', letterSpacing: 1 }}>Annotations</div>
+          <Seg tkey="annotations" options={[{value:'on',label:'Show'},{value:'off',label:'Hide'}]}/>
+        </div>
+      )}
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
