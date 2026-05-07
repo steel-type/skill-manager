@@ -1,12 +1,15 @@
 import { create } from "zustand";
 import type {
   AppSettings,
+  DeployRequest,
   Skill,
+  SkillStack,
+  StackDeployment,
   TrackedProject,
   UpdateInfo,
 } from "../../electron/services/types";
 
-export type Tab = "library" | "deploy" | "settings";
+export type Tab = "library" | "stacks" | "deploy" | "settings";
 export type LibraryFilter =
   | "all"
   | "updates"
@@ -21,7 +24,10 @@ export type ModalState =
   | { type: "removeSkill"; name: string }
   | { type: "removeProject"; path: string }
   | { type: "rollback"; name: string }
-  | { type: "deploy"; skill: string };
+  | { type: "deploy"; skill: string }
+  | { type: "createStack" }
+  | { type: "editStack"; stackId: string }
+  | { type: "deleteStack"; stackId: string };
 
 /**
  * Full-pane "screens" that take over the right-pane (the LeftRail stays
@@ -40,6 +46,7 @@ export type Screen =
   | { kind: "main" }
   | { kind: "update"; prefillName?: string }
   | { kind: "detail"; name: string }
+  | { kind: "stackDetail"; stackId: string }
   | {
       kind: "import";
       entries: ImportEntryPrefill[];
@@ -96,6 +103,34 @@ interface AppState {
   settings: AppSettings;
   loadSettings: () => Promise<void>;
   updateSettings: (partial: Partial<AppSettings>) => Promise<void>;
+
+  // ── Stacks ──────────────────────────────────────────────────────────────
+  stacks: SkillStack[];
+  stackDeployments: StackDeployment[];
+  /** Most-recently-opened StackDetailFlow stack id. Lets the detail screen
+   *  re-render after composition edits without re-loading. */
+  activeStackId: string | null;
+  /** Skill or stack queued for deployment. Set by `queueSkillForDeploy` /
+   *  `queueStackForDeploy`, which also flip `activeTab` to "deploy". The
+   *  Deploy view reads this and pre-selects the queued item. */
+  deployQueue: DeployRequest | null;
+
+  loadStacks: () => Promise<void>;
+  loadStackDeployments: () => Promise<void>;
+  createStack: (
+    name: string,
+    description: string,
+    skillIds: string[],
+  ) => Promise<SkillStack>;
+  updateStackComposition: (
+    stackId: string,
+    skillIds: string[],
+  ) => Promise<void>;
+  deleteStack: (stackId: string, cleanup: boolean) => Promise<void>;
+  setActiveStack: (stackId: string | null) => void;
+  queueSkillForDeploy: (skillName: string) => void;
+  queueStackForDeploy: (stackId: string) => void;
+  clearDeployQueue: () => void;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -207,4 +242,77 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ lastError: err instanceof Error ? err.message : String(err) });
     }
   },
+
+  // ── Stacks ────────────────────────────────────────────────────────────────
+
+  stacks: [],
+  stackDeployments: [],
+  activeStackId: null,
+  deployQueue: null,
+
+  loadStacks: async () => {
+    try {
+      const stacks = await window.api.listStacks();
+      set({ stacks });
+    } catch (err) {
+      set({ lastError: err instanceof Error ? err.message : String(err) });
+    }
+  },
+
+  loadStackDeployments: async () => {
+    try {
+      const stackDeployments = await window.api.getStackDeployments();
+      set({ stackDeployments });
+    } catch (err) {
+      set({ lastError: err instanceof Error ? err.message : String(err) });
+    }
+  },
+
+  createStack: async (name, description, skillIds) => {
+    const stack = await window.api.createStack(name, description, skillIds);
+    set((state) => ({ stacks: [...state.stacks, stack] }));
+    return stack;
+  },
+
+  updateStackComposition: async (stackId, skillIds) => {
+    const result = await window.api.updateStackComposition(stackId, skillIds);
+    set((state) => ({
+      stacks: state.stacks.map((s) =>
+        s.id === stackId ? result.stack : s,
+      ),
+    }));
+    // Refresh deployments since includedSkillIds and timestamp changed.
+    await get().loadStackDeployments();
+  },
+
+  deleteStack: async (stackId, cleanup) => {
+    await window.api.deleteStack(stackId, cleanup);
+    set((state) => ({
+      stacks: state.stacks.filter((s) => s.id !== stackId),
+      stackDeployments: state.stackDeployments.filter(
+        (d) => d.stackId !== stackId,
+      ),
+      activeStackId:
+        state.activeStackId === stackId ? null : state.activeStackId,
+    }));
+  },
+
+  setActiveStack: (activeStackId) => set({ activeStackId }),
+
+  queueSkillForDeploy: (skillName) =>
+    set({
+      deployQueue: { type: "skill", id: skillName },
+      activeTab: "deploy",
+      // Close any modal that was previously routing to the Deploy flow.
+      modal: null,
+    }),
+
+  queueStackForDeploy: (stackId) =>
+    set({
+      deployQueue: { type: "stack", id: stackId },
+      activeTab: "deploy",
+      modal: null,
+    }),
+
+  clearDeployQueue: () => set({ deployQueue: null }),
 }));
