@@ -77,6 +77,40 @@ const api = {
       import("./services/setup").CompleteSetupResult
     >,
 
+  // ── Migration (relocate library between agent dirs / custom paths) ──
+  planMigration: (args: {
+    fromLibrary: string;
+    toLibrary: string;
+    moveHistory: boolean;
+    fromHistory?: string;
+    toHistory?: string;
+  }) =>
+    ipcRenderer.invoke("plan-migration", args) as Promise<
+      import("./services/migration").MigrationPlan
+    >,
+  runMigration: (
+    plan: import("./services/migration").MigrationPlan,
+    streamId: string,
+    onLog?: (m: import("./services/migration").MigrationProgressMsg) => void,
+  ) => {
+    // Migration progress is JSON-encoded over the same op-log channel
+    // every other long-running op uses; parse on receipt.
+    const stringHandler = onLog
+      ? (line: string) => {
+          try {
+            onLog(JSON.parse(line));
+          } catch {
+            onLog({ level: "info", text: line });
+          }
+        }
+      : undefined;
+    return withLogChannel(streamId, stringHandler, () =>
+      ipcRenderer.invoke("run-migration", { plan, streamId }) as Promise<
+        import("./services/migration").MigrationResult
+      >,
+    );
+  },
+
   listAgents: () =>
     ipcRenderer.invoke("list-agents") as Promise<
       {

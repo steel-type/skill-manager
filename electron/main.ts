@@ -363,6 +363,51 @@ ipcMain.handle("complete-setup", (_e, args: CompleteSetupArgs) =>
   completeSetup(args),
 );
 
+// ── Migration handlers ──
+
+ipcMain.handle(
+  "plan-migration",
+  async (
+    _e,
+    args: {
+      fromLibrary: string;
+      toLibrary: string;
+      moveHistory: boolean;
+      fromHistory?: string;
+      toHistory?: string;
+    },
+  ) => {
+    const { planMigration } = await import("./services/migration");
+    return planMigration(args);
+  },
+);
+
+ipcMain.handle(
+  "run-migration",
+  async (
+    _e,
+    args: {
+      plan: import("./services/migration").MigrationPlan;
+      streamId?: string;
+    },
+  ) => {
+    const { runMigration } = await import("./services/migration");
+    const stringLogger = makeLogger(args.streamId);
+    const onLog = stringLogger
+      ? (m: import("./services/migration").MigrationProgressMsg) =>
+          stringLogger(JSON.stringify(m))
+      : undefined;
+    try {
+      return await runMigration(args.plan, {
+        onLog,
+        signal: registerCancellable(args.streamId),
+      });
+    } finally {
+      clearCancellable(args.streamId);
+    }
+  },
+);
+
 ipcMain.handle("list-agents", () =>
   getSupportedAgents().map((a) => ({
     id: a.id,
