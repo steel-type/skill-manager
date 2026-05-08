@@ -118,6 +118,7 @@ const api = {
         displayName: string;
         supportsSymlinks: boolean;
         formatNotes: string | null;
+        skillsDir: string | null;
       }[]
     >,
 

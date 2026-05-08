@@ -1,17 +1,25 @@
 // First-run setup overlay. Renders edge-to-edge over the entire app
 // when setup.completed === false; the rest of the UI is hidden until
-// completeSetup() succeeds. Five steps:
+// completeSetup() succeeds.
+//
+// Steps:
 //   1. Welcome
-//   2. Library location (claude / centralized / custom)
-//   3. Primary agent + default deploy mode
-//   4. Existing skills detection (import or skip per name conflicts)
-//   5. Confirm + run
+//   2. Agent (a/b/c/d/e shortcuts) → primary agent + auto-scan its default
+//      skills dir so the next step can branch.
+//   3. Location → "Use {agent}'s skills dir" vs. "Move to Skill Manager
+//      library (recommended)" when skills were found, or "Use Skill Manager
+//      default" when nothing was found. "Choose folder…" + More options
+//      below for power users.
+//   4. Existing → review+confirm which detected skills to track.
+//   5. Confirm → final summary.
+//   6. Running → progress.
 
 import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "../state/store";
 import type {
   CompleteSetupArgs,
   DetectedSkill,
+  ImportMode,
 } from "../../electron/services/setup";
 import type {
   DeployMode,
@@ -21,8 +29,8 @@ import type {
 
 type Step =
   | "welcome"
+  | "agent"
   | "location"
-  | "primary"
   | "existing"
   | "confirm"
   | "running";
@@ -30,7 +38,19 @@ type Step =
 interface AgentChoice {
   id: string;
   displayName: string;
+  skillsDir: string | null;
 }
+
+// Stable display order for agent letter shortcuts. Claude first, then the
+// other primary-capable agents, then the catch-all.
+const AGENT_ORDER = ["claude", "codex", "gemini", "continue"] as const;
+
+// What the user picked on the location step.
+type LibraryChoice =
+  | { kind: "agentInPlace"; agentId: string; libraryPath: string }
+  | { kind: "smCentralized" }
+  | { kind: "claudeDefault" }
+  | { kind: "custom"; path: string };
 
 export function SetupFlow() {
   const setup = useAppStore((s) => s.setup);
@@ -43,23 +63,40 @@ export function SetupFlow() {
   const setError = useAppStore((s) => s.setError);
 
   const [step, setStep] = useState<Step>("welcome");
-  const [libraryRoot, setLibraryRoot] = useState<LibraryRoot>("claude");
+
+  // Agent step.
+  const [agents, setAgents] = useState<AgentChoice[]>([]);
+  const [primaryAgent, setPrimaryAgent] = useState<string>("claude");
+  const [otherSelected, setOtherSelected] = useState(false);
+
+  // Auto-scan of agent's default skills dir, populated when entering Agent
+  // step and used on Location step to branch the UI.
+  const [agentScanResult, setAgentScanResult] = useState<DetectedSkill[]>(
+    [],
+  );
+  const [agentScanLoading, setAgentScanLoading] = useState(false);
+
+  // Library choice.
+  const [libraryChoice, setLibraryChoice] = useState<LibraryChoice | null>(
+    null,
+  );
+  const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [customPath, setCustomPath] = useState<string>("");
-  const [pathError, setPathError] = useState<string | null>(null);
   const [resolvedPaths, setResolvedPaths] = useState<{
     libraryPath: string;
     historyPath: string;
   } | null>(null);
-  const [agents, setAgents] = useState<AgentChoice[]>([]);
-  const [primaryAgent, setPrimaryAgent] = useState<string>("claude");
+  const [pathError, setPathError] = useState<string | null>(null);
   const [deployMode, setDeployMode] = useState<DeployMode>("symlink");
+
+  // Existing skills step.
   const [detectedSkills, setDetectedSkills] = useState<DetectedSkill[]>([]);
   const [scanLoading, setScanLoading] = useState(false);
   const [selectedToImport, setSelectedToImport] = useState<Set<string>>(
     new Set(),
   );
-  // JSON entries pulled from a skills.json the user picked. We don't
-  // clone these during setup — that's slow and can fail. Instead, after
+  // JSON entries pulled from a skills.json the user picked. We don't clone
+  // these during setup — that's slow and can fail. Instead, after
   // completeSetup the ImportFlow opens with these pre-loaded.
   const [jsonEntries, setJsonEntries] = useState<
     {
@@ -71,37 +108,40 @@ export function SetupFlow() {
     }[]
   >([]);
   const [jsonSourcePath, setJsonSourcePath] = useState<string | null>(null);
+
   const [progress, setProgress] = useState<string[]>([]);
   const setScreen = useAppStore((s) => s.setScreen);
 
-  // Pre-setup theme picker. The Settings tab doesn't exist yet — give
-  // the user immediate control over the appearance from the very first
-  // screen so they aren't blinded.
   const settings = useAppStore((s) => s.settings);
   const updateSettings = useAppStore((s) => s.updateSettings);
 
-  // Load the agent list once. Filter to those with a globalSkillPath —
-  // cursor and cline have no global skills directory so they can't be
-  // primary.
+  // Load the agent list once. Filter to PRIMARY_CAPABLE — cursor and cline
+  // have no globalSkillPath so they can't be the primary agent.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const list = await window.api.listAgents();
         if (cancelled) return;
-        // listAgents returns minimal info; the renderer doesn't have
-        // direct access to the registry's globalSkillPath. Filter by id
-        // against the known set instead.
-        const PRIMARY_CAPABLE = new Set([
+        const PRIMARY_CAPABLE = new Set<string>([
           "claude",
           "codex",
           "gemini",
           "continue",
         ]);
+        const filtered = list.filter((a) => PRIMARY_CAPABLE.has(a.id));
+        // Sort by AGENT_ORDER so the letter shortcuts are stable.
+        filtered.sort(
+          (a, b) =>
+            AGENT_ORDER.indexOf(a.id as typeof AGENT_ORDER[number]) -
+            AGENT_ORDER.indexOf(b.id as typeof AGENT_ORDER[number]),
+        );
         setAgents(
-          list
-            .filter((a) => PRIMARY_CAPABLE.has(a.id))
-            .map((a) => ({ id: a.id, displayName: a.displayName })),
+          filtered.map((a) => ({
+            id: a.id,
+            displayName: a.displayName,
+            skillsDir: a.skillsDir,
+          })),
         );
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -112,22 +152,73 @@ export function SetupFlow() {
     };
   }, [setError]);
 
-  // Resolve the chosen library root → absolute paths whenever it changes.
+  // Auto-scan agent's default skills dir whenever the user picks one. The
+  // result drives the Location step's branching.
   useEffect(() => {
-    if (step !== "location" && step !== "existing" && step !== "confirm")
+    if (otherSelected) {
+      setAgentScanResult([]);
       return;
+    }
+    const agent = agents.find((a) => a.id === primaryAgent);
+    if (!agent || !agent.skillsDir) {
+      setAgentScanResult([]);
+      return;
+    }
+    let cancelled = false;
+    setAgentScanLoading(true);
+    (async () => {
+      try {
+        const found = await window.api.scanForExistingSkills(agent.skillsDir!);
+        if (!cancelled) setAgentScanResult(found);
+      } catch {
+        if (!cancelled) setAgentScanResult([]);
+      } finally {
+        if (!cancelled) setAgentScanLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [primaryAgent, otherSelected, agents]);
+
+  // Resolve the library choice → absolute paths whenever it changes.
+  useEffect(() => {
+    if (!libraryChoice) {
+      setResolvedPaths(null);
+      setPathError(null);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
-        if (libraryRoot === "custom" && !customPath.trim()) {
+        let root: LibraryRoot;
+        let path: string | null = null;
+        switch (libraryChoice.kind) {
+          case "agentInPlace":
+            // Map known agents to their LibraryRoot preset; else custom.
+            if (libraryChoice.agentId === "claude") root = "claude";
+            else {
+              root = "custom";
+              path = libraryChoice.libraryPath;
+            }
+            break;
+          case "smCentralized":
+            root = "centralized";
+            break;
+          case "claudeDefault":
+            root = "claude";
+            break;
+          case "custom":
+            root = "custom";
+            path = libraryChoice.path;
+            break;
+        }
+        if (root === "custom" && !path) {
           setResolvedPaths(null);
           setPathError(null);
           return;
         }
-        const r = await window.api.resolveLibraryRoot(
-          libraryRoot,
-          libraryRoot === "custom" ? customPath.trim() : null,
-        );
+        const r = await window.api.resolveLibraryRoot(root, path);
         if (cancelled) return;
         setResolvedPaths(r);
         const err = await window.api.validateLibraryPath(r.libraryPath);
@@ -142,22 +233,34 @@ export function SetupFlow() {
     return () => {
       cancelled = true;
     };
-  }, [libraryRoot, customPath, step]);
+  }, [libraryChoice]);
 
-  // When entering Existing step, scan the resolved library for any skills
-  // already on disk.
+  // When entering the Existing step, scan the chosen library — UNLESS the
+  // user picked "Move to SM" with skills already detected at the agent
+  // dir; in that case prefill with the agent-scan results so we move them.
   useEffect(() => {
-    if (step !== "existing" || !resolvedPaths) return;
+    if (step !== "existing" || !resolvedPaths || !libraryChoice) return;
     let cancelled = false;
     setScanLoading(true);
     (async () => {
       try {
-        const found = await window.api.scanForExistingSkills(
-          resolvedPaths.libraryPath,
-        );
+        // Source of detected skills depends on the library choice.
+        let found: DetectedSkill[] = [];
+        if (
+          libraryChoice.kind === "smCentralized" &&
+          agentScanResult.length > 0
+        ) {
+          // Move-from-agent flow: the candidates ARE the agent's skills.
+          found = agentScanResult;
+        } else {
+          // Default: scan the chosen library location for anything already
+          // there (idempotent re-runs, custom paths with prior data).
+          found = await window.api.scanForExistingSkills(
+            resolvedPaths.libraryPath,
+          );
+        }
         if (cancelled) return;
         setDetectedSkills(found);
-        // Default: import everything detected.
         setSelectedToImport(new Set(found.map((s) => s.name)));
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -168,26 +271,98 @@ export function SetupFlow() {
     return () => {
       cancelled = true;
     };
-  }, [step, resolvedPaths, setError]);
+  }, [step, resolvedPaths, libraryChoice, agentScanResult, setError]);
+
+  // Keyboard shortcuts for the Agent step: a/b/c/d/e to select, Enter to
+  // advance. Only active while the agent step is mounted, and ignored when
+  // a text input has focus.
+  useEffect(() => {
+    if (step !== "agent") return;
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || target?.isContentEditable) {
+        return;
+      }
+      const letterToIdx: Record<string, number> = {
+        a: 0,
+        b: 1,
+        c: 2,
+        d: 3,
+      };
+      const key = e.key.toLowerCase();
+      if (key in letterToIdx) {
+        const idx = letterToIdx[key];
+        if (idx < agents.length) {
+          e.preventDefault();
+          setPrimaryAgent(agents[idx].id);
+          setOtherSelected(false);
+        }
+      } else if (key === "e") {
+        e.preventDefault();
+        setOtherSelected(true);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        setStep("location");
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [step, agents]);
 
   const canContinueLocation =
+    libraryChoice !== null &&
     pathError === null &&
-    resolvedPaths !== null &&
-    (libraryRoot !== "custom" || customPath.trim().length > 0);
+    resolvedPaths !== null;
 
   const onComplete = async () => {
-    if (!resolvedPaths) return;
+    if (!resolvedPaths || !libraryChoice) return;
     setStep("running");
     setProgress(["Creating directories…"]);
     try {
+      // Decide import mode from libraryChoice.
+      const importMode: ImportMode =
+        libraryChoice.kind === "smCentralized" &&
+        agentScanResult.length > 0
+          ? "move"
+          : "copy";
       const importSkills = Array.from(selectedToImport).map((name) => {
         const detected = detectedSkills.find((d) => d.name === name);
-        return { name, sourcePath: detected?.path ?? "" };
+        return {
+          name,
+          sourcePath: detected?.path ?? "",
+          mode: importMode,
+        };
       }).filter((s) => s.sourcePath !== "");
+
+      // libraryRoot/customPath args mirror the LibraryChoice.
+      let libraryRoot: LibraryRoot;
+      let customArg: string | null = null;
+      switch (libraryChoice.kind) {
+        case "agentInPlace":
+          if (libraryChoice.agentId === "claude") {
+            libraryRoot = "claude";
+          } else {
+            libraryRoot = "custom";
+            customArg = libraryChoice.libraryPath;
+          }
+          break;
+        case "smCentralized":
+          libraryRoot = "centralized";
+          break;
+        case "claudeDefault":
+          libraryRoot = "claude";
+          break;
+        case "custom":
+          libraryRoot = "custom";
+          customArg = libraryChoice.path;
+          break;
+      }
+
       const args: CompleteSetupArgs = {
         libraryRoot,
-        customPath: libraryRoot === "custom" ? customPath.trim() : null,
-        primaryAgent,
+        customPath: customArg,
+        primaryAgent: otherSelected ? "claude" : primaryAgent,
         defaultDeployMode: deployMode,
         importSkills,
       };
@@ -205,9 +380,7 @@ export function SetupFlow() {
       await refreshProjects();
       await loadStacks();
       await loadStackDeployments();
-      // If the user picked a skills.json during setup, push them into
-      // ImportFlow with the entries pre-loaded so cloning starts on
-      // the main UI without further clicks.
+      // Pre-load ImportFlow with skills.json entries if the user picked one.
       if (jsonEntries.length > 0) {
         setScreen({
           kind: "import",
@@ -228,8 +401,11 @@ export function SetupFlow() {
     }
   };
 
-  // Setup is complete — App.tsx will unmount this overlay on next render.
+  // Setup complete — App.tsx unmounts the overlay on next render.
   if (setup.completed) return null;
+
+  const selectedAgent = agents.find((a) => a.id === primaryAgent);
+  const skillsAtAgent = !otherSelected && agentScanResult.length > 0;
 
   return (
     <div
@@ -252,18 +428,11 @@ export function SetupFlow() {
           display: "flex",
           alignItems: "center",
           gap: 12,
-          // Drag region so the user can move the window even on the
-          // setup overlay. Children opt-out via WebkitAppRegion: 'no-drag'.
-          // (cast to React.CSSProperties to satisfy TS — the property is
-          // a Webkit extension.)
           WebkitAppRegion: "drag",
           height: 36,
           flexShrink: 0,
         } as React.CSSProperties}
       >
-        {/* Reserve space for the native traffic lights on the left so
-            'Skill Manager' doesn't sit underneath the close/minimize
-            buttons. Same 76px reservation as AppWindow. */}
         <div aria-hidden style={{ width: 76, flexShrink: 0 }} />
         <span style={{ flex: 1 }} />
         <span
@@ -297,30 +466,42 @@ export function SetupFlow() {
       >
         <div style={{ width: "100%", maxWidth: 560 }}>
           {step === "welcome" && (
-            <Welcome onNext={() => setStep("location")} />
+            <Welcome onNext={() => setStep("agent")} />
+          )}
+          {step === "agent" && (
+            <AgentStep
+              agents={agents}
+              primaryAgent={primaryAgent}
+              setPrimaryAgent={(id) => {
+                setPrimaryAgent(id);
+                setOtherSelected(false);
+              }}
+              otherSelected={otherSelected}
+              setOtherSelected={setOtherSelected}
+              onBack={() => setStep("welcome")}
+              onNext={() => setStep("location")}
+            />
           )}
           {step === "location" && (
             <LocationStep
-              libraryRoot={libraryRoot}
-              setLibraryRoot={setLibraryRoot}
+              selectedAgent={selectedAgent ?? null}
+              otherSelected={otherSelected}
+              skillsAtAgent={skillsAtAgent}
+              agentScanLoading={agentScanLoading}
+              agentScanCount={agentScanResult.length}
+              libraryChoice={libraryChoice}
+              setLibraryChoice={setLibraryChoice}
               customPath={customPath}
               setCustomPath={setCustomPath}
               resolvedPaths={resolvedPaths}
               pathError={pathError}
-              onBack={() => setStep("welcome")}
-              onNext={() => setStep("primary")}
-              canContinue={canContinueLocation}
-            />
-          )}
-          {step === "primary" && (
-            <PrimaryStep
-              agents={agents}
-              primaryAgent={primaryAgent}
-              setPrimaryAgent={setPrimaryAgent}
+              showMoreOptions={showMoreOptions}
+              setShowMoreOptions={setShowMoreOptions}
               deployMode={deployMode}
               setDeployMode={setDeployMode}
-              onBack={() => setStep("location")}
+              onBack={() => setStep("agent")}
               onNext={() => setStep("existing")}
+              canContinue={canContinueLocation}
             />
           )}
           {step === "existing" && (
@@ -330,6 +511,10 @@ export function SetupFlow() {
               selected={selectedToImport}
               setSelected={setSelectedToImport}
               libraryPath={resolvedPaths?.libraryPath ?? ""}
+              moveMode={
+                libraryChoice?.kind === "smCentralized" &&
+                agentScanResult.length > 0
+              }
               jsonEntries={jsonEntries}
               jsonSourcePath={jsonSourcePath}
               onScanFolder={async () => {
@@ -338,9 +523,6 @@ export function SetupFlow() {
                 try {
                   const found =
                     await window.api.scanForExistingSkills(picked);
-                  // Merge with existing detections; name-based dedupe
-                  // (last-wins so 'Scan another folder' overrides the
-                  // auto-detected entry of the same name).
                   setDetectedSkills((prev) => {
                     const byName = new Map(prev.map((d) => [d.name, d]));
                     for (const f of found) byName.set(f.name, f);
@@ -379,22 +561,25 @@ export function SetupFlow() {
                 setJsonSourcePath(null);
                 setStep("confirm");
               }}
-              onBack={() => setStep("primary")}
+              onBack={() => setStep("location")}
               onNext={() => setStep("confirm")}
             />
           )}
-          {step === "confirm" && resolvedPaths && (
+          {step === "confirm" && resolvedPaths && libraryChoice && (
             <ConfirmStep
-              libraryRoot={libraryRoot}
+              libraryChoice={libraryChoice}
               libraryPath={resolvedPaths.libraryPath}
               historyPath={resolvedPaths.historyPath}
               primaryAgent={primaryAgent}
               primaryAgentName={
-                agents.find((a) => a.id === primaryAgent)?.displayName ??
-                primaryAgent
+                selectedAgent?.displayName ?? primaryAgent
               }
               deployMode={deployMode}
               importCount={selectedToImport.size}
+              moveMode={
+                libraryChoice.kind === "smCentralized" &&
+                agentScanResult.length > 0
+              }
               onBack={() => setStep("existing")}
               onComplete={onComplete}
             />
@@ -433,9 +618,8 @@ function Welcome({ onNext }: { onNext: () => void }) {
           margin: "0 auto",
         }}
       >
-        Let's set up your skill library. You'll pick where it lives, which
-        agent is your primary, and how skills deploy by default. This takes
-        about a minute.
+        Let's set up your skill library. You'll pick your primary agent,
+        where the library lives, and which existing skills to track.
       </p>
       <div style={{ marginTop: 40 }}>
         <button
@@ -458,36 +642,191 @@ function Welcome({ onNext }: { onNext: () => void }) {
   );
 }
 
+function AgentStep({
+  agents,
+  primaryAgent,
+  setPrimaryAgent,
+  otherSelected,
+  setOtherSelected,
+  onBack,
+  onNext,
+}: {
+  agents: AgentChoice[];
+  primaryAgent: string;
+  setPrimaryAgent: (id: string) => void;
+  otherSelected: boolean;
+  setOtherSelected: (v: boolean) => void;
+  onBack: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div>
+      <h2 style={{ fontFamily: "var(--hand)", fontSize: 28, margin: 0 }}>
+        Which agent do you use most?
+      </h2>
+      <p style={{ color: "var(--ink-soft)", fontSize: 13 }}>
+        We'll auto-scan its default skills folder and pre-select it for
+        Deploy. Press the letter to pick, Enter to continue.
+      </p>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          marginTop: 18,
+        }}
+      >
+        {agents.map((a, i) => (
+          <AgentCard
+            key={a.id}
+            letter={String.fromCharCode("a".charCodeAt(0) + i)}
+            label={a.displayName}
+            hint={a.skillsDir ?? "no global skills directory"}
+            checked={!otherSelected && primaryAgent === a.id}
+            onClick={() => setPrimaryAgent(a.id)}
+          />
+        ))}
+        <AgentCard
+          letter="e"
+          label="Other / multiple agents"
+          hint="Skip the agent default and pick a library location yourself."
+          checked={otherSelected}
+          onClick={() => setOtherSelected(true)}
+        />
+      </div>
+      <Footer onBack={onBack} onNext={onNext} canContinue={true} />
+    </div>
+  );
+}
+
+function AgentCard({
+  letter,
+  label,
+  hint,
+  checked,
+  onClick,
+}: {
+  letter: string;
+  label: string;
+  hint: string;
+  checked: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      role="radio"
+      aria-checked={checked}
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      style={{
+        padding: 12,
+        border: `1.5px solid ${checked ? "var(--accent)" : "var(--line-soft)"}`,
+        borderRadius: 8,
+        background: checked ? "var(--card-selected-bg)" : "var(--paper)",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+      }}
+    >
+      <span
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: 6,
+          border: `1.5px solid ${checked ? "var(--accent)" : "var(--line)"}`,
+          background: checked ? "var(--accent)" : "var(--paper-2)",
+          color: checked ? "var(--on-accent)" : "var(--ink-soft)",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: "var(--mono)",
+          fontWeight: 700,
+          fontSize: 13,
+          flexShrink: 0,
+        }}
+      >
+        {letter}
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>{label}</div>
+        <div
+          style={{
+            fontSize: 11,
+            fontFamily: "var(--mono)",
+            color: "var(--ink-faint)",
+          }}
+        >
+          {hint}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LocationStep({
-  libraryRoot,
-  setLibraryRoot,
+  selectedAgent,
+  otherSelected,
+  skillsAtAgent,
+  agentScanLoading,
+  agentScanCount,
+  libraryChoice,
+  setLibraryChoice,
   customPath,
   setCustomPath,
   resolvedPaths,
   pathError,
+  showMoreOptions,
+  setShowMoreOptions,
+  deployMode,
+  setDeployMode,
   onBack,
   onNext,
   canContinue,
 }: {
-  libraryRoot: LibraryRoot;
-  setLibraryRoot: (r: LibraryRoot) => void;
+  selectedAgent: AgentChoice | null;
+  otherSelected: boolean;
+  skillsAtAgent: boolean;
+  agentScanLoading: boolean;
+  agentScanCount: number;
+  libraryChoice: LibraryChoice | null;
+  setLibraryChoice: (c: LibraryChoice | null) => void;
   customPath: string;
   setCustomPath: (p: string) => void;
   resolvedPaths: { libraryPath: string; historyPath: string } | null;
   pathError: string | null;
+  showMoreOptions: boolean;
+  setShowMoreOptions: (v: boolean) => void;
+  deployMode: DeployMode;
+  setDeployMode: (m: DeployMode) => void;
   onBack: () => void;
   onNext: () => void;
   canContinue: boolean;
 }) {
+  const agent = selectedAgent;
+  const agentDir = agent?.skillsDir ?? "";
+
   return (
     <div>
       <h2 style={{ fontFamily: "var(--hand)", fontSize: 28, margin: 0 }}>
         Where should your library live?
       </h2>
       <p style={{ color: "var(--ink-soft)", fontSize: 13 }}>
-        Skills are stored once in this directory; deployments to projects
-        symlink or copy from here.
+        {otherSelected
+          ? "Pick a centralized location."
+          : skillsAtAgent
+            ? `Found ${agentScanCount} skill${agentScanCount === 1 ? "" : "s"} in your ${agent?.displayName} folder. Pick one:`
+            : agentScanLoading
+              ? `Scanning ${agentDir}…`
+              : `No skills found in your ${agent?.displayName} folder. We'll start fresh:`}
       </p>
+
       <div
         style={{
           display: "flex",
@@ -496,59 +835,138 @@ function LocationStep({
           marginTop: 18,
         }}
       >
-        <RootCard
-          checked={libraryRoot === "claude"}
-          onClick={() => setLibraryRoot("claude")}
-          title="Claude home"
-          subtitle="~/.claude/skills"
-          hint="Default, plays well with Claude Code's native layout."
-        />
-        <RootCard
-          checked={libraryRoot === "centralized"}
-          onClick={() => setLibraryRoot("centralized")}
-          title="Centralized (recommended)"
-          subtitle="~/.skill-stack/skills"
-          hint="Agent-neutral location. Pick this if you use multiple agents."
-        />
-        <RootCard
-          checked={libraryRoot === "custom"}
-          onClick={() => setLibraryRoot("custom")}
-          title="Custom"
-          subtitle={customPath || "Choose a folder…"}
-          hint="Pick your own path."
-        >
-          {libraryRoot === "custom" && (
-            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-              <input
-                type="text"
-                value={customPath}
-                onChange={(e) => setCustomPath(e.target.value)}
-                placeholder="/Users/you/my-skills"
-                style={{
-                  flex: 1,
-                  fontFamily: "var(--mono)",
-                  fontSize: 12,
-                  padding: "6px 8px",
-                  border: "1.5px solid var(--line-soft)",
-                  borderRadius: 6,
-                  background: "var(--paper)",
-                  color: "var(--ink)",
-                }}
-              />
-              <button
-                type="button"
-                className="sk-btn sm"
-                onClick={async () => {
-                  const picked = await window.api.pickFolder();
-                  if (picked) setCustomPath(picked);
-                }}
-              >
-                Browse…
-              </button>
-            </div>
-          )}
-        </RootCard>
+        {/* Branch on whether the agent already has skills. */}
+        {!otherSelected && agent && skillsAtAgent && (
+          <>
+            <PrimaryCard
+              checked={
+                libraryChoice?.kind === "smCentralized"
+              }
+              onClick={() => setLibraryChoice({ kind: "smCentralized" })}
+              title="Move to Skill Manager library"
+              subtitle="~/.skill-stack/skills"
+              hint={`Recommended. Moves the ${agentScanCount} found skill${agentScanCount === 1 ? "" : "s"} into the SM library and leaves a symlink at ${agentDir} so ${agent.displayName} keeps working. One source of truth across agents.`}
+              recommended
+            />
+            <PrimaryCard
+              checked={libraryChoice?.kind === "agentInPlace"}
+              onClick={() =>
+                setLibraryChoice({
+                  kind: "agentInPlace",
+                  agentId: agent.id,
+                  libraryPath: agentDir,
+                })
+              }
+              title={`Use ${agent.displayName}'s folder as the library`}
+              subtitle={agentDir}
+              hint="Best if you only use one agent. Skills stay where they are; nothing moves."
+            />
+          </>
+        )}
+        {!otherSelected && agent && !skillsAtAgent && !agentScanLoading && (
+          <PrimaryCard
+            checked={libraryChoice?.kind === "smCentralized"}
+            onClick={() => setLibraryChoice({ kind: "smCentralized" })}
+            title="Use Skill Manager default"
+            subtitle="~/.skill-stack/skills"
+            hint="Centralized location that works across agents. We'll create the directory if it doesn't exist."
+            recommended
+          />
+        )}
+        {otherSelected && (
+          <PrimaryCard
+            checked={libraryChoice?.kind === "smCentralized"}
+            onClick={() => setLibraryChoice({ kind: "smCentralized" })}
+            title="Use Skill Manager default"
+            subtitle="~/.skill-stack/skills"
+            hint="Agent-neutral location. Best for multi-agent workflows."
+            recommended
+          />
+        )}
       </div>
+
+      {/* Smaller folder-picker affordance below the primary cards. */}
+      <div
+        style={{
+          marginTop: 14,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          flexWrap: "wrap",
+        }}
+      >
+        <button
+          type="button"
+          className="sk-btn sm ghost"
+          onClick={async () => {
+            const picked = await window.api.pickFolder();
+            if (picked) {
+              setCustomPath(picked);
+              setLibraryChoice({ kind: "custom", path: picked });
+            }
+          }}
+        >
+          Choose a folder…
+        </button>
+        {libraryChoice?.kind === "custom" && (
+          <span
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 11,
+              color: "var(--ink-soft)",
+            }}
+          >
+            {customPath}
+          </span>
+        )}
+        <div style={{ flex: 1 }} />
+        <button
+          type="button"
+          className="sk-btn sm ghost"
+          onClick={() => setShowMoreOptions(!showMoreOptions)}
+        >
+          {showMoreOptions ? "Less options" : "More options"}
+        </button>
+      </div>
+
+      {showMoreOptions && (
+        <div
+          style={{
+            marginTop: 14,
+            padding: 12,
+            border: "1.5px dashed var(--line-soft)",
+            borderRadius: 8,
+            background: "var(--paper-2)",
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "var(--hand)",
+              fontSize: 18,
+              marginBottom: 8,
+            }}
+          >
+            Default deploy mode
+          </div>
+          <p style={{ color: "var(--ink-soft)", fontSize: 12, marginTop: 0 }}>
+            Symlink: edits propagate automatically. Copy: independent
+            per-project copies. You can change this per-deploy.
+          </p>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <ModePill
+              active={deployMode === "symlink"}
+              onClick={() => setDeployMode("symlink")}
+              label="Symlink"
+            />
+            <ModePill
+              active={deployMode === "copy"}
+              onClick={() => setDeployMode("copy")}
+              label="Copy"
+            />
+          </div>
+        </div>
+      )}
+
       {resolvedPaths && (
         <div
           style={{
@@ -576,88 +994,13 @@ function LocationStep({
   );
 }
 
-function PrimaryStep({
-  agents,
-  primaryAgent,
-  setPrimaryAgent,
-  deployMode,
-  setDeployMode,
-  onBack,
-  onNext,
-}: {
-  agents: AgentChoice[];
-  primaryAgent: string;
-  setPrimaryAgent: (id: string) => void;
-  deployMode: DeployMode;
-  setDeployMode: (m: DeployMode) => void;
-  onBack: () => void;
-  onNext: () => void;
-}) {
-  return (
-    <div>
-      <h2 style={{ fontFamily: "var(--hand)", fontSize: 28, margin: 0 }}>
-        Primary agent
-      </h2>
-      <p style={{ color: "var(--ink-soft)", fontSize: 13 }}>
-        Which agent do you use most? This pre-selects in Deploy and orders
-        the agent list.
-      </p>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 8,
-          marginTop: 14,
-        }}
-      >
-        {agents.map((a) => (
-          <RadioRow
-            key={a.id}
-            checked={primaryAgent === a.id}
-            onClick={() => setPrimaryAgent(a.id)}
-            label={a.displayName}
-          />
-        ))}
-      </div>
-
-      <h3
-        style={{
-          fontFamily: "var(--hand)",
-          fontSize: 22,
-          marginTop: 28,
-          marginBottom: 4,
-        }}
-      >
-        Default deploy mode
-      </h3>
-      <p style={{ color: "var(--ink-soft)", fontSize: 12, marginTop: 0 }}>
-        Symlink: edits propagate automatically. Copy: independent
-        per-project copies. You can change this per-deploy.
-      </p>
-      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-        <ModePill
-          active={deployMode === "symlink"}
-          onClick={() => setDeployMode("symlink")}
-          label="Symlink"
-        />
-        <ModePill
-          active={deployMode === "copy"}
-          onClick={() => setDeployMode("copy")}
-          label="Copy"
-        />
-      </div>
-
-      <Footer onBack={onBack} onNext={onNext} canContinue={true} />
-    </div>
-  );
-}
-
 function ExistingStep({
   loading,
   detected,
   selected,
   setSelected,
   libraryPath,
+  moveMode,
   jsonEntries,
   jsonSourcePath,
   onScanFolder,
@@ -671,6 +1014,7 @@ function ExistingStep({
   selected: Set<string>;
   setSelected: (s: Set<string>) => void;
   libraryPath: string;
+  moveMode: boolean;
   jsonEntries: { name: string; url: string }[];
   jsonSourcePath: string | null;
   onScanFolder: () => void;
@@ -702,9 +1046,9 @@ function ExistingStep({
       ) : (
         <>
           <p style={{ color: "var(--ink-soft)", fontSize: 13 }}>
-            Found {detected.length} skill
-            {detected.length === 1 ? "" : "s"} at {libraryPath}. Select which
-            ones to track in your library.
+            {moveMode
+              ? `Found ${detected.length} skill${detected.length === 1 ? "" : "s"}. Selected ones will be moved to ${libraryPath} with symlinks left at the original location.`
+              : `Found ${detected.length} skill${detected.length === 1 ? "" : "s"} at ${libraryPath}. Select which to track in your library.`}
           </p>
           <div
             style={{
@@ -741,6 +1085,15 @@ function ExistingStep({
                 >
                   {s.name}
                 </span>
+                {s.viaContainer && (
+                  <span
+                    className="sk-tag"
+                    style={{ fontSize: 9 }}
+                    title={`found via ${s.viaContainer}/`}
+                  >
+                    via {s.viaContainer}/
+                  </span>
+                )}
                 {s.isBundle && (
                   <span
                     className="sk-tag"
@@ -756,8 +1109,6 @@ function ExistingStep({
         </>
       )}
 
-      {/* Add-more-sources buttons + skip. Always visible regardless of
-          whether the auto-scan found anything. */}
       <div
         style={{
           marginTop: 14,
@@ -813,23 +1164,25 @@ function ExistingStep({
 }
 
 function ConfirmStep({
-  libraryRoot,
+  libraryChoice,
   libraryPath,
   historyPath,
   primaryAgent,
   primaryAgentName,
   deployMode,
   importCount,
+  moveMode,
   onBack,
   onComplete,
 }: {
-  libraryRoot: LibraryRoot;
+  libraryChoice: LibraryChoice;
   libraryPath: string;
   historyPath: string;
   primaryAgent: string;
   primaryAgentName: string;
   deployMode: DeployMode;
   importCount: number;
+  moveMode: boolean;
   onBack: () => void;
   onComplete: () => void;
 }) {
@@ -840,7 +1193,9 @@ function ConfirmStep({
         Ready to set up
       </h2>
       <p style={{ color: "var(--ink-soft)", fontSize: 13 }}>
-        Confirm and we'll create directories + import any selected skills.
+        Confirm and we'll create directories and {moveMode
+          ? "move selected skills with a symlink-back"
+          : "import any selected skills"}.
       </p>
       <div
         style={{
@@ -854,8 +1209,8 @@ function ConfirmStep({
         }}
       >
         <div>
-          <span style={{ color: "var(--ink-faint)" }}>library root:</span>{" "}
-          {libraryRoot}
+          <span style={{ color: "var(--ink-faint)" }}>library:</span>{" "}
+          {libraryChoiceLabel(libraryChoice)}
         </div>
         <div>
           <span style={{ color: "var(--ink-faint)" }}>library path:</span>{" "}
@@ -874,7 +1229,9 @@ function ConfirmStep({
           {deployMode}
         </div>
         <div>
-          <span style={{ color: "var(--ink-faint)" }}>import:</span>{" "}
+          <span style={{ color: "var(--ink-faint)" }}>
+            {moveMode ? "move:" : "import:"}
+          </span>{" "}
           {importCount} skill{importCount === 1 ? "" : "s"}
         </div>
       </div>
@@ -885,11 +1242,7 @@ function ConfirmStep({
           gap: 8,
         }}
       >
-        <button
-          type="button"
-          className="sk-btn ghost"
-          onClick={onBack}
-        >
+        <button type="button" className="sk-btn ghost" onClick={onBack}>
           ← Back
         </button>
         <div style={{ flex: 1 }} />
@@ -909,6 +1262,19 @@ function ConfirmStep({
       </div>
     </div>
   );
+}
+
+function libraryChoiceLabel(c: LibraryChoice): string {
+  switch (c.kind) {
+    case "agentInPlace":
+      return `${c.agentId} (in place)`;
+    case "smCentralized":
+      return "Skill Manager (centralized)";
+    case "claudeDefault":
+      return "Claude home";
+    case "custom":
+      return `custom (${c.path})`;
+  }
 }
 
 function RunningStep({ progress }: { progress: string[] }) {
@@ -944,7 +1310,7 @@ function RunningStep({ progress }: { progress: string[] }) {
 // ── Building blocks ────────────────────────────────────────────────────
 
 function StepDots({ active }: { active: Step }) {
-  const order: Step[] = ["welcome", "location", "primary", "existing", "confirm"];
+  const order: Step[] = ["welcome", "agent", "location", "existing", "confirm"];
   const idx = order.indexOf(active === "running" ? "confirm" : active);
   return (
     <div style={{ display: "flex", gap: 6 }}>
@@ -1001,20 +1367,20 @@ function Footer({
   );
 }
 
-function RootCard({
+function PrimaryCard({
   checked,
   onClick,
   title,
   subtitle,
   hint,
-  children,
+  recommended,
 }: {
   checked: boolean;
   onClick: () => void;
   title: string;
   subtitle: string;
   hint: string;
-  children?: React.ReactNode;
+  recommended?: boolean;
 }) {
   return (
     <div
@@ -1029,11 +1395,12 @@ function RootCard({
         }
       }}
       style={{
-        padding: 12,
+        padding: 14,
         border: `1.5px solid ${checked ? "var(--accent)" : "var(--line-soft)"}`,
         borderRadius: 8,
         background: checked ? "var(--card-selected-bg)" : "var(--paper)",
         cursor: "pointer",
+        position: "relative",
       }}
     >
       <div
@@ -1068,7 +1435,25 @@ function RootCard({
           )}
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 13 }}>{title}</div>
+          <div
+            style={{
+              fontWeight: 700,
+              fontSize: 14,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            {title}
+            {recommended && (
+              <span
+                className="sk-tag"
+                style={{ fontSize: 9, background: "var(--good)", color: "var(--on-accent)" }}
+              >
+                recommended
+              </span>
+            )}
+          </div>
           <div
             style={{
               fontSize: 11,
@@ -1078,65 +1463,12 @@ function RootCard({
           >
             {subtitle}
           </div>
-          <div style={{ fontSize: 11, color: "var(--ink-faint)", marginTop: 2 }}>
+          <div style={{ fontSize: 11, color: "var(--ink-faint)", marginTop: 4 }}>
             {hint}
           </div>
         </div>
       </div>
-      {children}
     </div>
-  );
-}
-
-function RadioRow({
-  checked,
-  onClick,
-  label,
-}: {
-  checked: boolean;
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <label
-      onClick={onClick}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "8px 12px",
-        border: `1.5px solid ${checked ? "var(--accent)" : "var(--line-soft)"}`,
-        borderRadius: 6,
-        cursor: "pointer",
-        background: checked ? "var(--card-selected-bg)" : "transparent",
-      }}
-    >
-      <span
-        style={{
-          width: 14,
-          height: 14,
-          borderRadius: "50%",
-          border: "1.5px solid var(--line)",
-          background: checked ? "var(--ink)" : "var(--paper)",
-          flexShrink: 0,
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {checked && (
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: "var(--paper)",
-            }}
-          />
-        )}
-      </span>
-      <span style={{ fontSize: 13 }}>{label}</span>
-    </label>
   );
 }
 
@@ -1221,5 +1553,5 @@ function ThemeToggleInline({
   );
 }
 
-// Suppress unused import warning for the type in the IIFE above.
+// Suppress unused-import warning.
 void ({} as { _: typeof useMemo });

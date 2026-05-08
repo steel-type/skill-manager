@@ -14,7 +14,7 @@ import * as path from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { CONFIG_PATH, getClaudeDir, getLibraryPath } from "./services/paths";
-import { getSupportedAgents } from "./services/agents";
+import { getAgentSkillsDir, getSupportedAgents } from "./services/agents";
 import { killAllGitChildren } from "./services/git";
 import {
   bootstrap,
@@ -414,6 +414,10 @@ ipcMain.handle("list-agents", () =>
     displayName: a.displayName,
     supportsSymlinks: a.supportsSymlinks,
     formatNotes: a.formatNotes,
+    /** Default global skills dir for this agent, or null if none. The
+     *  SetupFlow uses this to auto-scan the right place after the user
+     *  picks an agent. */
+    skillsDir: getAgentSkillsDir(a.id),
   })),
 );
 

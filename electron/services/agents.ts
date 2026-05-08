@@ -106,6 +106,21 @@ function expand(template: string, skillName: string): string {
   return path;
 }
 
+/**
+ * Return the agent's default global skills directory (the parent of the
+ * per-skill `{name}` slot), expanded to an absolute path. Returns null if
+ * the agent has no global concept (cursor/cline).
+ *
+ * Example: claude → "/Users/<you>/.claude/skills"
+ */
+export function getAgentSkillsDir(agentId: string): string | null {
+  const agent = AGENTS[agentId];
+  if (!agent || !agent.globalSkillPath) return null;
+  // Strip the {name}/ slot off the end of the template, then expand.
+  const template = agent.globalSkillPath.replace(/\{name\}\/?$/, "");
+  return expand(template, "");
+}
+
 export interface ResolvedAgentPaths {
   globalPath: string | null;
   projectPath: string | null;
