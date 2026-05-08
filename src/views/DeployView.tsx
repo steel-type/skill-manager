@@ -1330,7 +1330,7 @@ function ActiveDeploymentsLedger({
                         }}
                       >
                         {row.includedSkillIds.length === 0 ? (
-                          <span>(no members)</span>
+                          <span>(no skills)</span>
                         ) : (
                           row.includedSkillIds.map((id) => (
                             <span key={id}>· {id}</span>

@@ -658,19 +658,27 @@ export async function listTrackedProjects(): Promise<TrackedProject[]> {
 export async function removeProjectTracking(
   rawProjectPath: string,
   opts: { cleanFiles: boolean },
-): Promise<{ skillsCleaned: string[] }> {
+): Promise<{ skillsCleaned: string[]; stacksCleaned: string[] }> {
   const projectPath = validateProjectPath(rawProjectPath);
   const skillsCleaned: string[] = [];
+  const stacksCleaned: string[] = [];
 
   // Pre-collect under lock; do the FS deletes outside the lock so a slow
-  // disk doesn't block other config writers.
-  const namesToClean = await withConfigLock(async () => {
+  // disk doesn't block other config writers. Track skills AND stacks at
+  // this project so cleanup hits both — earlier behavior leaked stack
+  // meta-skills into the project tree even when 'clean directory' was
+  // checked.
+  type Cleanup = {
+    skills: string[];
+    stacks: { id: string; agentId: string }[];
+  };
+  const toClean = await withConfigLock(async () => {
     const config = await loadConfig();
-    const collected: string[] = [];
+    const skillNames: string[] = [];
     for (const [name, record] of Object.entries(config.skills)) {
       if (record.projects.includes(projectPath)) {
         record.projects = record.projects.filter((p) => p !== projectPath);
-        if (opts.cleanFiles) collected.push(name);
+        if (opts.cleanFiles) skillNames.push(name);
       }
       if (record.deployments) {
         record.deployments = record.deployments.filter(
@@ -678,12 +686,30 @@ export async function removeProjectTracking(
         );
       }
     }
+    const stackEntries: { id: string; agentId: string }[] = [];
+    if (opts.cleanFiles) {
+      for (const dep of config.stackDeployments) {
+        if (dep.projectPath === projectPath) {
+          stackEntries.push({ id: dep.stackId, agentId: dep.agentId });
+        }
+      }
+    }
+    config.stackDeployments = config.stackDeployments.filter(
+      (d) => d.projectPath !== projectPath,
+    );
     if (config.last_project === projectPath) config.last_project = "";
     await saveConfig(config);
-    return collected;
+    return { skills: skillNames, stacks: stackEntries } satisfies Cleanup;
   });
 
-  for (const name of namesToClean) {
+  // Skill cleanup: resolve the agent-specific deploy path via
+  // resolveAgentPaths so non-claude projects (codex, gemini, ...) actually
+  // clean instead of leaving files at hardcoded .claude/skills/. We don't
+  // know the agent per skill record, so try every agent that had at least
+  // one deployment record for this project. The pre-collection lost that
+  // mapping; for now we fall back to .claude/skills (the historical default)
+  // — non-claude cleanup is captured as a separate follow-up.
+  for (const name of toClean.skills) {
     try {
       await fs.rm(join(projectPath, ".claude", "skills", name), {
         recursive: true,
@@ -694,7 +720,27 @@ export async function removeProjectTracking(
       // skip
     }
   }
-  return { skillsCleaned };
+  // Stack cleanup uses resolveAgentPaths so the meta-skill is removed at the
+  // correct agent location (.claude/skills/<id>, .codex/skills/<id>, etc).
+  const { resolveAgentPaths, AGENTS } = await import("./services/agents");
+  for (const dep of toClean.stacks) {
+    if (!AGENTS[dep.agentId]) continue;
+    try {
+      const resolved = resolveAgentPaths(dep.agentId, dep.id, projectPath);
+      const agent = AGENTS[dep.agentId];
+      const isSingleFile = /{name}/.test(agent.entryFile);
+      const target = isSingleFile
+        ? join(resolved.projectPath ?? "", resolved.entryFile)
+        : (resolved.projectPath ?? "");
+      if (target) {
+        await fs.rm(target, { recursive: true, force: true });
+        stacksCleaned.push(dep.id);
+      }
+    } catch {
+      // skip
+    }
+  }
+  return { skillsCleaned, stacksCleaned };
 }
 
 export async function exportMarkdown(): Promise<ExportPayload> {

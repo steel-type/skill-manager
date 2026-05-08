@@ -13,13 +13,26 @@ interface RemoveProjectFlowProps {
 export function RemoveProjectFlow({ path }: RemoveProjectFlowProps) {
   const closeModal = useAppStore((s) => s.closeModal);
   const projects = useAppStore((s) => s.projects);
+  const stackDeployments = useAppStore((s) => s.stackDeployments);
   const refreshSkills = useAppStore((s) => s.refreshSkills);
   const refreshProjects = useAppStore((s) => s.refreshProjects);
+  const loadStackDeployments = useAppStore((s) => s.loadStackDeployments);
   const setError = useAppStore((s) => s.setError);
 
   const project = useMemo(
     () => projects.find((p) => p.path === path),
     [projects, path],
+  );
+  const stackIdsAtProject = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          stackDeployments
+            .filter((d) => d.projectPath === path)
+            .map((d) => d.stackId),
+        ),
+      ),
+    [stackDeployments, path],
   );
   const [cleanFiles, setCleanFiles] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
@@ -27,6 +40,7 @@ export function RemoveProjectFlow({ path }: RemoveProjectFlowProps) {
 
   if (!project) return null;
   const skillNames = project.skillNames;
+  const totalToDelete = skillNames.length + stackIdsAtProject.length;
 
   const onConfirm = async () => {
     setRunning(true);
@@ -34,6 +48,7 @@ export function RemoveProjectFlow({ path }: RemoveProjectFlowProps) {
       await window.api.removeProjectTracking(path, cleanFiles);
       await refreshSkills();
       await refreshProjects();
+      await loadStackDeployments();
       closeModal();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -106,11 +121,16 @@ export function RemoveProjectFlow({ path }: RemoveProjectFlowProps) {
           />
         </div>
 
-        {cleanFiles && skillNames.length > 0 && (
+        {cleanFiles && totalToDelete > 0 && (
           <>
             <div className="rail-section" style={{ padding: 0 }}>
-              Will delete · {skillNames.length} folder
-              {skillNames.length === 1 ? "" : "s"}
+              Will delete · {totalToDelete} item{totalToDelete === 1 ? "" : "s"}
+              {stackIdsAtProject.length > 0 &&
+                ` (${skillNames.length} skill${
+                  skillNames.length === 1 ? "" : "s"
+                }, ${stackIdsAtProject.length} stack${
+                  stackIdsAtProject.length === 1 ? "" : "s"
+                })`}
             </div>
             <div
               className="sk-box"
@@ -120,15 +140,21 @@ export function RemoveProjectFlow({ path }: RemoveProjectFlowProps) {
                 fontSize: 11,
               }}
             >
-              {skillNames.map((name, i) => (
+              {[
+                ...skillNames.map((name) => ({ kind: "skill" as const, name })),
+                ...stackIdsAtProject.map((id) => ({
+                  kind: "stack" as const,
+                  name: id,
+                })),
+              ].map((row, i, arr) => (
                 <div
-                  key={name}
+                  key={`${row.kind}:${row.name}`}
                   style={{
                     display: "flex",
                     alignItems: "center",
                     padding: "8px 12px",
                     borderBottom:
-                      i < skillNames.length - 1
+                      i < arr.length - 1
                         ? "1px dashed var(--line-soft)"
                         : "none",
                     gap: 8,
@@ -136,7 +162,24 @@ export function RemoveProjectFlow({ path }: RemoveProjectFlowProps) {
                 >
                   <span style={{ color: "var(--warn)", fontSize: 14 }}>⚠</span>
                   <span style={{ flex: 1 }}>
-                    {path.replace(/^\/Users\/[^/]+/, "~")}/.claude/skills/{name}
+                    {path.replace(/^\/Users\/[^/]+/, "~")}/.claude/skills/
+                    {row.name}
+                  </span>
+                  <span
+                    className="sk-tag"
+                    style={{
+                      fontSize: 9,
+                      background:
+                        row.kind === "stack"
+                          ? "var(--accent)"
+                          : "var(--paper-2)",
+                      color:
+                        row.kind === "stack"
+                          ? "var(--on-accent)"
+                          : "var(--ink-soft)",
+                    }}
+                  >
+                    {row.kind}
                   </span>
                 </div>
               ))}
@@ -145,6 +188,7 @@ export function RemoveProjectFlow({ path }: RemoveProjectFlowProps) {
               style={{
                 display: "flex",
                 alignItems: "center",
+                justifyContent: "center",
                 gap: 8,
                 fontSize: 12,
                 color: "var(--warn)",
@@ -184,7 +228,7 @@ export function RemoveProjectFlow({ path }: RemoveProjectFlowProps) {
             {running
               ? "Removing…"
               : cleanFiles
-                ? `Untrack + delete ${skillNames.length} →`
+                ? `Untrack + delete ${totalToDelete} →`
                 : "Untrack only"}
           </button>
         </div>

@@ -125,7 +125,7 @@ const api = {
   removeProjectTracking: (
     projectPath: string,
     cleanFiles: boolean,
-  ): Promise<{ skillsCleaned: string[] }> =>
+  ): Promise<{ skillsCleaned: string[]; stacksCleaned: string[] }> =>
     ipcRenderer.invoke("remove-project-tracking", { projectPath, cleanFiles }),
 
   exportMarkdown: () =>

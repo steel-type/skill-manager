@@ -141,6 +141,7 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
     !running &&
     name.trim().length > 0 &&
     selected.length > 0 &&
+    description.trim().length <= DESCRIPTION_MAX &&
     (isEdit || (idValid && !idCollision));
 
   const onSubmit = async () => {
@@ -229,10 +230,12 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="One-line summary of what this stack does."
-              rows={2}
-              style={{ ...inputStyle, resize: "vertical", minHeight: 44 }}
+              placeholder='Describe what this stack does AND when to activate it. Example: "TypeScript and React debugging stack. Use when the user mentions TypeScript errors, React rendering issues, or asks about hooks."'
+              rows={3}
+              maxLength={DESCRIPTION_MAX}
+              style={{ ...inputStyle, resize: "vertical", minHeight: 60 }}
             />
+            <DescriptionFeedback value={description} />
           </div>
         </div>
 
@@ -429,6 +432,64 @@ const inputStyle: React.CSSProperties = {
   outline: "none",
   boxSizing: "border-box",
 };
+
+// Per agentskills.io specification:
+// https://agentskills.io/specification — description must be 1-1024 chars
+// and "should describe both what the skill does and when to use it.
+// Should include specific keywords that help agents identify relevant
+// tasks." We surface this contract via a live counter + a soft warning
+// when no trigger phrasing is detected.
+const DESCRIPTION_MAX = 1024;
+const DESCRIPTION_SOFT_MIN = 60;
+const TRIGGER_KEYWORDS =
+  /(\buse when\b|\bwhen the user\b|\btriggers?\b|\bmentions?\b|\basks? about\b|\bworking with\b|\bactivate\b)/i;
+
+function DescriptionFeedback({ value }: { value: string }) {
+  const trimmed = value.trim();
+  const len = trimmed.length;
+  const overLimit = len > DESCRIPTION_MAX;
+  const tooShort = len > 0 && len < DESCRIPTION_SOFT_MIN;
+  const noTrigger = len > 0 && !TRIGGER_KEYWORDS.test(trimmed);
+  const counterColor = overLimit
+    ? "var(--warn)"
+    : len > DESCRIPTION_MAX * 0.8
+      ? "var(--warn)"
+      : "var(--ink-faint)";
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
+        marginTop: 4,
+        fontSize: 10,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <span style={{ color: "var(--ink-faint)" }}>
+          Per <span style={{ fontFamily: "var(--mono)" }}>agentskills.io</span>:
+          describe what + when. The description is how agents decide to load
+          this stack.
+        </span>
+        <span style={{ color: counterColor, fontFamily: "var(--mono)" }}>
+          {len}/{DESCRIPTION_MAX}
+        </span>
+      </div>
+      {tooShort && (
+        <span style={{ color: "var(--warn)" }}>
+          ⚠ Very short — agents may under-trigger this stack.
+        </span>
+      )}
+      {noTrigger && !tooShort && (
+        <span style={{ color: "var(--warn)" }}>
+          ⚠ No trigger phrasing detected. Add &ldquo;Use when…&rdquo; or
+          &ldquo;When the user mentions…&rdquo; so agents know when to
+          activate.
+        </span>
+      )}
+    </div>
+  );
+}
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
