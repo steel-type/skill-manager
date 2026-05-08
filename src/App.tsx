@@ -19,6 +19,7 @@ import { DeleteStackFlow } from "./flows/DeleteStackFlow";
 import { ConfirmModal } from "./components/ConfirmModal";
 import { DeployResultModal } from "./components/DeployResultModal";
 import { SetupFlow } from "./flows/SetupFlow";
+import { MigrationFlow } from "./flows/MigrationFlow";
 import { StackDetailFlow } from "./flows/StackDetailFlow";
 import { useAppStore } from "./state/store";
 
@@ -214,6 +215,9 @@ export default function App() {
       )}
       {modal?.type === "confirm" && <ConfirmModal />}
       {modal?.type === "deployResult" && <DeployResultModal />}
+      {modal?.type === "migrate" && (
+        <MigrationFlow toLibraryPath={modal.toLibraryPath} />
+      )}
 
       <CommandOverlay
         open={overlayOpen}

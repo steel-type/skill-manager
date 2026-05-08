@@ -51,6 +51,12 @@ export type ModalState =
       itemKind: "skill" | "stack";
       itemId: string;
       messages: DeployResultMessage[];
+    }
+  | {
+      // Library relocation flow. Opened from Settings → Library → Move…
+      // after the user picks a destination folder.
+      type: "migrate";
+      toLibraryPath: string;
     };
 
 /**

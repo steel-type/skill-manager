@@ -184,6 +184,22 @@ export function SettingsView() {
         onOpen={() => setup.libraryPath && window.api.openInFinder(setup.libraryPath)}
         onCopy={() => setup.libraryPath && window.api.writeClipboard(setup.libraryPath)}
       />
+      <div style={{ marginTop: -4, marginBottom: 4 }}>
+        <button
+          type="button"
+          className="sk-btn sm ghost"
+          onClick={async () => {
+            const picked = await window.api.pickFolder();
+            if (!picked) return;
+            useAppStore.getState().openModal({
+              type: "migrate",
+              toLibraryPath: picked,
+            });
+          }}
+        >
+          Move library to another folder…
+        </button>
+      </div>
       <PathRow
         label="History location"
         value={setup.historyPath || "(not set)"}
