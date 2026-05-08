@@ -20,6 +20,7 @@ export interface EnvInfo {
   platform: NodeJS.Platform;
   electron: string;
   node: string;
+  home: string;
   paths: {
     config: string;
     library: string;

@@ -206,13 +206,26 @@ export function DeployView() {
   };
 
   const handleAddProject = useCallback(async () => {
-    const target = pendingProjectPath.trim();
-    if (!target) {
+    const raw = pendingProjectPath.trim();
+    if (!raw) {
       const picked = await window.api.pickFolder();
       if (!picked) return;
       setPendingProjectPath(picked);
       setSelectedProjects((prev) => new Set(prev).add(picked));
       return;
+    }
+    // Expand ~/ to the user's home dir — backend validateProjectPath
+    // requires absolute paths and was rejecting tilde-prefixed input
+    // with ValidationError.
+    let target = raw;
+    if (target === "~" || target.startsWith("~/")) {
+      try {
+        const env = await window.api.envInfo();
+        target = target === "~" ? env.home : `${env.home}${target.slice(1)}`;
+      } catch {
+        // Fall through with the raw value; backend will surface a clear
+        // error if it's still invalid.
+      }
     }
     setSelectedProjects((prev) => new Set(prev).add(target));
     setPendingProjectPath("");
@@ -236,7 +249,7 @@ export function DeployView() {
               );
               messages.push({
                 level: "success",
-                text: `${deployQueue.id} → ${tildify(projectPath)} (${r.deployMode}, ${agentId})`,
+                text: `→ ${tildify(projectPath)} (${r.deployMode}, ${agentId})`,
               });
               if (r.warning) {
                 messages.push({ level: "warn", text: r.warning });
@@ -250,7 +263,7 @@ export function DeployView() {
               );
               messages.push({
                 level: "success",
-                text: `stack ${deployQueue.id} → ${tildify(projectPath)} (${r.deployMode}, ${agentId}, ${r.deployed.length}/${r.deployed.length + r.failed.length} skills)`,
+                text: `→ ${tildify(projectPath)} (${r.deployMode}, ${agentId}, ${r.deployed.length}/${r.deployed.length + r.failed.length} skills)`,
               });
               for (const f of r.failed) {
                 anyFailure = true;
@@ -267,7 +280,7 @@ export function DeployView() {
             anyFailure = true;
             messages.push({
               level: "error",
-              text: `${deployQueue.id} → ${tildify(projectPath)} (${agentId}): ${
+              text: `→ ${tildify(projectPath)} (${agentId}): ${
                 err instanceof Error ? err.message : String(err)
               }`,
             });

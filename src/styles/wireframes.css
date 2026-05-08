@@ -199,8 +199,9 @@ body { background: #e8e4d8; margin: 0; font-family: var(--read); color: var(--in
   background: var(--paper);
   border: 1.5px solid var(--line);
   /* Match the macOS Terminal / Finder window curvature so modal popups
-     read as windows, not square boxes. */
-  border-radius: 14px;
+     read as windows, not square boxes. Bumped 14→18 because the smaller
+     value disappeared visually against the dark theme backdrop. */
+  border-radius: 18px;
   box-shadow: 4px 4px 0 rgba(42,42,42,0.15);
   overflow: hidden;
   display: flex;

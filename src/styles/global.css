@@ -26,7 +26,11 @@ html, body, #root {
   background: var(--paper);
 }
 
-.app-root .wf-window {
+/* Target ONLY the main app window (which uses combined .wf-window.wf
+   classes) — modals also use .wf-window inside .app-root and must keep
+   their rounded corners. The previous unscoped rule stripped the radius
+   from every modal too. */
+.app-root > .wf-window.wf {
   flex: 1;
   width: auto;
   height: auto;
@@ -36,8 +40,9 @@ html, body, #root {
 }
 
 /* The titlebar still keeps its bottom rule so the wireframe's "page header"
-   beat is preserved even though the surrounding frame is gone. */
-.app-root .wf-titlebar {
+   beat is preserved even though the surrounding frame is gone. Scoped to
+   the main window only. */
+.app-root > .wf-window.wf > .wf-titlebar {
   border-bottom: 1.5px solid var(--line);
 }
 

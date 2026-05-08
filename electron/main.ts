@@ -11,6 +11,7 @@ import {
 import windowStateKeeper from "electron-window-state";
 import { randomUUID } from "node:crypto";
 import * as path from "node:path";
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { CLAUDE_DIR, CONFIG_PATH, LIBRARY_PATH } from "./services/paths";
 import { getSupportedAgents } from "./services/agents";
@@ -298,6 +299,7 @@ ipcMain.handle("env-info", () => ({
   platform: process.platform,
   electron: process.versions.electron,
   node: process.versions.node,
+  home: homedir(),
   paths: {
     config: CONFIG_PATH,
     library: LIBRARY_PATH,
