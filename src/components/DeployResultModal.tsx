@@ -29,7 +29,13 @@ export function DeployResultModal() {
       : `Skill ${modal.itemId}`;
 
   return (
-    <Modal open title={title} width={520} onClose={closeModal}>
+    <Modal
+      open
+      title={title}
+      width={520}
+      onClose={closeModal}
+      closeOnBackdrop={false}
+    >
       <div
         style={{
           padding: 16,

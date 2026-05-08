@@ -35,4 +35,12 @@ package-lock.json
 # as committed artifact so the build doesn't require running build-icons.sh)
 assets/icon.iconset/
 
+# Skills deployed into this repo by the app during dev/testing — these
+# are the agent-specific deployment trees (.claude, .codex, .gemini,
+# .continue, .cursor, .cline). Source of truth lives in ~/.claude/skills/.
 .claude/skills/
+.codex/skills/
+.gemini/skills/
+.continue/skills/
+.cursor/rules/
+.cline/skills/
