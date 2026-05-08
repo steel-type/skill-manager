@@ -18,6 +18,7 @@ import { CreateStackFlow } from "./flows/CreateStackFlow";
 import { DeleteStackFlow } from "./flows/DeleteStackFlow";
 import { ConfirmModal } from "./components/ConfirmModal";
 import { DeployResultModal } from "./components/DeployResultModal";
+import { SetupFlow } from "./flows/SetupFlow";
 import { StackDetailFlow } from "./flows/StackDetailFlow";
 import { useAppStore } from "./state/store";
 
@@ -36,6 +37,8 @@ export default function App() {
   const modal = useAppStore((s) => s.modal);
   const loadSettings = useAppStore((s) => s.loadSettings);
   const settings = useAppStore((s) => s.settings);
+  const setup = useAppStore((s) => s.setup);
+  const loadSetup = useAppStore((s) => s.loadSetup);
   const refreshSkills = useAppStore((s) => s.refreshSkills);
   const runUpdateCheck = useAppStore((s) => s.runUpdateCheck);
   const setActiveTab = useAppStore((s) => s.setActiveTab);
@@ -73,16 +76,24 @@ export default function App() {
     return () => window.removeEventListener("keydown", handler);
   }, [setActiveTab]);
 
-  // Bootstrap: load settings, then skills, then optionally auto-check.
+  // Bootstrap: load setup first, then settings + skills + auto-check
+  // (only if setup is complete — pre-setup we don't want to scribble into
+  // the default ~/.claude/skills before the user has confirmed).
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      await loadSetup();
+      if (cancelled) return;
+      const setupNow = useAppStore.getState().setup;
+      if (!setupNow.completed) {
+        // Stop here. SetupFlow renders, the user completes it, completeSetup
+        // refreshes everything before the overlay unmounts.
+        return;
+      }
       await loadSettings();
       if (cancelled) return;
       await refreshSkills();
       if (cancelled) return;
-      // Settings are now loaded; check the freshly-loaded value rather than
-      // the closure-captured one above.
       if (useAppStore.getState().settings.auto_check_updates) {
         runUpdateCheck();
       }
@@ -90,7 +101,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [loadSettings, refreshSkills, runUpdateCheck]);
+  }, [loadSetup, loadSettings, refreshSkills, runUpdateCheck]);
 
   // Apply theme to the document root whenever the persisted setting
   // changes. CSS variable overrides under `[data-theme="dark"]` swap
@@ -108,6 +119,39 @@ export default function App() {
 
   // Avoid the unused-var warning while still ensuring settings is reactive.
   void settings;
+
+  // Pre-setup: render only the SetupFlow and the error toast. The rest of
+  // the app is hidden until completeSetup flips setup.completed.
+  if (!setup.completed) {
+    return (
+      <div className="app-root">
+        <SetupFlow />
+        {lastError && (
+          <div
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            style={{
+              position: "fixed",
+              bottom: 20,
+              right: 20,
+              padding: "10px 14px",
+              background: "var(--warn)",
+              color: "var(--on-warn)",
+              fontFamily: "var(--read)",
+              fontSize: 13,
+              borderRadius: 6,
+              border: "1.5px solid var(--ink)",
+              zIndex: 2000,
+              maxWidth: 360,
+            }}
+          >
+            {lastError}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="app-root">

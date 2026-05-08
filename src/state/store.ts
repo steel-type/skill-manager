@@ -2,12 +2,14 @@ import { create } from "zustand";
 import type {
   AppSettings,
   DeployRequest,
+  SetupConfig,
   Skill,
   SkillStack,
   StackDeployment,
   TrackedProject,
   UpdateInfo,
 } from "../../electron/services/types";
+import { DEFAULT_SETUP } from "../../electron/services/types";
 
 export type Tab = "library" | "stacks" | "deploy" | "settings";
 export type LibraryFilter =
@@ -127,6 +129,11 @@ interface AppState {
   settings: AppSettings;
   loadSettings: () => Promise<void>;
   updateSettings: (partial: Partial<AppSettings>) => Promise<void>;
+
+  // First-run / library-relocation state.
+  setup: SetupConfig;
+  loadSetup: () => Promise<void>;
+  setSetup: (partial: Partial<SetupConfig>) => Promise<void>;
 
   // ── Stacks ──────────────────────────────────────────────────────────────
   stacks: SkillStack[];
@@ -275,6 +282,24 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ lastError: err instanceof Error ? err.message : String(err) });
     }
   },
+  setup: DEFAULT_SETUP,
+  loadSetup: async () => {
+    try {
+      const setup = await window.api.getSetup();
+      set({ setup });
+    } catch (err) {
+      set({ lastError: err instanceof Error ? err.message : String(err) });
+    }
+  },
+  setSetup: async (partial) => {
+    try {
+      const setup = await window.api.setSetup(partial);
+      set({ setup });
+    } catch (err) {
+      set({ lastError: err instanceof Error ? err.message : String(err) });
+    }
+  },
+
   updateSettings: async (partial) => {
     try {
       const settings = await window.api.setSettings(partial);
