@@ -28,7 +28,7 @@ import {
   saveConfig,
   withConfigLock,
 } from "./config";
-import { DEFAULT_SETTINGS } from "./types";
+import { DEFAULT_SETTINGS, DEFAULT_SETUP } from "./types";
 import { dirname } from "node:path";
 
 beforeEach(async () => {
@@ -112,6 +112,41 @@ describe("loadConfig", () => {
     expect(config.stackDeployments).toEqual([]);
   });
 
+  it("hydrates setup to DEFAULT_SETUP when missing — completed:false triggers SetupFlow", async () => {
+    await fs.writeFile(
+      CONFIG_PATH,
+      JSON.stringify({ skills: {}, settings: DEFAULT_SETTINGS }),
+    );
+    const config = await loadConfig();
+    expect(config.setup).toEqual(DEFAULT_SETUP);
+    expect(config.setup.completed).toBe(false);
+  });
+
+  it("preserves an existing completed setup field across round-trip", async () => {
+    const seed = {
+      skills: {},
+      settings: DEFAULT_SETTINGS,
+      stacks: [],
+      stackDeployments: [],
+      setup: {
+        completed: true,
+        version: 1 as const,
+        libraryRoot: "centralized" as const,
+        libraryPath: "/Users/x/.skill-stack/skills",
+        historyPath: "/Users/x/.skill-stack/skills-history",
+        primaryAgent: "codex",
+        completedAt: "2026-05-08T00:00:00Z",
+      },
+    };
+    await fs.writeFile(CONFIG_PATH, JSON.stringify(seed));
+    const config = await loadConfig();
+    expect(config.setup).toEqual(seed.setup);
+    // Save then reload to confirm round-trip stability.
+    await saveConfig(config);
+    const reloaded = await loadConfig();
+    expect(reloaded.setup).toEqual(seed.setup);
+  });
+
   it("preserves existing stacks and stackDeployments when present", async () => {
     const stack = {
       id: "my-stack",
@@ -170,6 +205,7 @@ describe("saveConfig", () => {
       settings: DEFAULT_SETTINGS,
       stacks: [],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     };
     await saveConfig(config);
     const text = await fs.readFile(CONFIG_PATH, "utf8");
@@ -185,6 +221,7 @@ describe("saveConfig", () => {
       settings: DEFAULT_SETTINGS,
       stacks: [],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     });
     const stat = await fs.stat(CONFIG_PATH);
     expect(stat.isFile()).toBe(true);
@@ -198,6 +235,7 @@ describe("saveConfig", () => {
       settings: DEFAULT_SETTINGS,
       stacks: [],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     };
     await saveConfig(original);
 
@@ -216,6 +254,7 @@ describe("saveConfig", () => {
         settings: DEFAULT_SETTINGS,
         stacks: [],
         stackDeployments: [],
+      setup: DEFAULT_SETUP,
       }),
     ).rejects.toThrow();
 
@@ -266,6 +305,7 @@ describe("reconcileConfig", () => {
       settings: DEFAULT_SETTINGS,
       stacks: [],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     };
     const reconciled = await reconcileConfig(initial);
     expect(reconciled.skills["found-skill"]).toBeDefined();
@@ -288,6 +328,7 @@ describe("reconcileConfig", () => {
       settings: DEFAULT_SETTINGS,
       stacks: [],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     };
     const reconciled = await reconcileConfig(initial);
     expect(reconciled.skills.ghost).toBeUndefined();
@@ -311,6 +352,7 @@ describe("reconcileConfig", () => {
       settings: DEFAULT_SETTINGS,
       stacks: [],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     };
     const reconciled = await reconcileConfig(initial);
     expect(reconciled.skills.keep.projects).toEqual([aliveProject]);
@@ -325,6 +367,7 @@ describe("reconcileConfig", () => {
       settings: DEFAULT_SETTINGS,
       stacks: [],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     });
     expect(reconciled.skills[".git"]).toBeUndefined();
     expect(reconciled.skills.visible).toBeDefined();

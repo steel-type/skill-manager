@@ -40,7 +40,7 @@ import {
   writeMetaSkillToLibrary,
   writeMetaSkillToProject,
 } from "./stacks";
-import { DEFAULT_SETTINGS, type SkillStack } from "./types";
+import { DEFAULT_SETTINGS, DEFAULT_SETUP, type SkillStack } from "./types";
 import { dirname } from "node:path";
 
 async function writeSkill(name: string, files: Record<string, string>) {
@@ -242,6 +242,7 @@ describe("createStack", () => {
       settings: DEFAULT_SETTINGS,
       stacks: [],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     });
     const stack = await createStack("My Stack", "test", ["alpha", "beta"]);
     expect(stack.id).toBe("my-stack");
@@ -267,6 +268,7 @@ describe("createStack", () => {
         },
       ],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     });
     await expect(createStack("My Stack", "", [])).rejects.toThrow(
       /already exists/,
@@ -280,6 +282,7 @@ describe("createStack", () => {
       settings: DEFAULT_SETTINGS,
       stacks: [],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     });
     await expect(
       createStack("My Stack", "", ["missing-skill"]),
@@ -321,6 +324,7 @@ describe("deployStack", () => {
         },
       ],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     });
     const project = await makeProject();
     try {
@@ -386,6 +390,7 @@ describe("deployStack", () => {
         },
       ],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     });
     const project = await makeProject();
     try {
@@ -423,6 +428,7 @@ describe("deployStack", () => {
         },
       ],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     });
     const project = await makeProject();
     try {
@@ -483,6 +489,7 @@ describe("updateStackComposition", () => {
         },
       ],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     });
     const project = await makeProject();
     await deployStack("demo", project, "claude", "copy");
@@ -565,6 +572,7 @@ describe("deleteStack", () => {
         },
       ],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     });
     const project = await makeProject();
     await deployStack("demo", project, "claude", "copy");
@@ -643,6 +651,7 @@ describe("createStack — library staging", () => {
       settings: DEFAULT_SETTINGS,
       stacks: [],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     });
   });
 
@@ -698,6 +707,7 @@ describe("deployStack — symlink mode", () => {
         },
       ],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     });
     // Pre-stage the library file (createStack would normally do this; this
     // test seeded the stack via saveConfig so we need to mimic).
@@ -738,6 +748,7 @@ describe("deleteStack — library cleanup", () => {
       settings: DEFAULT_SETTINGS,
       stacks: [],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     });
     const stack = await createStack("Demo", "Triggers when user says demo", [
       "alpha",
@@ -769,6 +780,7 @@ describe("listSkills excludes stack ids (Phase 0A)", () => {
       settings: DEFAULT_SETTINGS,
       stacks: [],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     });
     const stack = await createStack(
       "Phase Zero",
@@ -808,6 +820,7 @@ describe("updateStackComposition — library refresh", () => {
       settings: DEFAULT_SETTINGS,
       stacks: [],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     });
     const stack = await createStack("Demo", "Triggers when user says demo", [
       "alpha",
@@ -850,6 +863,7 @@ describe("updateStackComposition cascadeRemoveOrphans", () => {
       settings: DEFAULT_SETTINGS,
       stacks: [],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     });
     const stack = await createStack(
       "Demo",
@@ -970,6 +984,7 @@ describe("previewCompositionCascade", () => {
       settings: DEFAULT_SETTINGS,
       stacks: [],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     });
     const stack = await createStack("Demo", "Triggers when user demos", [
       "alpha",
@@ -1014,6 +1029,7 @@ describe("removeStackDeployment cascadeMembers", () => {
       settings: DEFAULT_SETTINGS,
       stacks: [],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     });
     const stack = await createStack("Demo", "Triggers when user demos", [
       "alpha",
@@ -1071,6 +1087,7 @@ describe("removeStackDeployment cascadeMembers", () => {
       settings: DEFAULT_SETTINGS,
       stacks: [],
       stackDeployments: [],
+      setup: DEFAULT_SETUP,
     });
     const stack = await createStack("Demo", "Triggers when user demos", [
       "alpha",

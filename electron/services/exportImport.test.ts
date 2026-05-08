@@ -6,7 +6,7 @@ import {
   parseSkillJson,
   parseSkillList,
 } from "./exportImport";
-import type { SkillManagerConfig } from "./types";
+import { DEFAULT_SETUP, type SkillManagerConfig } from "./types";
 
 const baseConfig: SkillManagerConfig = {
   last_project: "",
@@ -23,6 +23,7 @@ const baseConfig: SkillManagerConfig = {
   } as const,
   stacks: [],
   stackDeployments: [],
+  setup: DEFAULT_SETUP,
 };
 
 describe("exportSkillList", () => {

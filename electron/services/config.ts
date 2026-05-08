@@ -3,8 +3,10 @@ import { dirname } from "node:path";
 import { CONFIG_PATH, getLibraryPath } from "./paths";
 import {
   DEFAULT_SETTINGS,
+  DEFAULT_SETUP,
   type AppSettings,
   type Deployment,
+  type SetupConfig,
   type SkillManagerConfig,
   type SkillRecord,
   type SkillStack,
@@ -36,10 +38,21 @@ interface RawConfig {
   settings?: Partial<AppSettings>;
   stacks?: SkillStack[];
   stackDeployments?: StackDeployment[];
+  setup?: Partial<SetupConfig>;
 }
 
 function withDefaults(partial?: Partial<AppSettings>): AppSettings {
   return { ...DEFAULT_SETTINGS, ...(partial ?? {}) };
+}
+
+/** Merge a partial setup field with DEFAULT_SETUP. Configs written before
+ *  this field existed land here without a `setup` key → the spread returns
+ *  DEFAULT_SETUP (completed:false), which makes SetupFlow appear on next
+ *  launch. */
+export function withSetupDefaults(
+  partial?: Partial<SetupConfig>,
+): SetupConfig {
+  return { ...DEFAULT_SETUP, ...(partial ?? {}) };
 }
 
 /**
@@ -137,6 +150,7 @@ export async function loadConfig(): Promise<SkillManagerConfig> {
       settings: withDefaults(raw.settings),
       stacks: raw.stacks ?? [],
       stackDeployments: raw.stackDeployments ?? [],
+      setup: withSetupDefaults(raw.setup),
     };
   }
 
@@ -158,6 +172,7 @@ export async function loadConfig(): Promise<SkillManagerConfig> {
     settings: withDefaults(raw.settings),
     stacks: raw.stacks ?? [],
     stackDeployments: raw.stackDeployments ?? [],
+    setup: withSetupDefaults(raw.setup),
   };
 }
 
@@ -248,6 +263,7 @@ export async function reconcileConfig(
       settings: config.settings,
       stacks: config.stacks ?? [],
       stackDeployments: config.stackDeployments ?? [],
+      setup: withSetupDefaults(config.setup),
     };
     await saveConfig(next);
     return next;

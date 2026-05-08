@@ -71,6 +71,46 @@ export const DEFAULT_SETTINGS: AppSettings = {
   default_deploy_mode: "copy",
 };
 
+/** Where the library + history live. `claude` keeps the legacy
+ *  ~/.claude/skills layout; `centralized` puts everything under
+ *  ~/.skill-stack/skills (agent-neutral); `custom` lets the user pick any
+ *  absolute path via the folder picker. */
+export type LibraryRoot = "claude" | "centralized" | "custom";
+
+/** First-run + library-relocation state. Loaded once at boot and used to
+ *  call `configurePaths` so the rest of the backend resolves to the right
+ *  on-disk location. `completed: false` means the SetupFlow blocks the
+ *  rest of the UI until the user makes their choices. */
+export interface SetupConfig {
+  completed: boolean;
+  /** Schema version — bumped if the shape evolves post-launch. */
+  version: 1;
+  libraryRoot: LibraryRoot;
+  /** Resolved absolute path to the library directory. Empty string while
+   *  `completed === false`. */
+  libraryPath: string;
+  /** Resolved absolute path to the history directory (sibling of
+   *  libraryPath's parent in the standard layout). */
+  historyPath: string;
+  /** Agent id of the user's primary agent. Drives the Deploy view's
+   *  default agent selection and the visual ordering. Limited to agents
+   *  with a globalSkillPath (claude, codex, gemini, continue) — cursor
+   *  and cline have no global skills dir so they can't be primary. */
+  primaryAgent: string;
+  /** ISO timestamp of completion. */
+  completedAt: string;
+}
+
+export const DEFAULT_SETUP: SetupConfig = {
+  completed: false,
+  version: 1,
+  libraryRoot: "claude",
+  libraryPath: "",
+  historyPath: "",
+  primaryAgent: "claude",
+  completedAt: "",
+};
+
 export interface SkillManagerConfig {
   last_project: string;
   skills: Record<string, SkillRecord>;
@@ -80,6 +120,10 @@ export interface SkillManagerConfig {
   /** Per-(stack, project, agent) deployment ledger — analogous to
    *  SkillRecord.deployments but for stacks. */
   stackDeployments: StackDeployment[];
+  /** First-run setup state. Defaults to DEFAULT_SETUP for configs that
+   *  predate this field, which causes the SetupFlow to mount on next
+   *  launch. */
+  setup: SetupConfig;
 }
 
 /** A named, reusable bundle of skills. Identified by `id` (kebab-case per the
