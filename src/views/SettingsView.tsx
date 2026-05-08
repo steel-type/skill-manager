@@ -25,6 +25,24 @@ export function SettingsView() {
   const updateSettings = useAppStore((s) => s.updateSettings);
   const loadSettings = useAppStore((s) => s.loadSettings);
   const setError = useAppStore((s) => s.setError);
+  const setup = useAppStore((s) => s.setup);
+  const setSetup = useAppStore((s) => s.setSetup);
+  const [primaryAgents, setPrimaryAgents] = useState<{ id: string; displayName: string }[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    window.api.listAgents().then((list) => {
+      if (cancelled) return;
+      const PRIMARY_CAPABLE = new Set(["claude", "codex", "gemini", "continue"]);
+      setPrimaryAgents(
+        list
+          .filter((a) => PRIMARY_CAPABLE.has(a.id))
+          .map((a) => ({ id: a.id, displayName: a.displayName })),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [env, setEnv] = useState<EnvInfo | null>(null);
   const [historyBytes, setHistoryBytes] = useState<number | null>(null);
@@ -152,6 +170,50 @@ export function SettingsView() {
       />
 
       <div className="rail-section" style={{ padding: "16px 0 0" }}>
+        Library
+      </div>
+      <PrimaryAgentRow
+        agents={primaryAgents}
+        primaryAgent={setup.primaryAgent}
+        onChange={(id) => setSetup({ primaryAgent: id })}
+      />
+      <PathRow
+        label="Library location"
+        value={setup.libraryPath || "(not set)"}
+        hint="canonical source for all deployments"
+        onOpen={() => setup.libraryPath && window.api.openInFinder(setup.libraryPath)}
+        onCopy={() => setup.libraryPath && window.api.writeClipboard(setup.libraryPath)}
+      />
+      <PathRow
+        label="History location"
+        value={setup.historyPath || "(not set)"}
+        hint="snapshot directory for rollback"
+        onOpen={() => setup.historyPath && window.api.openInFinder(setup.historyPath)}
+        onCopy={() => setup.historyPath && window.api.writeClipboard(setup.historyPath)}
+      />
+      <SegmentedRow
+        label="Default deploy mode"
+        hint="fresh deployments use this; you can override per-deploy"
+        value={settings.default_deploy_mode}
+        options={[
+          { value: "symlink", label: "Symlink" },
+          { value: "copy", label: "Copy" },
+        ]}
+        onChange={(v) =>
+          updateSettings({ default_deploy_mode: v as "symlink" | "copy" })
+        }
+      />
+      <div style={{ marginTop: 6 }}>
+        <button
+          type="button"
+          className="sk-btn sm ghost"
+          onClick={() => setSetup({ completed: false })}
+        >
+          Re-run setup…
+        </button>
+      </div>
+
+      <div className="rail-section" style={{ padding: "16px 0 0" }}>
         Appearance
       </div>
       <ThemeRow />
@@ -192,20 +254,6 @@ export function SettingsView() {
         options={[
           { value: "cards", label: "Cards" },
           { value: "palette", label: "⌘K" },
-        ]}
-      />
-      <SegmentedRow
-        label="Default deploy mode"
-        hint="copy duplicates files; symlink points the project at the library copy"
-        value={settings.default_deploy_mode}
-        onChange={(v) =>
-          updateSettings({
-            default_deploy_mode: v as AppSettings["default_deploy_mode"],
-          })
-        }
-        options={[
-          { value: "copy", label: "Copy" },
-          { value: "symlink", label: "Symlink" },
         ]}
       />
       <SegmentedRow
@@ -303,6 +351,54 @@ export function SettingsView() {
           {armed === "reset" ? "Confirm — reset config" : "Reset config"}
         </button>
       </div>
+    </div>
+  );
+}
+
+function PrimaryAgentRow({
+  agents,
+  primaryAgent,
+  onChange,
+}: {
+  agents: { id: string; displayName: string }[];
+  primaryAgent: string;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+        padding: "8px 4px",
+        borderBottom: "1px dashed var(--line-soft)",
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>Primary agent</div>
+        <div style={{ fontSize: 11, color: "var(--ink-faint)" }}>
+          pre-checked in Deploy and pinned to top of the agent list
+        </div>
+      </div>
+      <select
+        value={primaryAgent}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          fontFamily: "var(--read)",
+          fontSize: 12,
+          padding: "4px 8px",
+          border: "1.5px solid var(--line-soft)",
+          borderRadius: 6,
+          background: "var(--paper)",
+          color: "var(--ink)",
+        }}
+      >
+        {agents.map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.displayName}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

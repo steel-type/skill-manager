@@ -71,6 +71,7 @@ export function DeployView() {
   const stackDeployments = useAppStore((s) => s.stackDeployments);
   const projects = useAppStore((s) => s.projects);
   const settings = useAppStore((s) => s.settings);
+  const setup = useAppStore((s) => s.setup);
   const deployQueue = useAppStore((s) => s.deployQueue);
   const refreshSkills = useAppStore((s) => s.refreshSkills);
   const refreshProjects = useAppStore((s) => s.refreshProjects);
@@ -83,8 +84,11 @@ export function DeployView() {
   const setError = useAppStore((s) => s.setError);
 
   const [agents, setAgents] = useState<AgentMeta[]>([]);
+  // Pre-select the user's primary agent. The store's setup is always
+  // populated by the time DeployView renders (App.tsx gates on
+  // setup.completed before showing tabs).
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(
-    new Set(["claude"]),
+    new Set([setup.primaryAgent || "claude"]),
   );
   const [selectedProjects, setSelectedProjects] = useState<Set<string>>(
     new Set(),
@@ -482,8 +486,17 @@ export function DeployView() {
                 gap: 2,
               }}
             >
-              {agents.map((a) => {
+              {[...agents]
+                .sort((a, b) => {
+                  // Primary agent pinned to top; everything else preserves
+                  // the registry order.
+                  if (a.id === setup.primaryAgent) return -1;
+                  if (b.id === setup.primaryAgent) return 1;
+                  return 0;
+                })
+                .map((a) => {
                 const checked = selectedAgents.has(a.id);
+                const isPrimary = a.id === setup.primaryAgent;
                 return (
                   <label
                     key={a.id}
@@ -508,9 +521,23 @@ export function DeployView() {
                           fontFamily: "var(--read)",
                           fontSize: 12,
                           fontWeight: checked ? 600 : 400,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
                         }}
                       >
                         {a.displayName}
+                        {isPrimary && (
+                          <span
+                            style={{
+                              fontFamily: "var(--mono)",
+                              fontSize: 9,
+                              color: "var(--ink-faint)",
+                            }}
+                          >
+                            · primary
+                          </span>
+                        )}
                       </div>
                       {!a.supportsSymlinks && (
                         <div
