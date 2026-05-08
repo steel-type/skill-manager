@@ -104,11 +104,22 @@ export default function App() {
     };
   }, [loadSetup, loadSettings, refreshSkills, runUpdateCheck]);
 
-  // Apply theme to the document root whenever the persisted setting
-  // changes. CSS variable overrides under `[data-theme="dark"]` swap
-  // colours / fonts / radii in one shot.
+  // Apply theme to the document root. "system" resolves via matchMedia
+  // and live-updates on OS appearance changes so the user doesn't have
+  // to flip it manually after sunset.
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", settings.theme);
+    const apply = (resolved: "light" | "dark") => {
+      document.documentElement.setAttribute("data-theme", resolved);
+    };
+    if (settings.theme === "system") {
+      const mq = window.matchMedia("(prefers-color-scheme: dark)");
+      apply(mq.matches ? "dark" : "light");
+      const handler = (e: MediaQueryListEvent) =>
+        apply(e.matches ? "dark" : "light");
+      mq.addEventListener("change", handler);
+      return () => mq.removeEventListener("change", handler);
+    }
+    apply(settings.theme);
   }, [settings.theme]);
 
   // Auto-dismiss transient error toasts.

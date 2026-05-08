@@ -16,6 +16,7 @@ import type {
 import type {
   DeployMode,
   LibraryRoot,
+  Theme,
 } from "../../electron/services/types";
 
 type Step =
@@ -58,6 +59,12 @@ export function SetupFlow() {
     new Set(),
   );
   const [progress, setProgress] = useState<string[]>([]);
+
+  // Pre-setup theme picker. The Settings tab doesn't exist yet — give
+  // the user immediate control over the appearance from the very first
+  // screen so they aren't blinded.
+  const settings = useAppStore((s) => s.settings);
+  const updateSettings = useAppStore((s) => s.updateSettings);
 
   // Load the agent list once. Filter to those with a globalSkillPath —
   // cursor and cline have no global skills directory so they can't be
@@ -208,17 +215,39 @@ export function SetupFlow() {
     >
       <div
         style={{
-          padding: "12px 20px",
+          padding: "10px 20px",
           borderBottom: "1.5px solid var(--line-soft)",
+          background: "var(--paper-2)",
           display: "flex",
           alignItems: "center",
           gap: 12,
-        }}
+          // Drag region so the user can move the window even on the
+          // setup overlay. Children opt-out via WebkitAppRegion: 'no-drag'.
+          // (cast to React.CSSProperties to satisfy TS — the property is
+          // a Webkit extension.)
+          WebkitAppRegion: "drag",
+          height: 36,
+          flexShrink: 0,
+        } as React.CSSProperties}
       >
-        <span style={{ fontFamily: "var(--hand)", fontSize: 22 }}>
+        {/* Reserve space for the native traffic lights on the left so
+            'Skill Manager' doesn't sit underneath the close/minimize
+            buttons. Same 76px reservation as AppWindow. */}
+        <div aria-hidden style={{ width: 76, flexShrink: 0 }} />
+        <span
+          style={{
+            fontFamily: "var(--hand)",
+            fontSize: 22,
+            color: "var(--ink)",
+          }}
+        >
           Skill Manager
         </span>
         <span style={{ flex: 1 }} />
+        <ThemeToggleInline
+          value={settings.theme}
+          onChange={(v) => updateSettings({ theme: v })}
+        />
         <StepDots active={step} />
       </div>
 
@@ -301,22 +330,32 @@ export function SetupFlow() {
 
 function Welcome({ onNext }: { onNext: () => void }) {
   return (
-    <div style={{ textAlign: "center" }}>
+    <div style={{ textAlign: "center", paddingTop: 40 }}>
       <div
         style={{
           fontFamily: "var(--hand)",
-          fontSize: 36,
-          marginBottom: 16,
+          fontSize: 56,
+          marginBottom: 24,
+          color: "var(--ink)",
+          lineHeight: 1.1,
         }}
       >
         Welcome
       </div>
-      <p style={{ fontSize: 14, lineHeight: 1.6, color: "var(--ink-soft)" }}>
+      <p
+        style={{
+          fontSize: 17,
+          lineHeight: 1.6,
+          color: "var(--ink-soft)",
+          maxWidth: 480,
+          margin: "0 auto",
+        }}
+      >
         Let's set up your skill library. You'll pick where it lives, which
         agent is your primary, and how skills deploy by default. This takes
         about a minute.
       </p>
-      <div style={{ marginTop: 32 }}>
+      <div style={{ marginTop: 40 }}>
         <button
           type="button"
           className="sk-btn"
@@ -325,7 +364,8 @@ function Welcome({ onNext }: { onNext: () => void }) {
             background: "var(--accent)",
             color: "var(--on-accent)",
             borderColor: "var(--accent)",
-            padding: "8px 24px",
+            padding: "10px 28px",
+            fontSize: 14,
             fontWeight: 700,
           }}
         >
@@ -983,6 +1023,57 @@ function ModePill({
     >
       {label}
     </button>
+  );
+}
+
+function ThemeToggleInline({
+  value,
+  onChange,
+}: {
+  value: Theme;
+  onChange: (v: Theme) => void;
+}) {
+  const opts: { v: Theme; label: string }[] = [
+    { v: "light", label: "☀" },
+    { v: "dark", label: "☾" },
+    { v: "system", label: "⌥" },
+  ];
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        gap: 2,
+        padding: 2,
+        border: "1.5px solid var(--line-soft)",
+        borderRadius: 999,
+        background: "var(--paper)",
+        WebkitAppRegion: "no-drag",
+      } as React.CSSProperties}
+    >
+      {opts.map((o) => {
+        const active = value === o.v;
+        return (
+          <button
+            key={o.v}
+            type="button"
+            onClick={() => onChange(o.v)}
+            title={o.v}
+            style={{
+              padding: "2px 10px",
+              fontSize: 13,
+              fontFamily: "var(--read)",
+              background: active ? "var(--accent)" : "transparent",
+              color: active ? "var(--on-accent)" : "var(--ink-soft)",
+              border: "none",
+              borderRadius: 999,
+              cursor: "pointer",
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

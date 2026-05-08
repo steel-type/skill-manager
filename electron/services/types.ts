@@ -42,7 +42,7 @@ export const HISTORY_RETENTION_OPTIONS = [0, 1, 2, 5, 10] as const;
 
 export type HistoryRetention = (typeof HISTORY_RETENTION_OPTIONS)[number];
 
-export type Theme = "light" | "dark";
+export type Theme = "light" | "dark" | "system";
 
 export interface AppSettings {
   auto_check_updates: boolean;
@@ -67,7 +67,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   show_resource_only: false,
   default_layout: "cards",
   update_history_retention: 2,
-  theme: "light",
+  // Default to dark — users open this app late at night and white mode
+  // is harsh. They can flip to light or system in Settings.
+  theme: "dark",
   default_deploy_mode: "copy",
 };
 
