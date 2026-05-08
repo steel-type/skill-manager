@@ -14,13 +14,17 @@ vi.mock("./paths", async () => {
     `skill-manager-deploy-test-${process.pid}-${Date.now()}`,
   );
   return {
-    CLAUDE_DIR: path.join(root, ".claude"),
-    LIBRARY_PATH: path.join(root, ".claude", "skills"),
     CONFIG_PATH: path.join(root, ".claude", "skill-manager.json"),
+    getClaudeDir: () => path.join(root, ".claude"),
+    getLibraryPath: () => path.join(root, ".claude", "skills"),
+    getHistoryPath: () => path.join(root, ".claude", "skills-history"),
+    configurePaths: () => undefined,
+    resetPathsForTest: () => undefined,
   };
 });
 
-import { LIBRARY_PATH } from "./paths";
+import { getLibraryPath } from "./paths";
+const LIBRARY_PATH = getLibraryPath();
 import {
   cascadeToDeployments,
   cascadeToProjects,

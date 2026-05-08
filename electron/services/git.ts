@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
-import { LIBRARY_PATH } from "./paths";
+import { getLibraryPath } from "./paths";
 
 export type LogHandler = (line: string) => void;
 
@@ -67,7 +67,7 @@ export async function cloneToLibrary(
   const { onLog, signal } = options;
   if (signal?.aborted) throw new CancelledError();
 
-  await fs.mkdir(LIBRARY_PATH, { recursive: true });
+  await fs.mkdir(getLibraryPath(), { recursive: true });
   const tmp = join(tmpdir(), `skill-download-${repoName}-${Date.now()}`);
   await rmrf(tmp);
 
@@ -188,7 +188,7 @@ export async function cloneToLibrary(
     await rmrf(tmp);
     throw new CancelledError();
   }
-  const dest = join(LIBRARY_PATH, repoName);
+  const dest = join(getLibraryPath(), repoName);
   try {
     await rmrf(dest);
     await fs.cp(tmp, dest, {

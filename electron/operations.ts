@@ -10,7 +10,7 @@
 
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
-import { LIBRARY_PATH } from "./services/paths";
+import { getHistoryPath, getLibraryPath } from "./services/paths";
 import {
   loadConfig,
   saveConfig,
@@ -96,7 +96,7 @@ export async function bootstrap(): Promise<void> {
     const { generateMetaSkill, loadStackMembers, writeMetaSkillToLibrary } =
       await import("./services/stacks");
     for (const stack of reconciled.stacks) {
-      const path = join(LIBRARY_PATH, stack.id, "SKILL.md");
+      const path = join(getLibraryPath(), stack.id, "SKILL.md");
       try {
         await fs.access(path);
         continue;
@@ -171,10 +171,7 @@ export async function clearAllHistory(): Promise<{
 
   // Recursively wipe the history tree. Done outside the config lock —
   // we've already detached the references, the disk delete is independent.
-  await fs.rm(
-    join(LIBRARY_PATH, "..", "skills-history"),
-    { recursive: true, force: true },
-  );
+  await fs.rm(getHistoryPath(), { recursive: true, force: true });
 
   return { snapshotsCleared, freedBytes: sizeBefore };
 }
@@ -214,7 +211,7 @@ export async function installLocalSkill(
   }
 
   await ensureLibraryDir();
-  const dest = join(LIBRARY_PATH, name);
+  const dest = join(getLibraryPath(), name);
   await fs.rm(dest, { recursive: true, force: true });
   // Same filter rules as cloneToLibrary's post-clone copy: skip .git /
   // node_modules / __pycache__ noise and refuse to follow symlinks (a
@@ -575,7 +572,7 @@ export async function removeSkill(
       // skip — project unreachable, keep going
     }
   }
-  await fs.rm(join(LIBRARY_PATH, name), { recursive: true, force: true });
+  await fs.rm(join(getLibraryPath(), name), { recursive: true, force: true });
   await clearHistory(name);
   return { removedFromProjects };
 }

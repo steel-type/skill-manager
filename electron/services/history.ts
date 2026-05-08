@@ -5,17 +5,14 @@
 
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
-import { CLAUDE_DIR } from "./paths";
-import { LIBRARY_PATH } from "./paths";
+import { getHistoryPath, getLibraryPath } from "./paths";
 import { nowIso } from "./config";
 import type { HistoryEntry, HistorySnapshot } from "./types";
-
-export const HISTORY_PATH = join(CLAUDE_DIR, "skills-history");
 
 function snapshotDir(name: string, commit: string): string {
   // Tolerate any commit string — file-safe replacement keeps things sane.
   const safe = commit.replace(/[^a-zA-Z0-9._-]/g, "_");
-  return join(HISTORY_PATH, name, safe);
+  return join(getHistoryPath(), name, safe);
 }
 
 async function dirSize(path: string): Promise<number> {
@@ -63,7 +60,7 @@ export async function archiveSkillVersion(
   name: string,
   commit: string | null,
 ): Promise<HistorySnapshot | null> {
-  const src = join(LIBRARY_PATH, name);
+  const src = join(getLibraryPath(), name);
   if (!(await pathExists(src))) return null;
 
   const archivedAt = nowIso();
@@ -72,7 +69,7 @@ export async function archiveSkillVersion(
     : `pre-${archivedAt.replace(/[:T]/g, "-")}`;
 
   const dest = snapshotDir(name, stableCommit);
-  await fs.mkdir(join(HISTORY_PATH, name), { recursive: true });
+  await fs.mkdir(join(getHistoryPath(), name), { recursive: true });
   // If a snapshot at this commit already exists, drop it — we want the most
   // recent capture under that name (rare: same commit re-archived after a
   // rollback). Avoids a stale snapshot lying about its origin.
@@ -164,7 +161,7 @@ export async function restoreSnapshot(
   if (!(await pathExists(src))) {
     throw new Error(`Snapshot not found: ${name} @ ${commit}`);
   }
-  const dest = join(LIBRARY_PATH, name);
+  const dest = join(getLibraryPath(), name);
   await fs.rm(dest, { recursive: true, force: true });
   await fs.cp(src, dest, { recursive: true });
 }
@@ -174,7 +171,7 @@ export async function restoreSnapshot(
  * keeping orphan history forever isn't useful and just costs disk).
  */
 export async function clearHistory(name: string): Promise<void> {
-  await fs.rm(join(HISTORY_PATH, name), { recursive: true, force: true });
+  await fs.rm(join(getHistoryPath(), name), { recursive: true, force: true });
 }
 
 /**
@@ -192,9 +189,10 @@ export async function reconcileHistory(
   let removedDirs = 0;
   let freedBytes = 0;
 
+  const historyPath = getHistoryPath();
   let nameDirs: import("node:fs").Dirent[];
   try {
-    nameDirs = await fs.readdir(HISTORY_PATH, { withFileTypes: true });
+    nameDirs = await fs.readdir(historyPath, { withFileTypes: true });
   } catch {
     // No history dir yet — nothing to reconcile.
     return { removedDirs, freedBytes };
@@ -204,7 +202,7 @@ export async function reconcileHistory(
     if (!nameDir.isDirectory()) continue;
     const skillName = nameDir.name;
     const allowed = referenced.get(skillName);
-    const skillRoot = join(HISTORY_PATH, skillName);
+    const skillRoot = join(historyPath, skillName);
 
     // Whole-skill orphan: skill removed from config but history dir lingers.
     if (!allowed) {
@@ -251,7 +249,7 @@ export async function reconcileHistory(
  */
 export async function totalHistorySize(): Promise<number> {
   try {
-    return await dirSize(HISTORY_PATH);
+    return await dirSize(getHistoryPath());
   } catch {
     return 0;
   }

@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import { join, basename, relative } from "node:path";
-import { LIBRARY_PATH } from "./paths";
+import { getLibraryPath } from "./paths";
 import { loadConfig } from "./config";
 import type {
   NestedSkill,
@@ -236,7 +236,7 @@ const TREE_MAX_NODES = 500;
  * breadth-capped so a runaway repo doesn't lock the renderer or main.
  */
 export async function getSkillTree(skillName: string): Promise<import("./types").TreeNode | null> {
-  const root = join(LIBRARY_PATH, skillName);
+  const root = join(getLibraryPath(), skillName);
   let nodeCount = 0;
 
   async function walk(
@@ -320,9 +320,10 @@ export async function listSkills(): Promise<Skill[]> {
   // Stacks tab is the only place they should appear.
   const stackIds = new Set(config.stacks.map((s) => s.id));
 
+  const libraryPath = getLibraryPath();
   let entries: import("node:fs").Dirent[];
   try {
-    entries = await fs.readdir(LIBRARY_PATH, { withFileTypes: true });
+    entries = await fs.readdir(libraryPath, { withFileTypes: true });
   } catch (err: unknown) {
     if (
       err &&
@@ -338,7 +339,7 @@ export async function listSkills(): Promise<Skill[]> {
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
     if (stackIds.has(entry.name)) continue;
-    const dir = join(LIBRARY_PATH, entry.name);
+    const dir = join(libraryPath, entry.name);
     const detection = await detectSkillType(dir);
     const frontmatter = await getSkillInfo(dir);
     const record = config.skills[entry.name];

@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import { dirname } from "node:path";
-import { CONFIG_PATH, LIBRARY_PATH } from "./paths";
+import { CONFIG_PATH, getLibraryPath } from "./paths";
 import {
   DEFAULT_SETTINGS,
   type AppSettings,
@@ -196,7 +196,7 @@ export async function reconcileConfig(
 
     let dirEntries: string[] = [];
     try {
-      const entries = await fs.readdir(LIBRARY_PATH, { withFileTypes: true });
+      const entries = await fs.readdir(getLibraryPath(), { withFileTypes: true });
       dirEntries = entries
         .filter(
           (e) =>
@@ -255,5 +255,5 @@ export async function reconcileConfig(
 }
 
 export async function ensureLibraryDir(): Promise<void> {
-  await fs.mkdir(LIBRARY_PATH, { recursive: true });
+  await fs.mkdir(getLibraryPath(), { recursive: true });
 }

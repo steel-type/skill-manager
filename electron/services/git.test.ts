@@ -12,9 +12,12 @@ vi.mock("./paths", async () => {
     `skill-manager-git-test-${process.pid}-${Date.now()}`,
   );
   return {
-    CLAUDE_DIR: path.join(root, ".claude"),
-    LIBRARY_PATH: path.join(root, ".claude", "skills"),
     CONFIG_PATH: path.join(root, ".claude", "skill-manager.json"),
+    getClaudeDir: () => path.join(root, ".claude"),
+    getLibraryPath: () => path.join(root, ".claude", "skills"),
+    getHistoryPath: () => path.join(root, ".claude", "skills-history"),
+    configurePaths: () => undefined,
+    resetPathsForTest: () => undefined,
   };
 });
 
@@ -51,7 +54,8 @@ vi.mock("node:child_process", () => ({
   }),
 }));
 
-import { LIBRARY_PATH } from "./paths";
+import { getLibraryPath } from "./paths";
+const LIBRARY_PATH = getLibraryPath();
 import { CancelledError, checkRemoteSha, cloneToLibrary } from "./git";
 
 beforeEach(() => {

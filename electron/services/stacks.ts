@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { AGENTS, resolveAgentPaths } from "./agents";
 import { loadConfig, nowIso, saveConfig, withConfigLock } from "./config";
 import { deployToProject } from "./deploy";
-import { LIBRARY_PATH } from "./paths";
+import { getLibraryPath } from "./paths";
 import { listSkills } from "./skills";
 import {
   validateProjectPath,
@@ -122,7 +122,7 @@ export async function writeMetaSkillToLibrary(
   stackId: string,
   content: string,
 ): Promise<string> {
-  const dir = join(LIBRARY_PATH, stackId);
+  const dir = join(getLibraryPath(), stackId);
   await fs.mkdir(dir, { recursive: true });
   const path = join(dir, "SKILL.md");
   await fs.writeFile(path, content, "utf8");
@@ -133,7 +133,7 @@ export async function writeMetaSkillToLibrary(
 export async function removeMetaSkillFromLibrary(
   stackId: string,
 ): Promise<void> {
-  await fs.rm(join(LIBRARY_PATH, stackId), { recursive: true, force: true });
+  await fs.rm(join(getLibraryPath(), stackId), { recursive: true, force: true });
 }
 
 export async function writeMetaSkillToProject(

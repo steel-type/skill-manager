@@ -12,17 +12,22 @@ vi.mock("./paths", async () => {
     `skill-manager-history-test-${process.pid}-${Date.now()}`,
   );
   return {
-    CLAUDE_DIR: path.join(root, ".claude"),
-    LIBRARY_PATH: path.join(root, ".claude", "skills"),
     CONFIG_PATH: path.join(root, ".claude", "skill-manager.json"),
+    getClaudeDir: () => path.join(root, ".claude"),
+    getLibraryPath: () => path.join(root, ".claude", "skills"),
+    getHistoryPath: () => path.join(root, ".claude", "skills-history"),
+    configurePaths: () => undefined,
+    resetPathsForTest: () => undefined,
   };
 });
 
-import { CLAUDE_DIR, LIBRARY_PATH } from "./paths";
+import { getClaudeDir, getHistoryPath, getLibraryPath } from "./paths";
+const CLAUDE_DIR = getClaudeDir();
+const LIBRARY_PATH = getLibraryPath();
+const HISTORY_PATH = getHistoryPath();
 import {
   archiveSkillVersion,
   clearHistory,
-  HISTORY_PATH,
   listHistory,
   pruneHistory,
   reconcileHistory,

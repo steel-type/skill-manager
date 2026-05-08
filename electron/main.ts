@@ -13,7 +13,7 @@ import { randomUUID } from "node:crypto";
 import * as path from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { CLAUDE_DIR, CONFIG_PATH, LIBRARY_PATH } from "./services/paths";
+import { CONFIG_PATH, getClaudeDir, getLibraryPath } from "./services/paths";
 import { getSupportedAgents } from "./services/agents";
 import { killAllGitChildren } from "./services/git";
 import {
@@ -303,8 +303,8 @@ ipcMain.handle("env-info", () => ({
   home: homedir(),
   paths: {
     config: CONFIG_PATH,
-    library: LIBRARY_PATH,
-    claudeDir: CLAUDE_DIR,
+    library: getLibraryPath(),
+    claudeDir: getClaudeDir(),
   },
 }));
 

@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import { dirname, join } from "node:path";
-import { LIBRARY_PATH } from "./paths";
+import { getLibraryPath } from "./paths";
 import { AGENTS, resolveAgentPaths } from "./agents";
 import type { Deployment, DeployMode } from "./types";
 
@@ -20,7 +20,7 @@ export interface DeployResult {
 }
 
 async function librarySource(name: string): Promise<string> {
-  const src = join(LIBRARY_PATH, name);
+  const src = join(getLibraryPath(), name);
   try {
     const stat = await fs.stat(src);
     if (!stat.isDirectory()) {
