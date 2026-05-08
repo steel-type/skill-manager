@@ -105,12 +105,31 @@ export default function App() {
   }, [loadSetup, loadSettings, refreshSkills, runUpdateCheck]);
 
   // Apply theme to the document root. "system" resolves via matchMedia
-  // and live-updates on OS appearance changes so the user doesn't have
-  // to flip it manually after sunset.
+  // and live-updates on OS appearance changes. Pre-setup we always start
+  // dark — the user hasn't had a chance to choose yet and white mode is
+  // harsh, especially at night which is when most users open this.
   useEffect(() => {
     const apply = (resolved: "light" | "dark") => {
       document.documentElement.setAttribute("data-theme", resolved);
     };
+    if (!setup.completed) {
+      // Pre-setup uses the inline toggle in SetupFlow header; keep the
+      // applied theme in sync with the user's live picks but never let
+      // a stale persisted "light" leak through on first launch.
+      const live = settings.theme;
+      if (live === "system") {
+        const mq = window.matchMedia("(prefers-color-scheme: dark)");
+        apply(mq.matches ? "dark" : "light");
+        const handler = (e: MediaQueryListEvent) =>
+          apply(e.matches ? "dark" : "light");
+        mq.addEventListener("change", handler);
+        return () => mq.removeEventListener("change", handler);
+      }
+      // For light/dark the user explicitly toggled — honor it. Default
+      // settings is "dark", so this lands on dark out of the box.
+      apply(live === "light" ? "light" : "dark");
+      return;
+    }
     if (settings.theme === "system") {
       const mq = window.matchMedia("(prefers-color-scheme: dark)");
       apply(mq.matches ? "dark" : "light");
@@ -120,7 +139,7 @@ export default function App() {
       return () => mq.removeEventListener("change", handler);
     }
     apply(settings.theme);
-  }, [settings.theme]);
+  }, [settings.theme, setup.completed]);
 
   // Auto-dismiss transient error toasts.
   useEffect(() => {

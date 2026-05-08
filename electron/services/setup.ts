@@ -103,35 +103,36 @@ export async function validateLibraryPath(p: string): Promise<string | null> {
       return `Refusing to use ${banned} as the library — pick a subdirectory.`;
     }
   }
-  // The path itself doesn't have to exist (we'll mkdir during setup). The
-  // PARENT does, so we know we can write into it.
-  const parent = dirname(trimmed);
-  try {
-    const stat = await fs.stat(parent);
-    if (!stat.isDirectory()) {
-      return `Parent ${parent} is not a directory.`;
+  // Walk up the path looking for the deepest ancestor that exists; that
+  // tells us whether we'll be allowed to mkdir -p down to the chosen
+  // path. We don't require the immediate parent to exist — completeSetup
+  // does `fs.mkdir({recursive: true})` so any depth of new folders is
+  // fine, as long as some ancestor up the chain is a writable directory.
+  let probe = trimmed;
+  while (probe !== "/" && probe !== "") {
+    try {
+      const stat = await fs.stat(probe);
+      if (stat.isDirectory()) {
+        // Found a real ancestor (or the path itself is a real dir).
+        return null;
+      }
+      // It's a file — refuse to recurse into a file path.
+      return `${probe} exists but is not a directory.`;
+    } catch (err: unknown) {
+      if (
+        err &&
+        typeof err === "object" &&
+        "code" in err &&
+        (err as NodeJS.ErrnoException).code === "ENOENT"
+      ) {
+        // Walk up another level.
+        probe = dirname(probe);
+        continue;
+      }
+      return `Cannot access ${probe}: ${err instanceof Error ? err.message : String(err)}`;
     }
-  } catch (err: unknown) {
-    if (
-      err &&
-      typeof err === "object" &&
-      "code" in err &&
-      (err as NodeJS.ErrnoException).code === "ENOENT"
-    ) {
-      return `Parent directory ${parent} doesn't exist.`;
-    }
-    return `Cannot access ${parent}: ${err instanceof Error ? err.message : String(err)}`;
   }
-  // If the path itself exists, make sure it's a directory (not a file).
-  try {
-    const stat = await fs.stat(trimmed);
-    if (!stat.isDirectory()) {
-      return `${trimmed} exists but is not a directory.`;
-    }
-  } catch {
-    // Doesn't exist — that's fine, completeSetup will create it.
-  }
-  return null;
+  return "Path has no existing ancestor — pick something under your home dir.";
 }
 
 /**

@@ -85,10 +85,12 @@ describe("validateLibraryPath", () => {
     expect(await validateLibraryPath("/")).toMatch(/Refusing/);
   });
 
-  it("rejects when parent doesn't exist", async () => {
+  it("accepts a deep path under an existing ancestor (mkdir -p will create it)", async () => {
+    // `/Users` exists on macOS even if every level below it doesn't.
+    // completeSetup uses fs.mkdir(recursive: true) to fill in the rest.
     expect(
-      await validateLibraryPath("/this/parent/should/not/exist/skills"),
-    ).toMatch(/doesn't exist/);
+      await validateLibraryPath("/Users/__nope__/deep/skills"),
+    ).toBeNull();
   });
 
   it("accepts a path whose parent exists", async () => {

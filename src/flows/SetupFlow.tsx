@@ -234,11 +234,13 @@ export function SetupFlow() {
             'Skill Manager' doesn't sit underneath the close/minimize
             buttons. Same 76px reservation as AppWindow. */}
         <div aria-hidden style={{ width: 76, flexShrink: 0 }} />
+        <span style={{ flex: 1 }} />
         <span
           style={{
             fontFamily: "var(--hand)",
             fontSize: 22,
             color: "var(--ink)",
+            textAlign: "center",
           }}
         >
           Skill Manager
