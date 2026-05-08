@@ -223,9 +223,18 @@ export function SettingsView() {
         <button
           type="button"
           className="sk-btn sm ghost"
-          onClick={() => setSetup({ completed: false })}
+          onClick={() =>
+            useAppStore.getState().openModal({
+              type: "confirm",
+              title: "Re-run onboarding?",
+              body:
+                "Setup will start over so you can pick a different agent, library location, or re-import skills. Your skills and library files stay where they are — only the setup flag is reset.",
+              confirmLabel: "Re-run",
+              onConfirm: () => setSetup({ completed: false }),
+            })
+          }
         >
-          Re-run setup…
+          Re-run onboarding…
         </button>
       </div>
 
