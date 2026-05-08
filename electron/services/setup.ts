@@ -23,7 +23,60 @@ export interface DetectedSkill {
   isBundle: boolean;
   /** Number of nested skills detected (when isBundle). */
   nestedCount: number;
+  /** When set, the detected entry was found one level below the scan root,
+   *  inside a container directory of this name (e.g. "skills/"). The UI
+   *  uses this to show provenance like "via skills/" so the user understands
+   *  what we descended into. */
+  viaContainer?: string;
 }
+
+/**
+ * Top-level entries we never treat as skills, regardless of contents.
+ *
+ * - plugins / marketplaces: Claude Code plugin system. We are not a plugin
+ *   manager — those are handled by the agent itself.
+ * - skills-history: snapshot directory we (or the legacy app) own.
+ * - agents / commands / hooks: Claude home siblings of skills/. If the user
+ *   accidentally points the scan at ~/.claude instead of ~/.claude/skills,
+ *   we don't want these masquerading as skills.
+ * - cache / file-history / sessions / etc: Claude internal state.
+ * - .git / node_modules / .DS_Store / dot-prefixed: never skills.
+ */
+const SCAN_EXCLUDE_NAMES = new Set([
+  "plugins",
+  "marketplaces",
+  "skills-history",
+  "agents",
+  "commands",
+  "hooks",
+  "cache",
+  "image-cache",
+  "paste-cache",
+  "file-history",
+  "session-env",
+  "sessions",
+  "shell-snapshots",
+  "ide",
+  "downloads",
+  "debug",
+  "backups",
+  "projects",
+  "plans",
+  "node_modules",
+  ".git",
+  ".DS_Store",
+]);
+
+/**
+ * Names that, when found as a single child of the scan root with no root
+ * identifier and nested skills inside, indicate a library container — we
+ * should descend into it and present its children as candidates instead.
+ *
+ * This catches the common bad shape `~/.skill-stack/skills/skills/` (a
+ * library re-nested inside itself by a buggy migration) without breaking
+ * legitimate multi-skill bundles like `context7/` or `n8n-skills/`.
+ */
+const CONTAINER_DESCEND_NAMES = new Set(["skills", "library"]);
 
 export interface ResolvedLibraryRoot {
   libraryPath: string;
@@ -137,9 +190,21 @@ export async function validateLibraryPath(p: string): Promise<string | null> {
 
 /**
  * Walk a directory looking for skill-shaped subdirectories so the SetupFlow
- * can offer to import them. Only scans one level deep (directories
- * directly inside `rootPath`). Returns isSkill/isBundle/nested-count from
- * `detectSkillType` so the UI can show meaningful choices.
+ * can offer to import them.
+ *
+ * Rules (see SCAN_EXCLUDE_NAMES / CONTAINER_DESCEND_NAMES above):
+ *  1. Hard-skip names like `plugins/`, `skills-history/`, `agents/` etc.
+ *     These are never skills and showing them as bundles is the bug we hit
+ *     on first-run when scanning `~/.claude` siblings of `skills/`.
+ *  2. For each remaining child, run `detectSkillType`:
+ *     - `isSkill` (root SKILL.md/AGENTS.md) → emit as one entry
+ *     - `isBundle` (no root identifier, nested skills) → if the directory
+ *       is named `skills`/`library`, treat as a *library container* and
+ *       emit the entries inside it instead (one level deep). Otherwise
+ *       emit as a single bundle.
+ *     - neither → skip
+ *  3. Containers can't recursively descend into more containers — that
+ *     would be a footgun on weird disk shapes.
  */
 export async function scanForExistingSkills(
   rootPath: string,
@@ -158,37 +223,105 @@ export async function scanForExistingSkills(
     }
     throw err;
   }
-  const found: DetectedSkill[] = [];
+  // Map keyed by skill name so a duplicate (same name nested in a container
+  // and at top level) collapses to one row. Last-wins.
+  const found = new Map<string, DetectedSkill>();
   for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith(".")) continue;
+    if (SCAN_EXCLUDE_NAMES.has(entry.name)) continue;
     const dir = join(rootPath, entry.name);
+    let detection;
     try {
-      const detection = await detectSkillType(dir);
-      if (!detection.isSkill && !detection.isBundle) continue;
-      found.push({
+      detection = await detectSkillType(dir);
+    } catch {
+      continue;
+    }
+
+    if (detection.isSkill) {
+      found.set(entry.name, {
         name: entry.name,
         path: dir,
-        isSkill: detection.isSkill,
-        isBundle: detection.isBundle,
+        isSkill: true,
+        isBundle: detection.nested.length > 0,
         nestedCount: detection.nested.length,
       });
-    } catch {
-      // skip
+      continue;
+    }
+
+    if (
+      detection.isBundle &&
+      CONTAINER_DESCEND_NAMES.has(entry.name) &&
+      detection.identifiers.length === 0 &&
+      detection.content.length === 0
+    ) {
+      // Library container: descend one level. Apply the same exclusion
+      // and skill/bundle rules to its children, but DO NOT descend further.
+      let childEntries: import("node:fs").Dirent[];
+      try {
+        childEntries = await fs.readdir(dir, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const child of childEntries) {
+        if (!child.isDirectory()) continue;
+        if (child.name.startsWith(".")) continue;
+        if (SCAN_EXCLUDE_NAMES.has(child.name)) continue;
+        const childDir = join(dir, child.name);
+        let childDetection;
+        try {
+          childDetection = await detectSkillType(childDir);
+        } catch {
+          continue;
+        }
+        if (!childDetection.isSkill && !childDetection.isBundle) continue;
+        found.set(child.name, {
+          name: child.name,
+          path: childDir,
+          isSkill: childDetection.isSkill,
+          isBundle: childDetection.isBundle,
+          nestedCount: childDetection.nested.length,
+          viaContainer: entry.name,
+        });
+      }
+      continue;
+    }
+
+    if (detection.isBundle) {
+      found.set(entry.name, {
+        name: entry.name,
+        path: dir,
+        isSkill: false,
+        isBundle: true,
+        nestedCount: detection.nested.length,
+      });
     }
   }
-  return found.sort((a, b) =>
+  return Array.from(found.values()).sort((a, b) =>
     a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
   );
 }
+
+/**
+ * How to bring an existing skill into the new library.
+ *
+ * - `copy`: clone the source into the library (originals untouched).
+ * - `move`: relocate the source into the library, then leave a symlink at
+ *   the original path pointing back. Makes the library the source of truth
+ *   while keeping the agent's directory functional. Used when the user
+ *   picks "move to Skill Manager library" during onboarding.
+ */
+export type ImportMode = "copy" | "move";
 
 export interface CompleteSetupArgs {
   libraryRoot: LibraryRoot;
   customPath: string | null;
   primaryAgent: string;
   defaultDeployMode: DeployMode;
-  /** Optional — skills to copy from elsewhere into the new library
-   *  during setup. Each entry's `name` becomes the destination folder. */
-  importSkills?: { name: string; sourcePath: string }[];
+  /** Optional — skills to bring into the new library during setup. Each
+   *  entry's `name` becomes the destination folder; `mode` defaults to
+   *  "copy" if omitted (preserves prior behaviour). */
+  importSkills?: { name: string; sourcePath: string; mode?: ImportMode }[];
 }
 
 export interface CompleteSetupResult {
@@ -216,28 +349,98 @@ export async function completeSetup(
   await fs.mkdir(libraryPath, { recursive: true });
   await fs.mkdir(historyPath, { recursive: true });
 
-  // Import phase: copy selected skills into the new library. Conflicts
-  // (name already exists at the destination) are skipped — the SetupFlow
-  // pre-warned the user and we never overwrite during setup.
+  // Import phase: copy or move selected skills into the new library.
+  // Conflicts (name already exists at the destination) are skipped — the
+  // SetupFlow pre-warned the user and we never overwrite during setup.
   const imported: string[] = [];
   const skipped: { name: string; reason: string }[] = [];
   for (const entry of args.importSkills ?? []) {
+    const mode: ImportMode = entry.mode ?? "copy";
     const dest = join(libraryPath, entry.name);
+
+    // Source must exist.
     try {
-      await fs.access(dest);
+      await fs.lstat(entry.sourcePath);
+    } catch {
+      skipped.push({
+        name: entry.name,
+        reason: `Source not found: ${entry.sourcePath}`,
+      });
+      continue;
+    }
+
+    // Source already pointing at dest (already a symlink to dest, or same
+    // path) — nothing to do. Helpful when the user re-runs onboarding.
+    try {
+      const real = await fs.realpath(entry.sourcePath);
+      const realDest = await fs.realpath(dest).catch(() => dest);
+      if (real === realDest) {
+        imported.push(entry.name);
+        continue;
+      }
+    } catch {
+      // realpath may throw on broken symlinks — fall through.
+    }
+
+    // Conflict at destination — skip, don't overwrite.
+    let destExists = false;
+    try {
+      await fs.lstat(dest);
+      destExists = true;
+    } catch {
+      // OK — destination free.
+    }
+    if (destExists) {
       skipped.push({
         name: entry.name,
         reason: `Already exists at ${dest}`,
       });
       continue;
-    } catch {
-      // OK — destination free.
     }
+
     try {
-      await fs.cp(entry.sourcePath, dest, {
-        recursive: true,
-        verbatimSymlinks: false,
-      });
+      if (mode === "move") {
+        // 1. Move source → dest. fs.rename is atomic within a filesystem;
+        //    falls back to copy+rm if the source crosses filesystems.
+        try {
+          await fs.rename(entry.sourcePath, dest);
+        } catch (err) {
+          if (
+            err &&
+            typeof err === "object" &&
+            "code" in err &&
+            (err as NodeJS.ErrnoException).code === "EXDEV"
+          ) {
+            await fs.cp(entry.sourcePath, dest, {
+              recursive: true,
+              verbatimSymlinks: false,
+            });
+            await fs.rm(entry.sourcePath, { recursive: true, force: true });
+          } else {
+            throw err;
+          }
+        }
+        // 2. Leave a symlink behind so the agent's directory still works.
+        //    Best-effort: if the symlink fails, the skill is safe at dest
+        //    and we surface the partial-success in the skipped reason.
+        try {
+          await fs.symlink(dest, entry.sourcePath);
+        } catch (err) {
+          skipped.push({
+            name: entry.name,
+            reason: `Moved to ${dest} but symlink-back failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          });
+          imported.push(entry.name);
+          continue;
+        }
+      } else {
+        await fs.cp(entry.sourcePath, dest, {
+          recursive: true,
+          verbatimSymlinks: false,
+        });
+      }
       imported.push(entry.name);
     } catch (err) {
       skipped.push({

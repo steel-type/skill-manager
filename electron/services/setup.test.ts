@@ -118,6 +118,80 @@ describe("scanForExistingSkills", () => {
     expect(result.map((s) => s.name)).toEqual(["alpha"]);
     expect(result[0].isSkill).toBe(true);
   });
+
+  it("hard-excludes plugins/skills-history/agents/etc. by name", async () => {
+    const root = join(dirname(CONFIG_PATH), "scan-excludes");
+    // Make every excluded name look skill-shaped — the exclusion should
+    // still drop them.
+    for (const name of [
+      "plugins",
+      "skills-history",
+      "agents",
+      "commands",
+      "hooks",
+      "marketplaces",
+    ]) {
+      await fs.mkdir(join(root, name, "fake-skill"), { recursive: true });
+      await fs.writeFile(join(root, name, "fake-skill", "SKILL.md"), "x");
+    }
+    // One real skill that should survive.
+    await fs.mkdir(join(root, "kept"), { recursive: true });
+    await fs.writeFile(join(root, "kept", "SKILL.md"), "y");
+    const result = await scanForExistingSkills(root);
+    expect(result.map((s) => s.name)).toEqual(["kept"]);
+  });
+
+  it("descends into a 'skills/' container and lists its children", async () => {
+    // Mirrors the broken on-disk shape we hit on first-run: the user
+    // pointed at ~/.skill-stack/skills/ but a buggy migration left the
+    // real library at ~/.skill-stack/skills/skills/.
+    const root = join(dirname(CONFIG_PATH), "scan-container");
+    await fs.mkdir(join(root, "skills", "alpha"), { recursive: true });
+    await fs.writeFile(join(root, "skills", "alpha", "SKILL.md"), "a");
+    await fs.mkdir(join(root, "skills", "beta"), { recursive: true });
+    await fs.writeFile(join(root, "skills", "beta", "AGENTS.md"), "b");
+    await fs.mkdir(join(root, "skills-history"), { recursive: true });
+    await fs.mkdir(join(root, "plugins", "fake"), { recursive: true });
+    await fs.writeFile(join(root, "plugins", "fake", "SKILL.md"), "p");
+
+    const result = await scanForExistingSkills(root);
+    expect(result.map((s) => s.name)).toEqual(["alpha", "beta"]);
+    expect(result[0].viaContainer).toBe("skills");
+    expect(result[1].viaContainer).toBe("skills");
+  });
+
+  it("keeps a multi-skill bundle whole (no descend) when not a container name", async () => {
+    // context7-style: a folder with nested skills that is NOT named
+    // skills/library — should be one bundle entry, NOT exploded.
+    const root = join(dirname(CONFIG_PATH), "scan-bundle");
+    await fs.mkdir(join(root, "context7", "skill-a"), { recursive: true });
+    await fs.writeFile(
+      join(root, "context7", "skill-a", "SKILL.md"),
+      "x",
+    );
+    await fs.mkdir(join(root, "context7", "skill-b"), { recursive: true });
+    await fs.writeFile(
+      join(root, "context7", "skill-b", "SKILL.md"),
+      "y",
+    );
+
+    const result = await scanForExistingSkills(root);
+    expect(result.map((s) => s.name)).toEqual(["context7"]);
+    expect(result[0].isSkill).toBe(false);
+    expect(result[0].isBundle).toBe(true);
+    expect(result[0].nestedCount).toBe(2);
+    expect(result[0].viaContainer).toBeUndefined();
+  });
+
+  it("dedupes by name when same skill appears at top level and inside container", async () => {
+    const root = join(dirname(CONFIG_PATH), "scan-dedupe");
+    await fs.mkdir(join(root, "alpha"), { recursive: true });
+    await fs.writeFile(join(root, "alpha", "SKILL.md"), "top");
+    await fs.mkdir(join(root, "skills", "alpha"), { recursive: true });
+    await fs.writeFile(join(root, "skills", "alpha", "SKILL.md"), "nested");
+    const result = await scanForExistingSkills(root);
+    expect(result.map((s) => s.name)).toEqual(["alpha"]);
+  });
 });
 
 describe("completeSetup", () => {
@@ -161,6 +235,79 @@ describe("completeSetup", () => {
     expect(config.setup.completed).toBe(true);
     expect(config.setup.libraryPath).toBe(libraryPath);
     expect(config.settings.default_deploy_mode).toBe("symlink");
+  });
+
+  it("move mode: relocates source and leaves a symlink pointing back", async () => {
+    const tmpRoot = join(dirname(CONFIG_PATH), "setup-move");
+    const libraryPath = join(tmpRoot, "skills");
+    const agentDir = join(tmpRoot, "agent-skills");
+    await fs.mkdir(libraryPath, { recursive: true });
+    await fs.mkdir(join(agentDir, "alpha"), { recursive: true });
+    await fs.writeFile(join(agentDir, "alpha", "SKILL.md"), "alpha body");
+
+    const result = await completeSetup({
+      libraryRoot: "custom",
+      customPath: libraryPath,
+      primaryAgent: "claude",
+      defaultDeployMode: "symlink",
+      importSkills: [
+        {
+          name: "alpha",
+          sourcePath: join(agentDir, "alpha"),
+          mode: "move",
+        },
+      ],
+    });
+
+    expect(result.imported).toEqual(["alpha"]);
+    expect(result.skipped).toEqual([]);
+    // File now lives in the library.
+    expect(
+      await fs.readFile(join(libraryPath, "alpha", "SKILL.md"), "utf8"),
+    ).toBe("alpha body");
+    // Original agent path is now a symlink pointing into the library.
+    const linkStat = await fs.lstat(join(agentDir, "alpha"));
+    expect(linkStat.isSymbolicLink()).toBe(true);
+    expect(await fs.readlink(join(agentDir, "alpha"))).toBe(
+      join(libraryPath, "alpha"),
+    );
+    // Reading via the symlink still works.
+    expect(
+      await fs.readFile(join(agentDir, "alpha", "SKILL.md"), "utf8"),
+    ).toBe("alpha body");
+  });
+
+  it("move mode: re-running onboarding on already-symlinked source is a no-op", async () => {
+    const tmpRoot = join(dirname(CONFIG_PATH), "setup-move-rerun");
+    const libraryPath = join(tmpRoot, "skills");
+    const agentDir = join(tmpRoot, "agent-skills");
+    await fs.mkdir(join(libraryPath, "alpha"), { recursive: true });
+    await fs.writeFile(
+      join(libraryPath, "alpha", "SKILL.md"),
+      "library copy",
+    );
+    await fs.mkdir(agentDir, { recursive: true });
+    await fs.symlink(join(libraryPath, "alpha"), join(agentDir, "alpha"));
+
+    const result = await completeSetup({
+      libraryRoot: "custom",
+      customPath: libraryPath,
+      primaryAgent: "claude",
+      defaultDeployMode: "symlink",
+      importSkills: [
+        {
+          name: "alpha",
+          sourcePath: join(agentDir, "alpha"),
+          mode: "move",
+        },
+      ],
+    });
+    expect(result.imported).toEqual(["alpha"]);
+    expect(result.skipped).toEqual([]);
+    // Library content untouched.
+    expect(
+      await fs.readFile(join(libraryPath, "alpha", "SKILL.md"), "utf8"),
+    ).toBe("library copy");
   });
 
   it("imports selected skills and skips name conflicts", async () => {
