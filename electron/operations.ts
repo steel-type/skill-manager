@@ -669,16 +669,40 @@ export async function removeProjectTracking(
   // meta-skills into the project tree even when 'clean directory' was
   // checked.
   type Cleanup = {
-    skills: string[];
+    // Each skill cleanup entry pairs name + agentId so the FS pass below can
+    // resolve the correct project path (.claude/skills, .codex/skills, etc).
+    // A single skill deployed to multiple agents at the same project shows
+    // up multiple times.
+    skills: { name: string; agentId: string }[];
     stacks: { id: string; agentId: string }[];
   };
   const toClean = await withConfigLock(async () => {
     const config = await loadConfig();
-    const skillNames: string[] = [];
+    const skillEntries: { name: string; agentId: string }[] = [];
     for (const [name, record] of Object.entries(config.skills)) {
+      // Pull every (skill, agent) pair at this project so cleanup can target
+      // the right agent dir. Older records that only have `projects[]` (no
+      // deployments[]) fall back to the default "claude" agent.
+      if (opts.cleanFiles) {
+        const seen = new Set<string>();
+        for (const dep of record.deployments ?? []) {
+          if (dep.projectPath === projectPath) {
+            const key = `${name}::${dep.agentId}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              skillEntries.push({ name, agentId: dep.agentId });
+            }
+          }
+        }
+        if (
+          seen.size === 0 &&
+          record.projects.includes(projectPath)
+        ) {
+          skillEntries.push({ name, agentId: "claude" });
+        }
+      }
       if (record.projects.includes(projectPath)) {
         record.projects = record.projects.filter((p) => p !== projectPath);
-        if (opts.cleanFiles) skillNames.push(name);
       }
       if (record.deployments) {
         record.deployments = record.deployments.filter(
@@ -699,43 +723,41 @@ export async function removeProjectTracking(
     );
     if (config.last_project === projectPath) config.last_project = "";
     await saveConfig(config);
-    return { skills: skillNames, stacks: stackEntries } satisfies Cleanup;
+    return { skills: skillEntries, stacks: stackEntries } satisfies Cleanup;
   });
 
-  // Skill cleanup: resolve the agent-specific deploy path via
-  // resolveAgentPaths so non-claude projects (codex, gemini, ...) actually
-  // clean instead of leaving files at hardcoded .claude/skills/. We don't
-  // know the agent per skill record, so try every agent that had at least
-  // one deployment record for this project. The pre-collection lost that
-  // mapping; for now we fall back to .claude/skills (the historical default)
-  // — non-claude cleanup is captured as a separate follow-up.
-  for (const name of toClean.skills) {
+  // FS cleanup uses resolveAgentPaths so non-claude projects (codex,
+  // gemini, continue, cursor, cline) actually have their deployed files
+  // removed instead of leaving symlinks behind at .codex/skills/<name>/.
+  const { resolveAgentPaths, AGENTS } = await import("./services/agents");
+
+  function resolvePathFor(agentId: string, name: string): string | null {
+    const agent = AGENTS[agentId];
+    if (!agent) return null;
+    const resolved = resolveAgentPaths(agentId, name, projectPath);
+    if (!resolved.projectPath) return null;
+    const isSingleFile = /{name}/.test(agent.entryFile);
+    return isSingleFile
+      ? join(resolved.projectPath, resolved.entryFile)
+      : resolved.projectPath;
+  }
+
+  for (const entry of toClean.skills) {
+    const target = resolvePathFor(entry.agentId, entry.name);
+    if (!target) continue;
     try {
-      await fs.rm(join(projectPath, ".claude", "skills", name), {
-        recursive: true,
-        force: true,
-      });
-      skillsCleaned.push(name);
+      await fs.rm(target, { recursive: true, force: true });
+      skillsCleaned.push(entry.name);
     } catch {
       // skip
     }
   }
-  // Stack cleanup uses resolveAgentPaths so the meta-skill is removed at the
-  // correct agent location (.claude/skills/<id>, .codex/skills/<id>, etc).
-  const { resolveAgentPaths, AGENTS } = await import("./services/agents");
   for (const dep of toClean.stacks) {
-    if (!AGENTS[dep.agentId]) continue;
+    const target = resolvePathFor(dep.agentId, dep.id);
+    if (!target) continue;
     try {
-      const resolved = resolveAgentPaths(dep.agentId, dep.id, projectPath);
-      const agent = AGENTS[dep.agentId];
-      const isSingleFile = /{name}/.test(agent.entryFile);
-      const target = isSingleFile
-        ? join(resolved.projectPath ?? "", resolved.entryFile)
-        : (resolved.projectPath ?? "");
-      if (target) {
-        await fs.rm(target, { recursive: true, force: true });
-        stacksCleaned.push(dep.id);
-      }
+      await fs.rm(target, { recursive: true, force: true });
+      stacksCleaned.push(dep.id);
     } catch {
       // skip
     }
