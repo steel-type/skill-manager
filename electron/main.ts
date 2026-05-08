@@ -53,7 +53,20 @@ import {
   removeStackDeployment,
   updateStackComposition,
 } from "./services/stacks";
-import type { DeployMode } from "./services/types";
+import {
+  completeSetup,
+  resolveLibraryRoot,
+  scanForExistingSkills,
+  validateLibraryPath,
+  type CompleteSetupArgs,
+} from "./services/setup";
+import { loadConfig, saveConfig, withConfigLock } from "./services/config";
+import { withSetupDefaults } from "./services/config";
+import type {
+  DeployMode,
+  LibraryRoot,
+  SetupConfig,
+} from "./services/types";
 
 // ESM doesn't expose __dirname; reconstruct it from import.meta.url so the
 // preload-script and built-renderer paths resolve from dist-electron/main.js.
@@ -307,6 +320,48 @@ ipcMain.handle("env-info", () => ({
     claudeDir: getClaudeDir(),
   },
 }));
+
+// ── Setup / first-run handlers ──
+
+ipcMain.handle("get-setup", async (): Promise<SetupConfig> => {
+  const config = await loadConfig();
+  return config.setup;
+});
+
+ipcMain.handle(
+  "set-setup",
+  async (
+    _e,
+    args: { partial: Partial<SetupConfig> },
+  ): Promise<SetupConfig> => {
+    return withConfigLock(async () => {
+      const config = await loadConfig();
+      config.setup = withSetupDefaults({ ...config.setup, ...args.partial });
+      await saveConfig(config);
+      return config.setup;
+    });
+  },
+);
+
+ipcMain.handle(
+  "validate-library-path",
+  (_e, args: { path: string }) => validateLibraryPath(args.path),
+);
+
+ipcMain.handle(
+  "scan-existing-skills",
+  (_e, args: { rootPath: string }) => scanForExistingSkills(args.rootPath),
+);
+
+ipcMain.handle(
+  "resolve-library-root",
+  (_e, args: { root: LibraryRoot; customPath: string | null }) =>
+    resolveLibraryRoot(args.root, args.customPath),
+);
+
+ipcMain.handle("complete-setup", (_e, args: CompleteSetupArgs) =>
+  completeSetup(args),
+);
 
 ipcMain.handle("list-agents", () =>
   getSupportedAgents().map((a) => ({

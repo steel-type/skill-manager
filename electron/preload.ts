@@ -50,6 +50,33 @@ function withLogChannel<T>(
 const api = {
   envInfo: () => ipcRenderer.invoke("env-info") as Promise<EnvInfo>,
 
+  // ── Setup / first-run ─────────────────────────────────────────────────
+  getSetup: () =>
+    ipcRenderer.invoke("get-setup") as Promise<import("./services/types").SetupConfig>,
+  setSetup: (partial: Partial<import("./services/types").SetupConfig>) =>
+    ipcRenderer.invoke("set-setup", { partial }) as Promise<
+      import("./services/types").SetupConfig
+    >,
+  validateLibraryPath: (p: string) =>
+    ipcRenderer.invoke("validate-library-path", { path: p }) as Promise<
+      string | null
+    >,
+  scanForExistingSkills: (rootPath: string) =>
+    ipcRenderer.invoke("scan-existing-skills", { rootPath }) as Promise<
+      import("./services/setup").DetectedSkill[]
+    >,
+  resolveLibraryRoot: (
+    root: import("./services/types").LibraryRoot,
+    customPath: string | null,
+  ) =>
+    ipcRenderer.invoke("resolve-library-root", { root, customPath }) as Promise<
+      { libraryPath: string; historyPath: string }
+    >,
+  completeSetup: (args: import("./services/setup").CompleteSetupArgs) =>
+    ipcRenderer.invoke("complete-setup", args) as Promise<
+      import("./services/setup").CompleteSetupResult
+    >,
+
   listAgents: () =>
     ipcRenderer.invoke("list-agents") as Promise<
       {

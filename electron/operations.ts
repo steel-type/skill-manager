@@ -84,6 +84,32 @@ import {
 } from "./services/types";
 
 export async function bootstrap(): Promise<void> {
+  // Pull setup state first so we can configure runtime paths BEFORE any
+  // disk operations land in the wrong place. If setup is incomplete, skip
+  // ensureLibraryDir + reconcile — the SetupFlow will run completeSetup
+  // which handles directory creation explicitly.
+  const initialConfig = await loadConfig();
+  if (initialConfig.setup.completed) {
+    const { configurePaths } = await import("./services/paths");
+    try {
+      configurePaths({
+        libraryPath: initialConfig.setup.libraryPath,
+        historyPath: initialConfig.setup.historyPath,
+      });
+    } catch (err) {
+      // A bad setup state (e.g. blank paths somehow persisted) shouldn't
+      // brick boot. Fall through with default paths.
+      console.warn(
+        "[skill-manager] setup paths invalid; falling back to defaults:",
+        err,
+      );
+    }
+  } else {
+    // Pre-setup boot: don't touch disk. The renderer will show SetupFlow,
+    // which calls completeSetup and triggers a refresh.
+    return;
+  }
+
   await ensureLibraryDir();
   const config = await loadConfig();
   const reconciled = await reconcileConfig(config);
