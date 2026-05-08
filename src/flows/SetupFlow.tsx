@@ -58,7 +58,21 @@ export function SetupFlow() {
   const [selectedToImport, setSelectedToImport] = useState<Set<string>>(
     new Set(),
   );
+  // JSON entries pulled from a skills.json the user picked. We don't
+  // clone these during setup — that's slow and can fail. Instead, after
+  // completeSetup the ImportFlow opens with these pre-loaded.
+  const [jsonEntries, setJsonEntries] = useState<
+    {
+      name: string;
+      url: string;
+      commit?: string | null;
+      description?: string;
+      alreadyInstalled: boolean;
+    }[]
+  >([]);
+  const [jsonSourcePath, setJsonSourcePath] = useState<string | null>(null);
   const [progress, setProgress] = useState<string[]>([]);
+  const setScreen = useAppStore((s) => s.setScreen);
 
   // Pre-setup theme picker. The Settings tab doesn't exist yet — give
   // the user immediate control over the appearance from the very first
@@ -191,6 +205,23 @@ export function SetupFlow() {
       await refreshProjects();
       await loadStacks();
       await loadStackDeployments();
+      // If the user picked a skills.json during setup, push them into
+      // ImportFlow with the entries pre-loaded so cloning starts on
+      // the main UI without further clicks.
+      if (jsonEntries.length > 0) {
+        setScreen({
+          kind: "import",
+          entries: jsonEntries.map((e) => ({
+            name: e.name,
+            url: e.url,
+            commit: e.commit ?? null,
+            description: e.description,
+            alreadyInstalled: e.alreadyInstalled,
+          })),
+          sourcePath: jsonSourcePath,
+          exportedAt: null,
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setStep("confirm");
@@ -299,6 +330,55 @@ export function SetupFlow() {
               selected={selectedToImport}
               setSelected={setSelectedToImport}
               libraryPath={resolvedPaths?.libraryPath ?? ""}
+              jsonEntries={jsonEntries}
+              jsonSourcePath={jsonSourcePath}
+              onScanFolder={async () => {
+                const picked = await window.api.pickFolder();
+                if (!picked) return;
+                try {
+                  const found =
+                    await window.api.scanForExistingSkills(picked);
+                  // Merge with existing detections; name-based dedupe
+                  // (last-wins so 'Scan another folder' overrides the
+                  // auto-detected entry of the same name).
+                  setDetectedSkills((prev) => {
+                    const byName = new Map(prev.map((d) => [d.name, d]));
+                    for (const f of found) byName.set(f.name, f);
+                    return Array.from(byName.values()).sort((a, b) =>
+                      a.name.localeCompare(b.name),
+                    );
+                  });
+                  setSelectedToImport((prev) => {
+                    const next = new Set(prev);
+                    for (const f of found) next.add(f.name);
+                    return next;
+                  });
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : String(err));
+                }
+              }}
+              onImportJson={async () => {
+                try {
+                  const picked = await window.api.readTextFile({
+                    filterName: "Skill manifest",
+                    extensions: ["json"],
+                  });
+                  if (!picked) return;
+                  const result = await window.api.parseImportJson(
+                    picked.content,
+                  );
+                  setJsonEntries(result.entries);
+                  setJsonSourcePath(picked.path ?? null);
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : String(err));
+                }
+              }}
+              onSkip={() => {
+                setSelectedToImport(new Set());
+                setJsonEntries([]);
+                setJsonSourcePath(null);
+                setStep("confirm");
+              }}
               onBack={() => setStep("primary")}
               onNext={() => setStep("confirm")}
             />
@@ -578,6 +658,11 @@ function ExistingStep({
   selected,
   setSelected,
   libraryPath,
+  jsonEntries,
+  jsonSourcePath,
+  onScanFolder,
+  onImportJson,
+  onSkip,
   onBack,
   onNext,
 }: {
@@ -586,6 +671,11 @@ function ExistingStep({
   selected: Set<string>;
   setSelected: (s: Set<string>) => void;
   libraryPath: string;
+  jsonEntries: { name: string; url: string }[];
+  jsonSourcePath: string | null;
+  onScanFolder: () => void;
+  onImportJson: () => void;
+  onSkip: () => void;
   onBack: () => void;
   onNext: () => void;
 }) {
@@ -664,6 +754,58 @@ function ExistingStep({
             ))}
           </div>
         </>
+      )}
+
+      {/* Add-more-sources buttons + skip. Always visible regardless of
+          whether the auto-scan found anything. */}
+      <div
+        style={{
+          marginTop: 14,
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 8,
+        }}
+      >
+        <button
+          type="button"
+          className="sk-btn sm ghost"
+          onClick={onScanFolder}
+        >
+          + Scan another folder…
+        </button>
+        <button
+          type="button"
+          className="sk-btn sm ghost"
+          onClick={onImportJson}
+        >
+          + Import skills.json…
+        </button>
+        <div style={{ flex: 1 }} />
+        <button
+          type="button"
+          className="sk-btn sm ghost"
+          onClick={onSkip}
+          title="Don't import anything during setup"
+        >
+          Skip imports
+        </button>
+      </div>
+      {jsonEntries.length > 0 && (
+        <div
+          style={{
+            marginTop: 10,
+            padding: 10,
+            background: "var(--paper-2)",
+            borderRadius: 6,
+            fontSize: 11,
+            fontFamily: "var(--mono)",
+            color: "var(--ink-soft)",
+          }}
+        >
+          {jsonEntries.length} skill{jsonEntries.length === 1 ? "" : "s"} from
+          JSON {jsonSourcePath ? `(${jsonSourcePath.split("/").pop()})` : ""}{" "}
+          will install after setup.
+        </div>
       )}
       <Footer onBack={onBack} onNext={onNext} canContinue={!loading} />
     </div>
