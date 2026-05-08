@@ -95,7 +95,6 @@ export function DeployView() {
   );
   const [picker, setPicker] = useState("");
   const [running, setRunning] = useState(false);
-  const [runMessages, setRunMessages] = useState<DeployRunMessage[]>([]);
 
   useEffect(() => {
     refreshSkills();
@@ -251,7 +250,7 @@ export function DeployView() {
               );
               messages.push({
                 level: "success",
-                text: `stack ${deployQueue.id} → ${tildify(projectPath)} (${r.deployMode}, ${agentId}, ${r.deployed.length}/${r.deployed.length + r.failed.length} members)`,
+                text: `stack ${deployQueue.id} → ${tildify(projectPath)} (${r.deployMode}, ${agentId}, ${r.deployed.length}/${r.deployed.length + r.failed.length} skills)`,
               });
               for (const f of r.failed) {
                 anyFailure = true;
@@ -275,7 +274,16 @@ export function DeployView() {
           }
         }
       }
-      setRunMessages(messages);
+      // Show the result as a real modal so it doesn't push the column
+      // layout around the way an inline card did.
+      if (messages.length > 0) {
+        openModal({
+          type: "deployResult",
+          itemKind: deployQueue.type,
+          itemId: deployQueue.id,
+          messages,
+        });
+      }
       await refreshSkills();
       await refreshProjects();
       await loadStackDeployments();
@@ -648,12 +656,40 @@ export function DeployView() {
                       <div
                         key={p}
                         style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
                           fontFamily: "var(--mono)",
                           fontSize: 11,
                           color: "var(--ink)",
                         }}
                       >
-                        {tildify(p)}
+                        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p}>
+                          {tildify(p)}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={`Remove ${p} from selection`}
+                          onClick={() =>
+                            setSelectedProjects((prev) => {
+                              const next = new Set(prev);
+                              next.delete(p);
+                              return next;
+                            })
+                          }
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: "var(--ink-faint)",
+                            cursor: "pointer",
+                            padding: "0 4px",
+                            fontSize: 14,
+                            lineHeight: 1,
+                          }}
+                          title="Remove this path"
+                        >
+                          ×
+                        </button>
                       </div>
                     ))}
                 </div>
@@ -716,64 +752,6 @@ export function DeployView() {
           {running ? "Deploying…" : "Deploy"}
         </button>
       </div>
-
-      {runMessages.length > 0 && (
-        <div
-          className="sk-box"
-          style={{
-            padding: 10,
-            display: "flex",
-            flexDirection: "column",
-            gap: 4,
-            background: "var(--paper)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <div className="rail-section" style={{ padding: 0, fontSize: 11 }}>
-              Last run
-            </div>
-            <button
-              type="button"
-              className="sk-btn sm ghost"
-              onClick={() => setRunMessages([])}
-            >
-              Dismiss
-            </button>
-          </div>
-          {runMessages.map((m, i) => (
-            <div
-              key={i}
-              style={{
-                fontSize: 11,
-                fontFamily: "var(--mono)",
-                color:
-                  m.level === "error"
-                    ? "var(--warn)"
-                    : m.level === "warn"
-                      ? "var(--warn)"
-                      : m.level === "success"
-                        ? "var(--good)"
-                        : "var(--ink-soft)",
-              }}
-            >
-              {m.level === "success"
-                ? "✓ "
-                : m.level === "error"
-                  ? "✗ "
-                  : m.level === "warn"
-                    ? "! "
-                    : ""}
-              {m.text}
-            </div>
-          ))}
-        </div>
-      )}
 
       <ActiveDeploymentsLedger
         projects={projects}

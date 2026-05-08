@@ -17,6 +17,7 @@ import { SkillDetailFlow } from "./flows/SkillDetailFlow";
 import { CreateStackFlow } from "./flows/CreateStackFlow";
 import { DeleteStackFlow } from "./flows/DeleteStackFlow";
 import { ConfirmModal } from "./components/ConfirmModal";
+import { DeployResultModal } from "./components/DeployResultModal";
 import { StackDetailFlow } from "./flows/StackDetailFlow";
 import { useAppStore } from "./state/store";
 
@@ -168,6 +169,7 @@ export default function App() {
         <DeleteStackFlow stackId={modal.stackId} />
       )}
       {modal?.type === "confirm" && <ConfirmModal />}
+      {modal?.type === "deployResult" && <DeployResultModal />}
 
       <CommandOverlay
         open={overlayOpen}

@@ -18,6 +18,11 @@ export type LibraryFilter =
   | "deployed";
 export type LibraryLayout = "cards" | "palette";
 
+export interface DeployResultMessage {
+  level: "info" | "warn" | "error" | "success";
+  text: string;
+}
+
 export type ModalState =
   | null
   | { type: "install"; prefillUrl?: string }
@@ -35,6 +40,15 @@ export type ModalState =
       cancelLabel?: string;
       destructive?: boolean;
       onConfirm: () => void | Promise<void>;
+    }
+  | {
+      // Outcome of a Deploy run. Replaces the inline 'Last run' card so the
+      // result doesn't push the column layout around when it appears.
+      type: "deployResult";
+      // What was being deployed: skill or stack id, or null for unknown.
+      itemKind: "skill" | "stack";
+      itemId: string;
+      messages: DeployResultMessage[];
     };
 
 /**
