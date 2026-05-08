@@ -1113,10 +1113,49 @@ function ActiveDeploymentsLedger({
     projectPath: string,
     agentId: string,
   ) => {
+    // Look up which members were deployed via this row + which are still
+    // claimed by another deployed stack (safe to keep).
+    const row = stackDeployments.find(
+      (d) =>
+        d.stackId === stackId &&
+        d.projectPath === projectPath &&
+        d.agentId === agentId,
+    );
+    const members = row?.includedSkillIds ?? [];
+    const stillOwnedByOther = members.filter((m) =>
+      stackDeployments.some(
+        (d) =>
+          !(d.stackId === stackId && d.agentId === agentId) &&
+          d.projectPath === projectPath &&
+          d.includedSkillIds.includes(m),
+      ),
+    );
+    const toRemove = members.filter(
+      (m) => !stillOwnedByOther.includes(m),
+    );
+    const bodyLines: string[] = [
+      `Remove the ${stackId} stack deployment from ${tildify(projectPath)}?`,
+      "",
+      "Will delete the meta-skill SKILL.md from the project.",
+    ];
+    if (toRemove.length > 0) {
+      bodyLines.push(
+        "",
+        `Will also remove ${toRemove.length} member file${toRemove.length === 1 ? "" : "s"} from the project:`,
+      );
+      for (const m of toRemove) bodyLines.push(`  · ${m}`);
+    }
+    if (stillOwnedByOther.length > 0) {
+      bodyLines.push(
+        "",
+        `Keeping ${stillOwnedByOther.length} member${stillOwnedByOther.length === 1 ? "" : "s"} (still claimed by another deployed stack at this project):`,
+      );
+      for (const m of stillOwnedByOther) bodyLines.push(`  · ${m}`);
+    }
     openModal({
       type: "confirm",
       title: `Remove ${stackId}?`,
-      body: `Remove the ${stackId} stack deployment from ${tildify(projectPath)}?\n\nThe meta-skill SKILL.md will be deleted from the project; member skill files stay on disk.`,
+      body: bodyLines.join("\n"),
       confirmLabel: "Remove",
       destructive: true,
       onConfirm: async () => {
@@ -1126,6 +1165,7 @@ function ActiveDeploymentsLedger({
             projectPath,
             agentId,
             true,
+            { cascadeMembers: true },
           );
           await loadStackDeployments();
           await refreshSkills();

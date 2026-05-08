@@ -49,6 +49,7 @@ import {
   deployStack,
   getStackDeployments,
   listStacks,
+  previewCompositionCascade,
   removeStackDeployment,
   updateStackComposition,
 } from "./services/stacks";
@@ -572,8 +573,23 @@ ipcMain.handle(
 
 ipcMain.handle(
   "update-stack-composition",
+  (
+    _e,
+    args: {
+      stackId: string;
+      skillIds: string[];
+      cascadeRemoveOrphans?: boolean;
+    },
+  ) =>
+    updateStackComposition(args.stackId, args.skillIds, {
+      cascadeRemoveOrphans: args.cascadeRemoveOrphans === true,
+    }),
+);
+
+ipcMain.handle(
+  "preview-composition-cascade",
   (_e, args: { stackId: string; skillIds: string[] }) =>
-    updateStackComposition(args.stackId, args.skillIds),
+    previewCompositionCascade(args.stackId, args.skillIds),
 );
 
 ipcMain.handle(
@@ -611,12 +627,11 @@ ipcMain.handle(
       projectPath: string;
       agentId: string;
       cleanup: boolean;
+      cascadeMembers?: boolean;
     },
   ) =>
-    removeStackDeployment(
-      args.stackId,
-      args.projectPath,
-      args.agentId,
-      args.cleanup,
-    ),
+    removeStackDeployment(args.stackId, args.projectPath, args.agentId, {
+      cleanup: args.cleanup,
+      cascadeMembers: args.cascadeMembers === true,
+    }),
 );

@@ -149,7 +149,14 @@ interface AppState {
   updateStackComposition: (
     stackId: string,
     skillIds: string[],
-  ) => Promise<void>;
+    opts?: { cascadeRemoveOrphans?: boolean },
+  ) => Promise<{
+    stack: SkillStack;
+    added: string[];
+    removed: string[];
+    cascadeRemoved: { skillId: string; projectPath: string; agentId: string }[];
+    cascadeSkipped: { skillId: string; projectPath: string; agentId: string; reason: string }[];
+  }>;
   deleteStack: (stackId: string, cleanup: boolean) => Promise<void>;
   setActiveStack: (stackId: string | null) => void;
   queueSkillForDeploy: (skillName: string) => void;
@@ -319,15 +326,25 @@ export const useAppStore = create<AppState>((set, get) => ({
     return stack;
   },
 
-  updateStackComposition: async (stackId, skillIds) => {
-    const result = await window.api.updateStackComposition(stackId, skillIds);
+  updateStackComposition: async (stackId, skillIds, opts) => {
+    const result = await window.api.updateStackComposition(
+      stackId,
+      skillIds,
+      opts,
+    );
     set((state) => ({
       stacks: state.stacks.map((s) =>
         s.id === stackId ? result.stack : s,
       ),
     }));
     // Refresh deployments since includedSkillIds and timestamp changed.
+    // If cascade removed any member files, the skill records changed too.
     await get().loadStackDeployments();
+    if (result.cascadeRemoved.length > 0) {
+      await get().refreshSkills();
+      await get().refreshProjects();
+    }
+    return result;
   },
 
   deleteStack: async (stackId, cleanup) => {

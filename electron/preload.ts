@@ -266,10 +266,15 @@ const api = {
       skillIds,
     }) as Promise<SkillStack>,
 
-  updateStackComposition: (stackId: string, skillIds: string[]) =>
+  updateStackComposition: (
+    stackId: string,
+    skillIds: string[],
+    opts?: { cascadeRemoveOrphans?: boolean },
+  ) =>
     ipcRenderer.invoke("update-stack-composition", {
       stackId,
       skillIds,
+      cascadeRemoveOrphans: opts?.cascadeRemoveOrphans === true,
     }) as Promise<{
       stack: SkillStack;
       added: string[];
@@ -281,6 +286,17 @@ const api = {
         addFailed: { skillId: string; error: string }[];
         metaSkillPath: string;
       }[];
+      cascadeRemoved: { skillId: string; projectPath: string; agentId: string }[];
+      cascadeSkipped: { skillId: string; projectPath: string; agentId: string; reason: string }[];
+    }>,
+
+  previewCompositionCascade: (stackId: string, skillIds: string[]) =>
+    ipcRenderer.invoke("preview-composition-cascade", {
+      stackId,
+      skillIds,
+    }) as Promise<{
+      toRemove: { skillId: string; projectPath: string; agentId: string }[];
+      toSkip: { skillId: string; projectPath: string; agentId: string; reason: string }[];
     }>,
 
   deleteStack: (stackId: string, cleanup: boolean) =>
@@ -318,13 +334,18 @@ const api = {
     projectPath: string,
     agentId: string,
     cleanup: boolean,
+    opts?: { cascadeMembers?: boolean },
   ) =>
     ipcRenderer.invoke("remove-stack-deployment", {
       stackId,
       projectPath,
       agentId,
       cleanup,
-    }) as Promise<void>,
+      cascadeMembers: opts?.cascadeMembers === true,
+    }) as Promise<{
+      cascadeRemoved: { skillId: string; projectPath: string; agentId: string }[];
+      cascadeSkipped: { skillId: string; projectPath: string; agentId: string; reason: string }[];
+    }>,
 };
 
 contextBridge.exposeInMainWorld("api", api);

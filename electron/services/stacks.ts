@@ -258,6 +258,78 @@ export interface UpdateStackCompositionResult {
     addFailed: { skillId: string; error: string }[];
     metaSkillPath: string;
   }[];
+  /** When `cascadeRemoveOrphans` was passed and removed members had files
+   *  deployed by this stack to projects, the cascade pass removed them
+   *  unless another deployed stack at the same project still claimed the
+   *  member. This array lists what was actually removed from disk. */
+  cascadeRemoved: { skillId: string; projectPath: string; agentId: string }[];
+  /** Removals that were SKIPPED because another deployed stack at the same
+   *  project still includes this member. Surfaced so the UI can explain why
+   *  some files were left behind. */
+  cascadeSkipped: { skillId: string; projectPath: string; agentId: string; reason: string }[];
+}
+
+export interface UpdateStackCompositionOptions {
+  /** When true, after composition is saved, remove the file deployments of
+   *  removed members from every project where this stack was deployed —
+   *  but only if no other deployed stack at that project still includes the
+   *  member. Default: false (legacy behavior, leaves orphan files). */
+  cascadeRemoveOrphans?: boolean;
+}
+
+/**
+ * Compute which (skillId, project, agent) tuples would be cascade-removed
+ * if `updateStackComposition(stackId, newSkillIds, { cascadeRemoveOrphans:
+ * true })` were run right now. Used by the UI to preview before commit.
+ *
+ * A tuple is INCLUDED iff: the member is in `removed`, the stack has an
+ * existing deployment at (project, agent), AND no other deployed stack at
+ * the same project includes the member.
+ */
+export async function previewCompositionCascade(
+  rawStackId: string,
+  rawNewSkillIds: string[],
+): Promise<{
+  toRemove: { skillId: string; projectPath: string; agentId: string }[];
+  toSkip: { skillId: string; projectPath: string; agentId: string; reason: string }[];
+}> {
+  const stackId = validateStackName(rawStackId);
+  const newSkillIds = rawNewSkillIds.map((s) => validateSkillName(s));
+  const config = await loadConfig();
+  const existing = config.stacks.find((s) => s.id === stackId);
+  if (!existing) return { toRemove: [], toSkip: [] };
+  const newSet = new Set(newSkillIds);
+  const removed = existing.skillIds.filter((id) => !newSet.has(id));
+  const deployments = config.stackDeployments.filter(
+    (d) => d.stackId === stackId,
+  );
+  const toRemove: { skillId: string; projectPath: string; agentId: string }[] = [];
+  const toSkip: { skillId: string; projectPath: string; agentId: string; reason: string }[] = [];
+  for (const skillId of removed) {
+    for (const dep of deployments) {
+      const ownedByOther = config.stackDeployments.some(
+        (d) =>
+          d.stackId !== stackId &&
+          d.projectPath === dep.projectPath &&
+          d.includedSkillIds.includes(skillId),
+      );
+      if (ownedByOther) {
+        toSkip.push({
+          skillId,
+          projectPath: dep.projectPath,
+          agentId: dep.agentId,
+          reason: "Still part of another deployed stack at this project",
+        });
+      } else {
+        toRemove.push({
+          skillId,
+          projectPath: dep.projectPath,
+          agentId: dep.agentId,
+        });
+      }
+    }
+  }
+  return { toRemove, toSkip };
 }
 
 /**
@@ -275,12 +347,14 @@ export interface UpdateStackCompositionResult {
 export async function updateStackComposition(
   rawStackId: string,
   rawNewSkillIds: string[],
+  opts: UpdateStackCompositionOptions = {},
 ): Promise<UpdateStackCompositionResult> {
   if (!Array.isArray(rawNewSkillIds)) {
     throw new Error("skillIds must be an array");
   }
   const stackId = validateStackName(rawStackId);
   const newSkillIds = rawNewSkillIds.map((s) => validateSkillName(s));
+  const cascade = opts.cascadeRemoveOrphans === true;
 
   // Snapshot config + member-skill descriptions outside the lock so the
   // long-running filesystem work below can run concurrently with other
@@ -402,7 +476,79 @@ export async function updateStackComposition(
     return updatedStack;
   });
 
-  return { stack: finalStack, added, removed, pushed };
+  // Cascade removal pass: opt-in. For each removed member, walk this
+  // stack's existing deployments and rm the file at the resolved agent
+  // path UNLESS another deployed stack at that project still includes
+  // the member. The skill's record.deployments entry is also dropped so
+  // the global deployment ledger stays in sync.
+  const cascadeRemoved: UpdateStackCompositionResult["cascadeRemoved"] = [];
+  const cascadeSkipped: UpdateStackCompositionResult["cascadeSkipped"] = [];
+  if (cascade && removed.length > 0 && deployments.length > 0) {
+    const reread = await loadConfig();
+    for (const skillId of removed) {
+      for (const dep of deployments) {
+        const ownedByOther = reread.stackDeployments.some(
+          (d) =>
+            d.stackId !== stackId &&
+            d.projectPath === dep.projectPath &&
+            d.includedSkillIds.includes(skillId),
+        );
+        if (ownedByOther) {
+          cascadeSkipped.push({
+            skillId,
+            projectPath: dep.projectPath,
+            agentId: dep.agentId,
+            reason: "Still part of another deployed stack at this project",
+          });
+          continue;
+        }
+        const agent = AGENTS[dep.agentId];
+        if (!agent) continue;
+        const resolved = resolveAgentPaths(dep.agentId, skillId, dep.projectPath);
+        const isSingleFile = /{name}/.test(agent.entryFile);
+        const target = isSingleFile
+          ? join(resolved.projectPath ?? "", resolved.entryFile)
+          : (resolved.projectPath ?? "");
+        if (!target) continue;
+        try {
+          await fs.rm(target, { recursive: true, force: true });
+          cascadeRemoved.push({
+            skillId,
+            projectPath: dep.projectPath,
+            agentId: dep.agentId,
+          });
+        } catch {
+          // Best-effort. The config update below still proceeds.
+        }
+      }
+    }
+    if (cascadeRemoved.length > 0) {
+      await withConfigLock(async () => {
+        const fresh = await loadConfig();
+        for (const entry of cascadeRemoved) {
+          const rec = fresh.skills[entry.skillId];
+          if (!rec) continue;
+          if (rec.deployments) {
+            rec.deployments = rec.deployments.filter(
+              (d) =>
+                !(d.projectPath === entry.projectPath &&
+                  d.agentId === entry.agentId),
+            );
+          }
+          // Drop the project from `projects[]` if no remaining deployments.
+          const stillDeployed = (rec.deployments ?? []).some(
+            (d) => d.projectPath === entry.projectPath,
+          );
+          if (!stillDeployed) {
+            rec.projects = rec.projects.filter((p) => p !== entry.projectPath);
+          }
+        }
+        await saveConfig(fresh);
+      });
+    }
+  }
+
+  return { stack: finalStack, added, removed, pushed, cascadeRemoved, cascadeSkipped };
 }
 
 /**
@@ -460,24 +606,94 @@ export interface DeployStackResult {
   warning: string | null;
 }
 
+export interface RemoveStackDeploymentOptions {
+  /** Remove the stack's meta-skill from the project. Default true to
+   *  match the legacy boolean signature when this flag is omitted. */
+  cleanup?: boolean;
+  /** Also rm each member skill file deployed by this stack at this
+   *  project. Members owned by another deployed stack at the same project
+   *  are skipped. Default false. */
+  cascadeMembers?: boolean;
+}
+
+export interface RemoveStackDeploymentResult {
+  cascadeRemoved: { skillId: string; projectPath: string; agentId: string }[];
+  cascadeSkipped: { skillId: string; projectPath: string; agentId: string; reason: string }[];
+}
+
 /** Drop a single (stack, project, agent) deployment. Mirrors
  *  {@link deleteStack} with `cleanup`, but scoped to one row — used by
- *  the Deploy tab's per-row Remove. */
+ *  the Deploy tab's per-row Remove. The third positional argument was
+ *  historically a boolean `cleanup`; now an options object is preferred
+ *  (the boolean form is still accepted for back-compat). */
 export async function removeStackDeployment(
   rawStackId: string,
   rawProjectPath: string,
   rawAgentId: string,
-  cleanup: boolean,
-): Promise<void> {
+  cleanupOrOpts: boolean | RemoveStackDeploymentOptions,
+): Promise<RemoveStackDeploymentResult> {
   const stackId = validateStackName(rawStackId);
   const projectPath = validateProjectPath(rawProjectPath);
   if (!AGENTS[rawAgentId]) throw new Error(`Unknown agent: ${rawAgentId}`);
+  const opts: RemoveStackDeploymentOptions =
+    typeof cleanupOrOpts === "boolean"
+      ? { cleanup: cleanupOrOpts }
+      : cleanupOrOpts;
+  const cleanup = opts.cleanup !== false;
+  const cascadeMembers = opts.cascadeMembers === true;
 
   if (cleanup) {
     try {
       await removeMetaSkillFromProject(stackId, projectPath, rawAgentId);
     } catch {
       // Best-effort cleanup — same rationale as deleteStack.
+    }
+  }
+
+  // Capture the snapshot BEFORE we strip this stack's row from config so
+  // we know which members the row claimed.
+  const cascadeRemoved: RemoveStackDeploymentResult["cascadeRemoved"] = [];
+  const cascadeSkipped: RemoveStackDeploymentResult["cascadeSkipped"] = [];
+  if (cascadeMembers) {
+    const snapshot = await loadConfig();
+    const row = snapshot.stackDeployments.find(
+      (d) =>
+        d.stackId === stackId &&
+        d.projectPath === projectPath &&
+        d.agentId === rawAgentId,
+    );
+    if (row) {
+      for (const skillId of row.includedSkillIds) {
+        const ownedByOther = snapshot.stackDeployments.some(
+          (d) =>
+            !(d.stackId === stackId && d.agentId === rawAgentId) &&
+            d.projectPath === projectPath &&
+            d.includedSkillIds.includes(skillId),
+        );
+        if (ownedByOther) {
+          cascadeSkipped.push({
+            skillId,
+            projectPath,
+            agentId: rawAgentId,
+            reason: "Still part of another deployed stack at this project",
+          });
+          continue;
+        }
+        const agent = AGENTS[rawAgentId];
+        if (!agent) continue;
+        const resolved = resolveAgentPaths(rawAgentId, skillId, projectPath);
+        const isSingleFile = /{name}/.test(agent.entryFile);
+        const target = isSingleFile
+          ? join(resolved.projectPath ?? "", resolved.entryFile)
+          : (resolved.projectPath ?? "");
+        if (!target) continue;
+        try {
+          await fs.rm(target, { recursive: true, force: true });
+          cascadeRemoved.push({ skillId, projectPath, agentId: rawAgentId });
+        } catch {
+          // Best-effort.
+        }
+      }
     }
   }
 
@@ -491,8 +707,29 @@ export async function removeStackDeployment(
           d.agentId === rawAgentId
         ),
     );
+    if (cascadeMembers) {
+      for (const entry of cascadeRemoved) {
+        const rec = fresh.skills[entry.skillId];
+        if (!rec) continue;
+        if (rec.deployments) {
+          rec.deployments = rec.deployments.filter(
+            (d) =>
+              !(d.projectPath === entry.projectPath &&
+                d.agentId === entry.agentId),
+          );
+        }
+        const stillDeployed = (rec.deployments ?? []).some(
+          (d) => d.projectPath === entry.projectPath,
+        );
+        if (!stillDeployed) {
+          rec.projects = rec.projects.filter((p) => p !== entry.projectPath);
+        }
+      }
+    }
     await saveConfig(fresh);
   });
+
+  return { cascadeRemoved, cascadeSkipped };
 }
 
 export async function deployStack(

@@ -28,8 +28,10 @@ import {
   deployStack,
   generateMetaSkill,
   listStacks,
+  previewCompositionCascade,
   removeMetaSkillFromLibrary,
   removeMetaSkillFromProject,
+  removeStackDeployment,
   updateStackComposition,
   writeMetaSkillToLibrary,
   writeMetaSkillToProject,
@@ -813,5 +815,284 @@ describe("updateStackComposition — library refresh", () => {
     await updateStackComposition(stack.id, ["alpha", "beta"]);
     const after = await fs.readFile(libPath, "utf8");
     expect(after).toMatch(/- alpha\n- beta/);
+  });
+});
+
+// ── Cascade-on-shrink: composition changes can opt-in to cleaning up
+// member files at every project where this stack was deployed. ──────────
+
+describe("updateStackComposition cascadeRemoveOrphans", () => {
+  async function seedTwoMemberStackDeployedClaude() {
+    await writeSkill("alpha", { "SKILL.md": "alpha body" });
+    await writeSkill("beta", { "SKILL.md": "beta body" });
+    await saveConfig({
+      last_project: "",
+      skills: {
+        alpha: {
+          url: null,
+          commit: null,
+          installed_at: "2026-01-01T00:00:00Z",
+          updated_at: null,
+          projects: [],
+        },
+        beta: {
+          url: null,
+          commit: null,
+          installed_at: "2026-01-01T00:00:00Z",
+          updated_at: null,
+          projects: [],
+        },
+      },
+      settings: DEFAULT_SETTINGS,
+      stacks: [],
+      stackDeployments: [],
+    });
+    const stack = await createStack(
+      "Demo",
+      "Triggers when user says demo",
+      ["alpha", "beta"],
+    );
+    const project = await makeProject();
+    await deployStack(stack.id, project, "claude", "copy");
+    return { stack, project };
+  }
+
+  it("removes orphan files when cascadeRemoveOrphans is true", async () => {
+    const { stack, project } = await seedTwoMemberStackDeployedClaude();
+    try {
+      // Composition shrinks: drop beta.
+      const result = await updateStackComposition(stack.id, ["alpha"], {
+        cascadeRemoveOrphans: true,
+      });
+      expect(result.removed).toEqual(["beta"]);
+      expect(result.cascadeRemoved).toEqual([
+        { skillId: "beta", projectPath: project, agentId: "claude" },
+      ]);
+      // The beta file at the project should be gone.
+      await expect(
+        fs.access(join(project, ".claude", "skills", "beta")),
+      ).rejects.toThrow();
+      // Alpha is still there.
+      expect(
+        await fs.readFile(
+          join(project, ".claude", "skills", "alpha", "SKILL.md"),
+          "utf8",
+        ),
+      ).toBe("alpha body");
+      // beta's record.deployments dropped this project.
+      const config = await loadConfig();
+      const betaDeps = config.skills.beta?.deployments ?? [];
+      expect(betaDeps.find((d) => d.projectPath === project)).toBeUndefined();
+    } finally {
+      await fs.rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves orphan files when cascadeRemoveOrphans is false (legacy)", async () => {
+    const { stack, project } = await seedTwoMemberStackDeployedClaude();
+    try {
+      const result = await updateStackComposition(stack.id, ["alpha"]);
+      expect(result.cascadeRemoved).toEqual([]);
+      // beta file still on disk.
+      expect(
+        await fs.readFile(
+          join(project, ".claude", "skills", "beta", "SKILL.md"),
+          "utf8",
+        ),
+      ).toBe("beta body");
+    } finally {
+      await fs.rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("skips a member that's still owned by another deployed stack", async () => {
+    const { stack, project } = await seedTwoMemberStackDeployedClaude();
+    try {
+      // Create a SECOND stack that also includes beta and deploy it.
+      const second = await createStack(
+        "Second",
+        "Triggers when user says second",
+        ["beta"],
+      );
+      await deployStack(second.id, project, "claude", "copy");
+      // Now shrink the first stack to drop beta with cascade ON.
+      const result = await updateStackComposition(stack.id, ["alpha"], {
+        cascadeRemoveOrphans: true,
+      });
+      expect(result.cascadeRemoved).toEqual([]);
+      expect(result.cascadeSkipped).toEqual([
+        {
+          skillId: "beta",
+          projectPath: project,
+          agentId: "claude",
+          reason: "Still part of another deployed stack at this project",
+        },
+      ]);
+      // beta file is still there because the second stack claims it.
+      expect(
+        await fs.readFile(
+          join(project, ".claude", "skills", "beta", "SKILL.md"),
+          "utf8",
+        ),
+      ).toBe("beta body");
+    } finally {
+      await fs.rm(project, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("previewCompositionCascade", () => {
+  it("returns the same toRemove / toSkip lists that updateStackComposition would act on", async () => {
+    await writeSkill("alpha", { "SKILL.md": "a" });
+    await writeSkill("beta", { "SKILL.md": "b" });
+    await saveConfig({
+      last_project: "",
+      skills: {
+        alpha: {
+          url: null,
+          commit: null,
+          installed_at: "2026-01-01T00:00:00Z",
+          updated_at: null,
+          projects: [],
+        },
+        beta: {
+          url: null,
+          commit: null,
+          installed_at: "2026-01-01T00:00:00Z",
+          updated_at: null,
+          projects: [],
+        },
+      },
+      settings: DEFAULT_SETTINGS,
+      stacks: [],
+      stackDeployments: [],
+    });
+    const stack = await createStack("Demo", "Triggers when user demos", [
+      "alpha",
+      "beta",
+    ]);
+    const project = await makeProject();
+    try {
+      await deployStack(stack.id, project, "claude", "copy");
+      const preview = await previewCompositionCascade(stack.id, ["alpha"]);
+      expect(preview.toRemove).toEqual([
+        { skillId: "beta", projectPath: project, agentId: "claude" },
+      ]);
+      expect(preview.toSkip).toEqual([]);
+    } finally {
+      await fs.rm(project, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("removeStackDeployment cascadeMembers", () => {
+  it("removes the meta-skill plus member files when cascadeMembers is true", async () => {
+    await writeSkill("alpha", { "SKILL.md": "alpha body" });
+    await writeSkill("beta", { "SKILL.md": "beta body" });
+    await saveConfig({
+      last_project: "",
+      skills: {
+        alpha: {
+          url: null,
+          commit: null,
+          installed_at: "2026-01-01T00:00:00Z",
+          updated_at: null,
+          projects: [],
+        },
+        beta: {
+          url: null,
+          commit: null,
+          installed_at: "2026-01-01T00:00:00Z",
+          updated_at: null,
+          projects: [],
+        },
+      },
+      settings: DEFAULT_SETTINGS,
+      stacks: [],
+      stackDeployments: [],
+    });
+    const stack = await createStack("Demo", "Triggers when user demos", [
+      "alpha",
+      "beta",
+    ]);
+    const project = await makeProject();
+    try {
+      await deployStack(stack.id, project, "claude", "copy");
+      // Sanity: members are on disk.
+      expect(
+        await fs.readFile(
+          join(project, ".claude", "skills", "alpha", "SKILL.md"),
+          "utf8",
+        ),
+      ).toBe("alpha body");
+      const result = await removeStackDeployment(
+        stack.id,
+        project,
+        "claude",
+        { cleanup: true, cascadeMembers: true },
+      );
+      expect(result.cascadeRemoved.map((r) => r.skillId).sort()).toEqual([
+        "alpha",
+        "beta",
+      ]);
+      // Files gone.
+      await expect(
+        fs.access(join(project, ".claude", "skills", "alpha")),
+      ).rejects.toThrow();
+      await expect(
+        fs.access(join(project, ".claude", "skills", "beta")),
+      ).rejects.toThrow();
+      // Meta-skill gone.
+      await expect(
+        fs.access(join(project, ".claude", "skills", stack.id)),
+      ).rejects.toThrow();
+    } finally {
+      await fs.rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("legacy boolean signature still works (cleanup=true, no cascade)", async () => {
+    await writeSkill("alpha", { "SKILL.md": "alpha body" });
+    await saveConfig({
+      last_project: "",
+      skills: {
+        alpha: {
+          url: null,
+          commit: null,
+          installed_at: "2026-01-01T00:00:00Z",
+          updated_at: null,
+          projects: [],
+        },
+      },
+      settings: DEFAULT_SETTINGS,
+      stacks: [],
+      stackDeployments: [],
+    });
+    const stack = await createStack("Demo", "Triggers when user demos", [
+      "alpha",
+    ]);
+    const project = await makeProject();
+    try {
+      await deployStack(stack.id, project, "claude", "copy");
+      const result = await removeStackDeployment(
+        stack.id,
+        project,
+        "claude",
+        true,
+      );
+      expect(result.cascadeRemoved).toEqual([]);
+      // Meta-skill removed but alpha is still on disk (no cascade).
+      await expect(
+        fs.access(join(project, ".claude", "skills", stack.id)),
+      ).rejects.toThrow();
+      expect(
+        await fs.readFile(
+          join(project, ".claude", "skills", "alpha", "SKILL.md"),
+          "utf8",
+        ),
+      ).toBe("alpha body");
+    } finally {
+      await fs.rm(project, { recursive: true, force: true });
+    }
   });
 });

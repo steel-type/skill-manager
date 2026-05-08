@@ -26,6 +26,10 @@ function makeStackId(rawName: string): string {
     .slice(0, 64);
 }
 
+function tildify(p: string): string {
+  return p.replace(/^\/Users\/[^/]+/, "~");
+}
+
 export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
   const setScreen = useAppStore((s) => s.setScreen);
   const setActiveTab = useAppStore((s) => s.setActiveTab);
@@ -38,6 +42,8 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
   );
   const setError = useAppStore((s) => s.setError);
   const loadStacks = useAppStore((s) => s.loadStacks);
+  const openModal = useAppStore((s) => s.openModal);
+  const modal = useAppStore((s) => s.modal);
 
   const isEdit = !!editingStackId;
   const editing = useMemo(
@@ -53,6 +59,10 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
   const [running, setRunning] = useState(false);
   const idEdited = useRef(false);
   const [stackId, setStackId] = useState<string>(editing?.id ?? "");
+  // Set when the orphan-confirm modal is open and the user picks 'Keep
+  // files' (cancel). The effect below catches the modal close and finishes
+  // saving without cascade.
+  const [pendingNonCascadeSave, setPendingNonCascadeSave] = useState(false);
 
   // Auto-derive id from name on every keystroke unless the user has hand-
   // typed an id (no advanced disclosure exposed yet, but the toggle is
@@ -144,28 +154,96 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
     description.trim().length <= DESCRIPTION_MAX &&
     (isEdit || (idValid && !idCollision));
 
-  const onSubmit = async () => {
+  const finishEdit = async (cascadeRemoveOrphans: boolean) => {
+    if (!editingStackId) return;
     setRunning(true);
     try {
-      if (isEdit && editingStackId) {
-        await updateStackComposition(editingStackId, selected);
-        await loadStacks();
-        setScreen({ kind: "stackDetail", stackId: editingStackId });
-      } else {
-        const created = await createStack(
-          name.trim(),
-          description.trim(),
-          selected,
-        );
-        // Drop the user into the freshly-created stack's detail screen so
-        // they can deploy it or edit further without navigating back.
-        setScreen({ kind: "stackDetail", stackId: created.id });
-      }
+      await updateStackComposition(editingStackId, selected, {
+        cascadeRemoveOrphans,
+      });
+      await loadStacks();
+      setScreen({ kind: "stackDetail", stackId: editingStackId });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setRunning(false);
     }
   };
+
+  const onSubmit = async () => {
+    if (isEdit && editingStackId) {
+      // Compute the would-be cascade: members removed in this edit AND
+      // currently deployed by this stack at projects where no other stack
+      // claims them. If non-empty, ask the user whether to remove the
+      // orphan files; otherwise just save.
+      try {
+        const preview = await window.api.previewCompositionCascade(
+          editingStackId,
+          selected,
+        );
+        if (preview.toRemove.length > 0) {
+          openModal({
+            type: "confirm",
+            title: "Remove orphan member files?",
+            body:
+              `Removing ${preview.toRemove.length} member deployment` +
+              `${preview.toRemove.length === 1 ? "" : "s"} from disk:\n\n` +
+              preview.toRemove
+                .map(
+                  (t) =>
+                    `  ${t.skillId} → ${tildify(t.projectPath)} (${t.agentId})`,
+                )
+                .join("\n") +
+              (preview.toSkip.length > 0
+                ? `\n\nSkipping ${preview.toSkip.length} (still claimed by another deployed stack).`
+                : "") +
+              `\n\nClick Cancel to save composition without removing files.`,
+            confirmLabel: "Remove orphans",
+            cancelLabel: "Keep files",
+            destructive: true,
+            onConfirm: async () => {
+              await finishEdit(true);
+            },
+          });
+          // The 'Keep files' (cancel) path saves composition WITHOUT
+          // cascade. closeModal happens automatically after onConfirm. We
+          // need a parallel flow for cancel that still saves — drive it via
+          // a state flag.
+          setPendingNonCascadeSave(true);
+          return;
+        }
+      } catch (err) {
+        // Preview failure should NOT block save — fall through and save.
+        console.warn("Cascade preview failed; saving without cascade:", err);
+      }
+      await finishEdit(false);
+      return;
+    }
+
+    setRunning(true);
+    try {
+      const created = await createStack(
+        name.trim(),
+        description.trim(),
+        selected,
+      );
+      setScreen({ kind: "stackDetail", stackId: created.id });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setRunning(false);
+    }
+  };
+
+  // When the user clicks 'Keep files' (cancel) on the orphan-confirm
+  // modal, we still want to commit the composition change without the
+  // cascade. closeModal fires; this effect catches that and finishes the
+  // save.
+  useEffect(() => {
+    if (!pendingNonCascadeSave) return;
+    if (modal !== null) return; // Wait for the modal to close.
+    setPendingNonCascadeSave(false);
+    void finishEdit(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingNonCascadeSave, modal]);
 
   return (
     <ScreenShell
