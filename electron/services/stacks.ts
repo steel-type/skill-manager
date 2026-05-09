@@ -338,10 +338,33 @@ export async function createStack(
       throw new Error(`A stack with id '${id}' already exists`);
     }
     // Stack ids share a namespace with skill names in the library — refuse
-    // collisions so writeMetaSkillToLibrary can never clobber a real skill.
+    // collisions so writeMetaSkillToLibrary can never clobber a real
+    // skill. Belt-and-suspenders: check both the config record AND the
+    // disk. Manual installs (or migrations) may produce a library dir
+    // without a config.skills entry; we still must not overwrite it.
     if (config.skills[id]) {
       throw new Error(
         `Cannot create stack '${id}': a skill with that name already exists in the library`,
+      );
+    }
+    let diskHasName = false;
+    try {
+      await fs.access(join(getLibraryPath(), id));
+      diskHasName = true;
+    } catch (err) {
+      if (
+        err &&
+        typeof err === "object" &&
+        "code" in err &&
+        (err as NodeJS.ErrnoException).code !== "ENOENT"
+      ) {
+        throw err;
+      }
+      // ENOENT — name is free on disk.
+    }
+    if (diskHasName) {
+      throw new Error(
+        `Cannot create stack '${id}': a directory already exists at ${join(getLibraryPath(), id)} — refusing to overwrite`,
       );
     }
     // Make sure each member skill is in the library — otherwise we'd happily
