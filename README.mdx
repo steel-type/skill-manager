@@ -245,12 +245,10 @@ The dark theme inherits all radii, shadows, and the wireframe shape language fro
 ## Test
 
 ```bash
-npm test            # vitest run — validators, parsers, IPC, stack collisions
-npm run typecheck   # both renderer (src/) and main (electron/) projects
-npm run lint:theme  # check-theme-tokens — flag hardcoded colors
+npm test            # vitest
+npm run typecheck   # tsc
+npm run lint:theme  # flag hardcoded colors
 ```
-
-The test suite focuses on security-critical code: input validators (URL, skill name, stack name, project path, commit token), the YAML frontmatter parser (with a 5 MB-file stress test), markdown export/import round-trip, and stack-id collision against on-disk orphans.
 
 ---
 
