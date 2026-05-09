@@ -15,6 +15,13 @@ interface ScreenShellProps {
   /** Inline content rendered to the right of the title — useful for
    *  per-screen actions (e.g. a "Refresh" button on a detail view). */
   rightSlot?: ReactNode;
+  /** Sticky footer rendered below `children` with a dashed top border
+   *  and the same vertical padding as the LeftRail's theme dock. Used
+   *  for primary action rows (Send to Deploy, Update N, Import N, etc)
+   *  so they stay reachable regardless of how far the user scrolls.
+   *  Pair with a `flex: 1; overflow: auto` content wrapper around the
+   *  scrolling region inside `children`. */
+  footerSlot?: ReactNode;
   children: ReactNode;
 }
 
@@ -23,6 +30,7 @@ export function ScreenShell({
   onBack,
   backDisabledReason,
   rightSlot,
+  footerSlot,
   children,
 }: ScreenShellProps) {
   return (
@@ -67,6 +75,22 @@ export function ScreenShell({
         {rightSlot}
       </div>
       {children}
+      {footerSlot && (
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            flexWrap: "wrap",
+            alignItems: "center",
+            flexShrink: 0,
+            padding: "12px 18px",
+            borderTop: "1px dashed var(--line-soft)",
+            background: "var(--paper)",
+          }}
+        >
+          {footerSlot}
+        </div>
+      )}
     </div>
   );
 }

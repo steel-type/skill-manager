@@ -59,6 +59,14 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
   const [running, setRunning] = useState(false);
   const idEdited = useRef(false);
   const [stackId, setStackId] = useState<string>(editing?.id ?? "");
+  // On create, default-on "also deploy to home library" so users don't
+  // miss the global path. On edit, mirror the current state of the stack.
+  const deployStackToHomeLibrary = useAppStore(
+    (s) => s.deployStackToHomeLibrary,
+  );
+  const [alsoDeployToHomeLibrary, setAlsoDeployToHomeLibrary] = useState(
+    editing?.inHomeLibrary !== false,
+  );
   // Set when the orphan-confirm modal is open and the user picks 'Keep
   // files' (cancel). The effect below catches the modal close and finishes
   // saving without cascade.
@@ -226,6 +234,17 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
         description.trim(),
         selected,
       );
+      // Honor the "also deploy to home library" checkbox so users don't
+      // have to click through to the detail screen and find the action.
+      if (alsoDeployToHomeLibrary) {
+        try {
+          await deployStackToHomeLibrary(created.id);
+        } catch (err) {
+          // Non-fatal: stack got created, just home-library wiring failed.
+          // Surface the warning but continue to the detail screen.
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      }
       setScreen({ kind: "stackDetail", stackId: created.id });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -245,30 +264,61 @@ export function CreateStackFlow({ editingStackId }: CreateStackFlowProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingNonCascadeSave, modal]);
 
+  // Create-mode footer carries the home-library checkbox + the primary
+  // submit. Putting them together gives the user one obvious place to
+  // commit the stack and decide whether it's also deployed to the
+  // home library — matches the StackDetail footer convention.
+  const createFooter = (
+    <>
+      {!isEdit && (
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            fontSize: 12,
+            color: "var(--ink-soft)",
+            cursor: "pointer",
+          }}
+          title="Wires the stack into your primary agent's global skills dir so it's invokable from any project"
+        >
+          <input
+            type="checkbox"
+            checked={alsoDeployToHomeLibrary}
+            onChange={(e) => setAlsoDeployToHomeLibrary(e.target.checked)}
+          />
+          Also add to home library
+        </label>
+      )}
+      <div style={{ flex: 1 }} />
+      <button
+        className="sk-btn"
+        disabled={!canSubmit}
+        onClick={onSubmit}
+        style={{
+          background: canSubmit ? "var(--accent)" : "var(--paper-2)",
+          color: canSubmit ? "var(--on-accent)" : "var(--ink-faint)",
+          borderColor: canSubmit ? "var(--accent)" : "var(--line-soft)",
+        }}
+      >
+        {running
+          ? isEdit
+            ? "Saving…"
+            : "Creating…"
+          : isEdit
+            ? "Save changes"
+            : alsoDeployToHomeLibrary
+              ? "Create + add to home library"
+              : "Create stack"}
+      </button>
+    </>
+  );
+
   return (
     <ScreenShell
       title={isEdit ? `Edit ${editing?.name ?? "stack"}` : "New stack"}
       onBack={goBack}
-      rightSlot={
-        <button
-          className="sk-btn"
-          disabled={!canSubmit}
-          onClick={onSubmit}
-          style={{
-            background: canSubmit ? "var(--accent)" : "var(--paper-2)",
-            color: canSubmit ? "var(--on-accent)" : "var(--ink-faint)",
-            borderColor: canSubmit ? "var(--accent)" : "var(--line-soft)",
-          }}
-        >
-          {running
-            ? isEdit
-              ? "Saving…"
-              : "Creating…"
-            : isEdit
-              ? "Save changes"
-              : "Create stack"}
-        </button>
-      }
+      footerSlot={createFooter}
     >
       <div
         style={{

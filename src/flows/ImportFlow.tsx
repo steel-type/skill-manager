@@ -250,7 +250,7 @@ export function ImportFlow({ entries, sourcePath, exportedAt }: ImportFlowProps)
           gap: 10,
           flex: 1,
           minHeight: 0,
-          overflow: "auto",
+          overflow: "hidden",
         }}
       >
         {step === "review" && (

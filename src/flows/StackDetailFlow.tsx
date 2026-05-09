@@ -49,6 +49,13 @@ export function StackDetailFlow({ stackId }: StackDetailFlowProps) {
   const loadStackDeployments = useAppStore((s) => s.loadStackDeployments);
   const openModal = useAppStore((s) => s.openModal);
   const queueStackForDeploy = useAppStore((s) => s.queueStackForDeploy);
+  const deployStackToHomeLibrary = useAppStore(
+    (s) => s.deployStackToHomeLibrary,
+  );
+  const removeStackFromHomeLibrary = useAppStore(
+    (s) => s.removeStackFromHomeLibrary,
+  );
+  const setError = useAppStore((s) => s.setError);
 
   useEffect(() => {
     loadStacks();
@@ -90,8 +97,88 @@ export function StackDetailFlow({ stackId }: StackDetailFlowProps) {
     );
   }
 
+  // Pre-flight: nudge users to put a stack in their home library before
+  // deploying it to a project. Skipping is fine; we just want them to
+  // make a deliberate call rather than silently miss the global path.
+  const onSendToDeployClick = () => {
+    if (stack.inHomeLibrary) {
+      queueStackForDeploy(stack.id);
+      return;
+    }
+    openModal({
+      type: "confirm",
+      title: "Deploy without placing in home library?",
+      body:
+        "Stacks in the home library are discoverable by your primary agent from any project automatically. We recommend placing this stack in the home library before deploying to a specific project — you can do both.",
+      confirmLabel: "Place in home library + continue",
+      cancelLabel: "Skip — go to Deploy",
+      onConfirm: async () => {
+        await deployStackToHomeLibrary(stack.id);
+        queueStackForDeploy(stack.id);
+      },
+      onCancel: () => {
+        queueStackForDeploy(stack.id);
+      },
+    });
+  };
+
+  const footer = (
+    <>
+      <button
+        className="sk-btn ghost"
+        onClick={() => openModal({ type: "deleteStack", stackId: stack.id })}
+        style={{ color: "var(--warn)", borderColor: "var(--warn)" }}
+      >
+        Delete stack
+      </button>
+      <div style={{ flex: 1 }} />
+      <button
+        className="sk-btn ghost"
+        onClick={() => setScreen({ kind: "editStack", stackId: stack.id })}
+      >
+        Edit composition
+      </button>
+      {stack.inHomeLibrary ? (
+        <button
+          className="sk-btn ghost"
+          onClick={() =>
+            removeStackFromHomeLibrary(stack.id).catch((err) =>
+              setError(err instanceof Error ? err.message : String(err)),
+            )
+          }
+          title="Remove from primary agent's global skills dir + flip the Library flag"
+        >
+          Remove from home library
+        </button>
+      ) : (
+        <button
+          className="sk-btn"
+          onClick={() =>
+            deployStackToHomeLibrary(stack.id).catch((err) =>
+              setError(err instanceof Error ? err.message : String(err)),
+            )
+          }
+          title="Wire this stack into your primary agent's global skills so it works in any project"
+        >
+          Add to home library
+        </button>
+      )}
+      <button
+        className="sk-btn"
+        onClick={onSendToDeployClick}
+        style={{
+          background: "var(--accent)",
+          color: "var(--on-accent)",
+          borderColor: "var(--accent)",
+        }}
+      >
+        Send to Deploy
+      </button>
+    </>
+  );
+
   return (
-    <ScreenShell title={stack.name} onBack={goBack}>
+    <ScreenShell title={stack.name} onBack={goBack} footerSlot={footer}>
       <div
         style={{
           flex: 1,
@@ -171,20 +258,9 @@ export function StackDetailFlow({ stackId }: StackDetailFlowProps) {
           </div>
         </div>
 
-        {/* Skills */}
-        <Section
-          title={`Skills · ${stack.skillIds.length}`}
-          rightSlot={
-            <button
-              className="sk-btn sm ghost"
-              onClick={() =>
-                setScreen({ kind: "editStack", stackId: stack.id })
-              }
-            >
-              Edit composition
-            </button>
-          }
-        >
+        {/* Skills — Edit composition lives in the sticky footer below
+            so we don't repeat the action here. */}
+        <Section title={`Skills · ${stack.skillIds.length}`}>
           {stack.skillIds.length === 0 ? (
             <div
               style={{
@@ -360,40 +436,6 @@ export function StackDetailFlow({ stackId }: StackDetailFlowProps) {
           )}
         </Section>
 
-        <div style={{ flex: 1 }} />
-
-        {/* Actions */}
-        <div style={{ display: "flex", gap: 6 }}>
-          <button
-            className="sk-btn ghost"
-            onClick={() =>
-              openModal({ type: "deleteStack", stackId: stack.id })
-            }
-            style={{ color: "var(--warn)", borderColor: "var(--warn)" }}
-          >
-            Delete stack
-          </button>
-          <div style={{ flex: 1 }} />
-          <button
-            className="sk-btn ghost"
-            onClick={() =>
-              setScreen({ kind: "editStack", stackId: stack.id })
-            }
-          >
-            Edit composition
-          </button>
-          <button
-            className="sk-btn"
-            onClick={() => queueStackForDeploy(stack.id)}
-            style={{
-              background: "var(--accent)",
-              color: "var(--on-accent)",
-              borderColor: "var(--accent)",
-            }}
-          >
-            Send to Deploy
-          </button>
-        </div>
       </div>
     </ScreenShell>
   );

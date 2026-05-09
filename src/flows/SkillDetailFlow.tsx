@@ -152,12 +152,36 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
     openModal({ type: "rollback", name: skill.name });
   };
 
+  const footer = (
+    <>
+      <button className="sk-btn ghost" onClick={handleBrowse}>
+        Browse files
+      </button>
+      {!skill.isLocal && (
+        <button className="sk-btn ghost" onClick={handleUpdate}>
+          Update from GitHub
+        </button>
+      )}
+      <div style={{ flex: 1 }} />
+      <button className="sk-btn primary" onClick={handleDeploy}>
+        Send to Deploy
+      </button>
+      <button className="sk-btn" onClick={goBack}>
+        Back to library
+      </button>
+    </>
+  );
+
   return (
-    <ScreenShell title={skill.displayName} onBack={goBack}>
-      {/* Three-region layout: sticky upper (header → metadata → Files
-          header), scrolling middle (just the tree), sticky bottom
-          (action buttons). Keeps key context visible regardless of
-          tree depth. */}
+    <ScreenShell
+      title={skill.displayName}
+      onBack={goBack}
+      footerSlot={footer}
+    >
+      {/* Three-region body: sticky-upper (header + metadata + Files
+          line) above a scrolling tree. The action footer comes from
+          ScreenShell's footerSlot so it stays anchored at the bottom
+          edge alongside the LeftRail's theme-dock dashed line. */}
       <div
         style={{
           flex: 1,
@@ -517,34 +541,6 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
           </>
         )}
 
-      </div>
-      {/* ── Sticky bottom: action buttons always reachable ── */}
-      <div
-        style={{
-          display: "flex",
-          gap: 6,
-          flexWrap: "wrap",
-          flexShrink: 0,
-          padding: "10px 18px",
-          borderTop: "1px solid var(--line-soft)",
-          background: "var(--paper)",
-        }}
-      >
-        <button className="sk-btn ghost" onClick={handleBrowse}>
-          Browse files
-        </button>
-        {!skill.isLocal && (
-          <button className="sk-btn ghost" onClick={handleUpdate}>
-            Update from GitHub
-          </button>
-        )}
-        <div style={{ flex: 1 }} />
-        <button className="sk-btn primary" onClick={handleDeploy}>
-          Send to Deploy
-        </button>
-        <button className="sk-btn" onClick={goBack}>
-          Back to library
-        </button>
       </div>
       </div>
     </ScreenShell>

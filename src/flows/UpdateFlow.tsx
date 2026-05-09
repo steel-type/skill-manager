@@ -227,7 +227,7 @@ export function UpdateFlow({ prefillName }: UpdateFlowProps = {}) {
           gap: 10,
           flex: 1,
           minHeight: 0,
-          overflow: "auto",
+          overflow: "hidden",
         }}
       >
         {step === "review" && (

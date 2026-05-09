@@ -27,6 +27,26 @@ export function ConfirmModal() {
     }
   };
 
+  // When the modal carries an onCancel, the cancel button is a SECOND
+  // action rather than a "back out" — wire it through the same
+  // running/error guards as confirm.
+  const onCancelButton = async () => {
+    if (running) return;
+    if (!modal.onCancel) {
+      closeModal();
+      return;
+    }
+    setRunning(true);
+    try {
+      await modal.onCancel();
+      closeModal();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRunning(false);
+    }
+  };
+
   return (
     <Modal open title={modal.title} width={400} onClose={closeModal}>
       <div
@@ -46,7 +66,7 @@ export function ConfirmModal() {
           <button
             type="button"
             className="sk-btn ghost"
-            onClick={closeModal}
+            onClick={onCancelButton}
             disabled={running}
           >
             {modal.cancelLabel ?? "Cancel"}

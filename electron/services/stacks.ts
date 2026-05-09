@@ -723,6 +723,31 @@ export async function deleteStack(
     (d) => d.stackId === stackId,
   );
 
+  // Home-library wiring (agent-dir symlinks/copies) and the library
+  // meta-skill ALWAYS get torn down on delete, regardless of the
+  // `cleanup` flag. The `cleanup` flag is about per-project deployments
+  // (which can be many and slow to clean); home-library is one place
+  // and leaving it around causes the meta-skill dir to surface in
+  // listSkills as an orphan after the stack record is gone.
+  const stackEntry = config.stacks.find((s) => s.id === stackId);
+  for (const agentId of stackEntry?.homeLibraryAgents ?? []) {
+    const agentSkillsDir = getAgentSkillsDir(agentId);
+    if (!agentSkillsDir) continue;
+    try {
+      await fs.rm(join(agentSkillsDir, stackId), {
+        recursive: true,
+        force: true,
+      });
+    } catch {
+      // best-effort
+    }
+  }
+  try {
+    await removeMetaSkillFromLibrary(stackId);
+  } catch {
+    // Best-effort.
+  }
+
   if (cleanup) {
     for (const dep of deployments) {
       try {
@@ -731,29 +756,6 @@ export async function deleteStack(
         // Best-effort cleanup — a project that's been moved or deleted
         // shouldn't block removing the stack from config.
       }
-    }
-    // Tear down any home-library wiring (agent-dir symlink/copy) before
-    // dropping the meta-skill from the library. Best-effort — orphaned
-    // symlinks won't block deletion.
-    const stackEntry = config.stacks.find((s) => s.id === stackId);
-    for (const agentId of stackEntry?.homeLibraryAgents ?? []) {
-      const agentSkillsDir = getAgentSkillsDir(agentId);
-      if (!agentSkillsDir) continue;
-      try {
-        await fs.rm(join(agentSkillsDir, stackId), {
-          recursive: true,
-          force: true,
-        });
-      } catch {
-        // best-effort
-      }
-    }
-    // Also remove the library staging directory so the stack is fully gone
-    // from disk and won't show up under reconcile/listSkills filtering.
-    try {
-      await removeMetaSkillFromLibrary(stackId);
-    } catch {
-      // Best-effort.
     }
   }
 

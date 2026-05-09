@@ -42,6 +42,11 @@ export type ModalState =
       cancelLabel?: string;
       destructive?: boolean;
       onConfirm: () => void | Promise<void>;
+      /** Optional. When provided, the cancel button runs this action
+       *  (instead of just closing the modal). Lets a confirm dialog act
+       *  as a two-action chooser — e.g., "Place in home library" /
+       *  "Skip — proceed anyway". */
+      onCancel?: () => void | Promise<void>;
     }
   | {
       // Outcome of a Deploy run. Replaces the inline 'Last run' card so the
