@@ -183,6 +183,69 @@ describe("scanForExistingSkills", () => {
     expect(result[0].viaContainer).toBeUndefined();
   });
 
+  it("tags content-only folders as 'package' with marker reason", async () => {
+    const root = join(dirname(CONFIG_PATH), "scan-package");
+    // awesome-claude-code shape: scripts/ + data/, no SKILL.md.
+    await fs.mkdir(join(root, "awesome-claude-code", "scripts"), {
+      recursive: true,
+    });
+    await fs.mkdir(join(root, "awesome-claude-code", "data"), {
+      recursive: true,
+    });
+    // get-shit-done shape: commands/ + agents/ + hooks/.
+    await fs.mkdir(join(root, "get-shit-done", "commands"), {
+      recursive: true,
+    });
+    await fs.mkdir(join(root, "get-shit-done", "agents"), {
+      recursive: true,
+    });
+    await fs.mkdir(join(root, "get-shit-done", "hooks"), {
+      recursive: true,
+    });
+    // n8n-mcp shape: package.json + CLAUDE.md.
+    await fs.mkdir(join(root, "n8n-mcp"), { recursive: true });
+    await fs.writeFile(join(root, "n8n-mcp", "package.json"), "{}");
+    await fs.writeFile(join(root, "n8n-mcp", "CLAUDE.md"), "docs");
+    // empty-junk shape: no markers at all → should NOT be picked up.
+    await fs.mkdir(join(root, "empty-junk"), { recursive: true });
+    await fs.writeFile(join(root, "empty-junk", "notes.txt"), "x");
+    // skill-with-id: should land as skill not package.
+    await fs.mkdir(join(root, "real-skill"), { recursive: true });
+    await fs.writeFile(join(root, "real-skill", "SKILL.md"), "y");
+
+    const result = await scanForExistingSkills(root);
+    const byName = Object.fromEntries(result.map((r) => [r.name, r]));
+    expect(Object.keys(byName).sort()).toEqual([
+      "awesome-claude-code",
+      "get-shit-done",
+      "n8n-mcp",
+      "real-skill",
+    ]);
+    expect(byName["real-skill"].kind).toBe("skill");
+    expect(byName["awesome-claude-code"].kind).toBe("package");
+    expect(byName["awesome-claude-code"].reason).toBe("scripts/, data/");
+    expect(byName["get-shit-done"].kind).toBe("package");
+    // hooks/ comes after agents/ in PACKAGE_DIR_MARKERS order, so
+    // first 3 are commands/, agents/, hooks/.
+    expect(byName["get-shit-done"].reason).toBe(
+      "commands/, agents/, hooks/",
+    );
+    expect(byName["n8n-mcp"].kind).toBe("package");
+    // n8n-mcp has no dir markers (only package.json + CLAUDE.md files).
+    expect(byName["n8n-mcp"].reason).toBe("package.json, CLAUDE.md");
+  });
+
+  it("packages also surface when descended into via skills/ container", async () => {
+    const root = join(dirname(CONFIG_PATH), "scan-package-via");
+    await fs.mkdir(join(root, "skills", "awesome", "scripts"), {
+      recursive: true,
+    });
+    const result = await scanForExistingSkills(root);
+    expect(result.map((s) => s.name)).toEqual(["awesome"]);
+    expect(result[0].kind).toBe("package");
+    expect(result[0].viaContainer).toBe("skills");
+  });
+
   it("dedupes by name when same skill appears at top level and inside container", async () => {
     const root = join(dirname(CONFIG_PATH), "scan-dedupe");
     await fs.mkdir(join(root, "alpha"), { recursive: true });

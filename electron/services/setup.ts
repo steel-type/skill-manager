@@ -12,14 +12,34 @@ import { detectSkillType } from "./skills";
 import { loadConfig, nowIso, saveConfig, withConfigLock } from "./config";
 import type { DeployMode, LibraryRoot, SetupConfig } from "./types";
 
+/**
+ * What the scanner thinks a candidate directory is.
+ *
+ * - "skill": root SKILL.md/AGENTS.md present. Canonical Anthropic skill.
+ * - "bundle": no root identifier, but contains nested skills (e.g. context7
+ *   ships several skills together).
+ * - "package": no root identifier, no nested skills, but the directory
+ *   *looks* substantive — has root content folders (scripts/data/commands/
+ *   resources/templates/agents/hooks/tools/bin/sdk), a package.json, a
+ *   Makefile, or a CLAUDE.md/GEMINI.md. Things like awesome-claude-code,
+ *   get-shit-done, and MCP servers fall here. We surface them so the user
+ *   can opt-in to bringing them along, but default-unchecked so we don't
+ *   blindly slurp every cloned repo.
+ */
+export type DetectedKind = "skill" | "bundle" | "package";
+
 export interface DetectedSkill {
   /** Skill name = directory basename. */
   name: string;
   /** Absolute path of the skill directory inside the scanned root. */
   path: string;
-  /** Has a SKILL.md / AGENTS.md and parses as a skill. */
+  kind: DetectedKind;
+  /** Short description of why we tagged it this way, shown as a chip in
+   *  the UI. Examples: "AGENTS.md", "scripts/, data/", "5 skills". */
+  reason: string;
+  /** Back-compat alias for `kind === "skill"`. */
   isSkill: boolean;
-  /** Bundle = directory containing nested skills. */
+  /** Back-compat alias for `kind === "bundle"`. */
   isBundle: boolean;
   /** Number of nested skills detected (when isBundle). */
   nestedCount: number;
@@ -77,6 +97,66 @@ const SCAN_EXCLUDE_NAMES = new Set([
  * legitimate multi-skill bundles like `context7/` or `n8n-skills/`.
  */
 const CONTAINER_DESCEND_NAMES = new Set(["skills", "library"]);
+
+/**
+ * Root markers that indicate a directory is a substantive "package" even
+ * if it isn't a skill in the SKILL.md sense. We use these to surface
+ * content-rich folders (awesome-claude-code, get-shit-done, MCP servers)
+ * as opt-in candidates during onboarding rather than silently skipping
+ * them.
+ */
+const PACKAGE_DIR_MARKERS = [
+  "scripts",
+  "data",
+  "commands",
+  "references",
+  "resources",
+  "templates",
+  "tools",
+  "agents",
+  "hooks",
+  "bin",
+  "sdk",
+] as const;
+const PACKAGE_FILE_MARKERS = [
+  "package.json",
+  "Makefile",
+  "CLAUDE.md",
+  "GEMINI.md",
+] as const;
+
+/**
+ * Probe a directory for package markers. Returns the human-readable list
+ * of markers found (used as the `reason` chip in the UI), or null if the
+ * directory has nothing that would make it useful to track.
+ */
+async function detectPackageMarkers(dir: string): Promise<string[]> {
+  const found: string[] = [];
+  // Cheap reads; bail early once we have something to show. We DON'T
+  // bail at first hit because the UI shows up to 3 markers — gives the
+  // user a sense of what's inside.
+  for (const m of PACKAGE_DIR_MARKERS) {
+    try {
+      const st = await fs.stat(join(dir, m));
+      if (st.isDirectory()) found.push(`${m}/`);
+    } catch {
+      // not present
+    }
+    if (found.length >= 3) break;
+  }
+  if (found.length < 3) {
+    for (const m of PACKAGE_FILE_MARKERS) {
+      try {
+        const st = await fs.stat(join(dir, m));
+        if (st.isFile()) found.push(m);
+      } catch {
+        // not present
+      }
+      if (found.length >= 3) break;
+    }
+  }
+  return found;
+}
 
 export interface ResolvedLibraryRoot {
   libraryPath: string;
@@ -239,9 +319,12 @@ export async function scanForExistingSkills(
     }
 
     if (detection.isSkill) {
+      const reason = detection.identifiers.join(", ") || "skill";
       found.set(entry.name, {
         name: entry.name,
         path: dir,
+        kind: "skill",
+        reason,
         isSkill: true,
         isBundle: detection.nested.length > 0,
         nestedCount: detection.nested.length,
@@ -250,13 +333,17 @@ export async function scanForExistingSkills(
     }
 
     if (
-      detection.isBundle &&
       CONTAINER_DESCEND_NAMES.has(entry.name) &&
       detection.identifiers.length === 0 &&
       detection.content.length === 0
     ) {
-      // Library container: descend one level. Apply the same exclusion
-      // and skill/bundle rules to its children, but DO NOT descend further.
+      // Library container: a folder named skills/library with no root
+      // identifier and no content folders is almost certainly a
+      // directory-of-skills (typically the bad-migration shape
+      // skills/skills/). Descend one level and classify each child;
+      // do NOT descend further. Note: we don't gate on isBundle here so
+      // packages-inside-containers (e.g. skills/awesome-claude-code)
+      // also surface.
       let childEntries: import("node:fs").Dirent[];
       try {
         childEntries = await fs.readdir(dir, { withFileTypes: true });
@@ -274,15 +361,45 @@ export async function scanForExistingSkills(
         } catch {
           continue;
         }
-        if (!childDetection.isSkill && !childDetection.isBundle) continue;
-        found.set(child.name, {
-          name: child.name,
-          path: childDir,
-          isSkill: childDetection.isSkill,
-          isBundle: childDetection.isBundle,
-          nestedCount: childDetection.nested.length,
-          viaContainer: entry.name,
-        });
+        if (childDetection.isSkill) {
+          found.set(child.name, {
+            name: child.name,
+            path: childDir,
+            kind: "skill",
+            reason: childDetection.identifiers.join(", ") || "skill",
+            isSkill: true,
+            isBundle: childDetection.nested.length > 0,
+            nestedCount: childDetection.nested.length,
+            viaContainer: entry.name,
+          });
+        } else if (childDetection.isBundle) {
+          found.set(child.name, {
+            name: child.name,
+            path: childDir,
+            kind: "bundle",
+            reason: `${childDetection.nested.length} skill${childDetection.nested.length === 1 ? "" : "s"}`,
+            isSkill: false,
+            isBundle: true,
+            nestedCount: childDetection.nested.length,
+            viaContainer: entry.name,
+          });
+        } else {
+          // Package check inside a container — same content/file probes as
+          // top-level so awesome-claude-code etc. surface even when nested.
+          const markers = await detectPackageMarkers(childDir);
+          if (markers.length > 0) {
+            found.set(child.name, {
+              name: child.name,
+              path: childDir,
+              kind: "package",
+              reason: markers.slice(0, 3).join(", "),
+              isSkill: false,
+              isBundle: false,
+              nestedCount: 0,
+              viaContainer: entry.name,
+            });
+          }
+        }
       }
       continue;
     }
@@ -291,9 +408,27 @@ export async function scanForExistingSkills(
       found.set(entry.name, {
         name: entry.name,
         path: dir,
+        kind: "bundle",
+        reason: `${detection.nested.length} skill${detection.nested.length === 1 ? "" : "s"}`,
         isSkill: false,
         isBundle: true,
         nestedCount: detection.nested.length,
+      });
+      continue;
+    }
+
+    // Not a skill, not a bundle — last chance: does it look like a
+    // substantive package the user might want anyway?
+    const markers = await detectPackageMarkers(dir);
+    if (markers.length > 0) {
+      found.set(entry.name, {
+        name: entry.name,
+        path: dir,
+        kind: "package",
+        reason: markers.slice(0, 3).join(", "),
+        isSkill: false,
+        isBundle: false,
+        nestedCount: 0,
       });
     }
   }

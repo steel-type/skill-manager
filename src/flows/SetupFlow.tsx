@@ -261,7 +261,14 @@ export function SetupFlow() {
         }
         if (cancelled) return;
         setDetectedSkills(found);
-        setSelectedToImport(new Set(found.map((s) => s.name)));
+        // Default-check skills + bundles, leave packages unticked. The
+        // user can opt them in via the "Check all" button on the
+        // Other-folders section, or per-row.
+        setSelectedToImport(
+          new Set(
+            found.filter((s) => s.kind !== "package").map((s) => s.name),
+          ),
+        );
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
@@ -488,7 +495,12 @@ export function SetupFlow() {
               otherSelected={otherSelected}
               skillsAtAgent={skillsAtAgent}
               agentScanLoading={agentScanLoading}
-              agentScanCount={agentScanResult.length}
+              agentSkillCount={
+                agentScanResult.filter((s) => s.kind !== "package").length
+              }
+              agentPackageCount={
+                agentScanResult.filter((s) => s.kind === "package").length
+              }
               libraryChoice={libraryChoice}
               setLibraryChoice={setLibraryChoice}
               customPath={customPath}
@@ -775,7 +787,8 @@ function LocationStep({
   otherSelected,
   skillsAtAgent,
   agentScanLoading,
-  agentScanCount,
+  agentSkillCount,
+  agentPackageCount,
   libraryChoice,
   setLibraryChoice,
   customPath,
@@ -794,7 +807,8 @@ function LocationStep({
   otherSelected: boolean;
   skillsAtAgent: boolean;
   agentScanLoading: boolean;
-  agentScanCount: number;
+  agentSkillCount: number;
+  agentPackageCount: number;
   libraryChoice: LibraryChoice | null;
   setLibraryChoice: (c: LibraryChoice | null) => void;
   customPath: string;
@@ -821,7 +835,11 @@ function LocationStep({
         {otherSelected
           ? "Pick a centralized location."
           : skillsAtAgent
-            ? `Found ${agentScanCount} skill${agentScanCount === 1 ? "" : "s"} in your ${agent?.displayName} folder. Pick one:`
+            ? `Found ${agentSkillCount} skill${agentSkillCount === 1 ? "" : "s"}${
+                agentPackageCount > 0
+                  ? ` and ${agentPackageCount} other folder${agentPackageCount === 1 ? "" : "s"}`
+                  : ""
+              } in your ${agent?.displayName} folder. Pick one:`
             : agentScanLoading
               ? `Scanning ${agentDir}…`
               : `No skills found in your ${agent?.displayName} folder. We'll start fresh:`}
@@ -845,7 +863,7 @@ function LocationStep({
               onClick={() => setLibraryChoice({ kind: "smCentralized" })}
               title="Move to Skill Manager library"
               subtitle="~/.skill-stack/skills"
-              hint={`Recommended. Moves the ${agentScanCount} found skill${agentScanCount === 1 ? "" : "s"} into the SM library and leaves a symlink at ${agentDir} so ${agent.displayName} keeps working. One source of truth across agents.`}
+              hint={`Recommended. Moves the ${agentSkillCount} found skill${agentSkillCount === 1 ? "" : "s"}${agentPackageCount > 0 ? ` (and any of the ${agentPackageCount} other folder${agentPackageCount === 1 ? "" : "s"} you opt-in to)` : ""} into the SM library and leaves a symlink at ${agentDir} so ${agent.displayName} keeps working. One source of truth across agents.`}
               recommended
             />
             <PrimaryCard
@@ -1029,6 +1047,23 @@ function ExistingStep({
     else next.add(name);
     setSelected(next);
   };
+  // Split high-confidence skills/bundles from package-tier candidates so
+  // the UI can default-check the former and default-uncheck the latter.
+  // The default selection (set on entry to this step) already excludes
+  // packages — see the entering effect in <SetupFlow>.
+  const skills = detected.filter((d) => d.kind !== "package");
+  const packages = detected.filter((d) => d.kind === "package");
+  const allPackagesChecked =
+    packages.length > 0 && packages.every((p) => selected.has(p.name));
+  const togglePackagesAll = () => {
+    const next = new Set(selected);
+    if (allPackagesChecked) {
+      for (const p of packages) next.delete(p.name);
+    } else {
+      for (const p of packages) next.add(p.name);
+    }
+    setSelected(next);
+  };
   return (
     <div>
       <h2 style={{ fontFamily: "var(--hand)", fontSize: 28, margin: 0 }}>
@@ -1047,65 +1082,89 @@ function ExistingStep({
         <>
           <p style={{ color: "var(--ink-soft)", fontSize: 13 }}>
             {moveMode
-              ? `Found ${detected.length} skill${detected.length === 1 ? "" : "s"}. Selected ones will be moved to ${libraryPath} with symlinks left at the original location.`
-              : `Found ${detected.length} skill${detected.length === 1 ? "" : "s"} at ${libraryPath}. Select which to track in your library.`}
+              ? `Found ${skills.length} skill${skills.length === 1 ? "" : "s"}. Selected ones will be moved to ${libraryPath} with symlinks left at the original location.`
+              : `Found ${skills.length} skill${skills.length === 1 ? "" : "s"} at ${libraryPath}. Select which to track in your library.`}
           </p>
-          <div
-            style={{
-              marginTop: 12,
-              padding: 4,
-              background: "var(--paper-2)",
-              borderRadius: 6,
-              maxHeight: 280,
-              overflow: "auto",
-            }}
-          >
-            {detected.map((s) => (
-              <label
-                key={s.name}
+          {skills.length > 0 && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: 4,
+                background: "var(--paper-2)",
+                borderRadius: 6,
+                maxHeight: 240,
+                overflow: "auto",
+              }}
+            >
+              {skills.map((s) => (
+                <DetectedRow
+                  key={s.name}
+                  detected={s}
+                  checked={selected.has(s.name)}
+                  onToggle={() => toggle(s.name)}
+                />
+              ))}
+            </div>
+          )}
+          {packages.length > 0 && (
+            <>
+              <div
                 style={{
+                  marginTop: 18,
                   display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "6px 8px",
-                  fontSize: 12,
-                  cursor: "pointer",
+                  alignItems: "baseline",
+                  gap: 10,
                 }}
               >
-                <input
-                  type="checkbox"
-                  checked={selected.has(s.name)}
-                  onChange={() => toggle(s.name)}
-                />
-                <span
+                <h3
                   style={{
-                    fontFamily: "var(--mono)",
-                    flex: 1,
+                    fontFamily: "var(--hand)",
+                    fontSize: 18,
+                    margin: 0,
                   }}
                 >
-                  {s.name}
-                </span>
-                {s.viaContainer && (
-                  <span
-                    className="sk-tag"
-                    style={{ fontSize: 9 }}
-                    title={`found via ${s.viaContainer}/`}
-                  >
-                    via {s.viaContainer}/
-                  </span>
-                )}
-                {s.isBundle && (
-                  <span
-                    className="sk-tag"
-                    style={{ fontSize: 9 }}
-                    title={`${s.nestedCount} nested`}
-                  >
-                    bundle
-                  </span>
-                )}
-              </label>
-            ))}
-          </div>
+                  Other folders ({packages.length})
+                </h3>
+                <button
+                  type="button"
+                  className="sk-btn sm ghost"
+                  onClick={togglePackagesAll}
+                >
+                  {allPackagesChecked ? "Uncheck all" : "Check all"}
+                </button>
+              </div>
+              <p
+                style={{
+                  color: "var(--ink-soft)",
+                  fontSize: 12,
+                  marginTop: 4,
+                }}
+              >
+                These directories don't have a SKILL.md / AGENTS.md but
+                look substantive (resource packs, plugin-like extensions,
+                MCP servers). Tick the ones you want tracked too.
+              </p>
+              <div
+                style={{
+                  marginTop: 8,
+                  padding: 4,
+                  background: "var(--paper-2)",
+                  borderRadius: 6,
+                  maxHeight: 200,
+                  overflow: "auto",
+                }}
+              >
+                {packages.map((s) => (
+                  <DetectedRow
+                    key={s.name}
+                    detected={s}
+                    checked={selected.has(s.name)}
+                    onToggle={() => toggle(s.name)}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </>
       )}
 
@@ -1364,6 +1423,54 @@ function Footer({
         Continue →
       </button>
     </div>
+  );
+}
+
+function DetectedRow({
+  detected,
+  checked,
+  onToggle,
+}: {
+  detected: DetectedSkill;
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <label
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "6px 8px",
+        fontSize: 12,
+        cursor: "pointer",
+      }}
+    >
+      <input type="checkbox" checked={checked} onChange={onToggle} />
+      <span style={{ fontFamily: "var(--mono)", flex: 1 }}>
+        {detected.name}
+      </span>
+      <span
+        className="sk-tag"
+        style={{ fontSize: 9 }}
+        title={detected.reason}
+      >
+        {detected.kind === "skill"
+          ? detected.reason
+          : detected.kind === "bundle"
+            ? `bundle · ${detected.nestedCount}`
+            : detected.reason}
+      </span>
+      {detected.viaContainer && (
+        <span
+          className="sk-tag"
+          style={{ fontSize: 9 }}
+          title={`found via ${detected.viaContainer}/`}
+        >
+          via {detected.viaContainer}/
+        </span>
+      )}
+    </label>
   );
 }
 

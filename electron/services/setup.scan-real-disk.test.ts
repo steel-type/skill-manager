@@ -26,9 +26,14 @@ describe.skipIf(!ENABLED)("scanForExistingSkills (real disk)", () => {
       console.log(`\n=== ${root}${exists ? "" : " (missing)"} ===`);
       for (const s of result) {
         const tag = s.viaContainer ? `(via ${s.viaContainer}/)` : "";
-        const kind = s.isSkill
-          ? `skill${s.nestedCount > 0 ? `+${s.nestedCount}` : ""}`
-          : `bundle×${s.nestedCount}`;
+        let kind: string;
+        if (s.kind === "skill") {
+          kind = s.nestedCount > 0 ? `skill+${s.nestedCount}` : "skill";
+        } else if (s.kind === "bundle") {
+          kind = `bundle×${s.nestedCount}`;
+        } else {
+          kind = `package (${s.reason})`;
+        }
         console.log(`  ${s.name}  [${kind}] ${tag}`);
       }
       console.log(`  total: ${result.length}`);
