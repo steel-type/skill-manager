@@ -63,20 +63,20 @@ npm run dev
 
 ---
 
-## Supported agents
+## Library + agents
 
-Read live from `electron/services/agents.ts`:
+Your **library** lives at one path you pick during Setup — your primary agent's default skills dir, the centralized `~/.skill-stack/skills`, or a custom path. From there, Skill Manager deploys per-project to each agent's expected location:
 
-| Agent | Global path | Project path | Entry file | Single-file alt |
-|---|---|---|---|---|
-| **Claude Code** | `~/.claude/skills/<name>/` | `.claude/skills/<name>/` | `SKILL.md` | `CLAUDE.md` |
-| **OpenAI Codex** | `~/.codex/skills/<name>/` | `.codex/skills/<name>/` | `SKILL.md` | `AGENTS.md` |
-| **Gemini CLI** | `~/.gemini/skills/<name>/` | `.gemini/skills/<name>/` | `SKILL.md` | `GEMINI.md` |
-| **Continue.dev** | `~/.continue/skills/<name>/` | `.continue/skills/<name>/` | `SKILL.md` | — |
-| **Cursor** | — (project only) | `.cursor/rules/` | `<name>.mdc` | `.cursorrules` |
-| **Cline** | — (project only) | `.cline/skills/<name>/` | `SKILL.md` | `.clinerules` |
+| Agent | Project deploy path | Entry file | Single-file alt |
+|---|---|---|---|
+| **Claude Code** | `.claude/skills/<name>/` | `SKILL.md` | `CLAUDE.md` |
+| **OpenAI Codex** | `.codex/skills/<name>/` | `SKILL.md` | `AGENTS.md` |
+| **Gemini CLI** | `.gemini/skills/<name>/` | `SKILL.md` | `GEMINI.md` |
+| **Continue.dev** | `.continue/skills/<name>/` | `SKILL.md` | — |
+| **Cursor** | `.cursor/rules/` | `<name>.mdc` | `.cursorrules` |
+| **Cline** | `.cline/skills/<name>/` | `SKILL.md` | `.clinerules` |
 
-Cursor and Cline have no global skills concept and so can't be the primary agent during Setup, but both are valid deploy targets at the project level.
+Cursor and Cline are project-only — they have no global skills concept, so they can't be the primary agent during Setup. They're still valid deploy targets at the project level. The full per-agent definition (including the default global dirs that Setup scans for existing skills) lives in `electron/services/agents.ts`.
 
 ---
 
