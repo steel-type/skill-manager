@@ -159,12 +159,15 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
           padding: 18,
           display: "flex",
           flexDirection: "column",
-          gap: 14,
+          gap: 10,
           overflow: "auto",
           flex: 1,
         }}
       >
-        {/* Header */}
+        {/* Header — tags inline directly under the name (no separate
+            description subtitle; identifiers/content show as chips on
+            the right). Trims a row of vertical real estate so Files has
+            room. */}
         <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
           <div
             className="skill-icon"
@@ -179,21 +182,44 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
             {skill.displayName.slice(0, 1).toUpperCase()}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 20, fontWeight: 700 }}>
-              {skill.displayName}
-            </div>
             <div
               style={{
-                fontSize: 13,
-                color: "var(--ink-soft)",
-                marginTop: 2,
+                display: "flex",
+                alignItems: "baseline",
+                gap: 10,
+                flexWrap: "wrap",
               }}
             >
-              {skill.description || (skill.isBundle
-                ? `Bundle of ${skill.bundleSize} skill${skill.bundleSize === 1 ? "" : "s"}`
-                : "(no description)")}
+              <div style={{ fontSize: 20, fontWeight: 700 }}>
+                {skill.displayName}
+              </div>
+              {/* Contents chips (identifiers + content dirs) — moved up
+                  next to the title so we don't repeat them in a separate
+                  CONTENTS section below. */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  flexWrap: "wrap",
+                  fontFamily: "var(--mono)",
+                  fontSize: 11,
+                }}
+              >
+                {skill.identifiers.map((id) => (
+                  <span key={id} className="sk-tag good">
+                    {id}
+                  </span>
+                ))}
+                {skill.contentDirs.map((d) => (
+                  <span key={d} className="sk-tag">
+                    {d}
+                  </span>
+                ))}
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+            <div
+              style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}
+            >
               {skill.isBundle && (
                 <span className="sk-tag">bundle · {skill.bundleSize} inside</span>
               )}
@@ -210,14 +236,14 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
           </div>
         </div>
 
-        <div className="sk-divider soft" />
-
-        {/* Source / dates / GH stats */}
+        {/* Source / Installed / Last updated — single row, tight gap so
+            the metadata sits close to the header instead of floating. */}
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: "minmax(0, 2fr) 1fr 1fr",
             gap: 14,
+            marginTop: -2,
           }}
         >
           <Field label="Source">
@@ -258,7 +284,13 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
                 : "never (since install)"}
             </span>
           </Field>
-          {gh && (
+        </div>
+
+        {/* GitHub stats live on their own line — only present when the
+            skill has an upstream URL. Kept out of the metadata grid so
+            the three-up Source/Installed/Last-updated layout stays tidy. */}
+        {gh && (
+          <div>
             <Field label="GitHub">
               {metaLoading && (
                 <span style={{ fontSize: 12, color: "var(--ink-faint)" }}>
@@ -297,40 +329,12 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
                 </span>
               )}
             </Field>
-          )}
-        </div>
-
-        {/* Identifiers + content */}
-        {(skill.identifiers.length > 0 || skill.contentDirs.length > 0) && (
-          <>
-            <div className="sk-divider soft" />
-            <div className="rail-section" style={{ padding: 0 }}>
-              Contents
-            </div>
-            <div
-              style={{
-                display: "flex",
-                gap: 6,
-                flexWrap: "wrap",
-                fontFamily: "var(--mono)",
-                fontSize: 11,
-              }}
-            >
-              {skill.identifiers.map((id) => (
-                <span key={id} className="sk-tag good">
-                  {id}
-                </span>
-              ))}
-              {skill.contentDirs.map((d) => (
-                <span key={d} className="sk-tag">
-                  {d}
-                </span>
-              ))}
-            </div>
-          </>
+          </div>
         )}
 
-        {/* File tree */}
+        {/* File tree — primary content of this view. Has a generous
+            min-height so it doesn't get squeezed when the upper sections
+            grow, and flex:1 so it fills any remaining vertical space. */}
         {tree && tree.children && tree.children.length > 0 && (
           <>
             <div className="sk-divider soft" />
@@ -357,7 +361,8 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
                 fontFamily: "var(--mono)",
                 fontSize: 11,
                 lineHeight: 1.55,
-                maxHeight: 300,
+                minHeight: 360,
+                flex: 1,
                 overflow: "auto",
                 background: "var(--paper-2)",
               }}
