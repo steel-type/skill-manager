@@ -191,7 +191,7 @@ function createWindow() {
     rendererCrashCount += 1;
     if (rendererCrashCount > MAX_RENDERER_CRASHES) {
       dialog.showErrorBox(
-        "Skill Manager",
+        "Skillbase",
         `The window kept crashing (${details.reason}). Quit and relaunch when you're ready.`,
       );
       return;

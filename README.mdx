@@ -1,4 +1,4 @@
-# Skill Manager
+# Skillbase
 
 > The macOS desktop app for installing, stacking, and deploying skills across every AI coding agent you use.
 
@@ -20,7 +20,13 @@ A real GUI on top of the `SKILL.md` / `AGENTS.md` ecosystem. Install skills from
 
 ## Install
 
-Grab the latest `.dmg` from the [Releases page](https://github.com/steel-type/skill-manager/releases/latest), open it, drag **Skill Manager** to Applications. Unsigned — first launch may need right-click → **Open** to bypass Gatekeeper. Apple Silicon only for now.
+Grab the latest `.dmg` from the [Releases page](https://github.com/steel-type/skill-manager/releases/latest), open it, drag **Skillbase** to Applications. Apple Silicon only for now.
+
+The app is ad-hoc signed but not Apple-notarized, so first launch needs one extra step. Open it, see the warning, then go to **System Settings → Privacy & Security** and click **Open Anyway** at the bottom. If macOS instead says *"Skillbase is damaged and can't be opened"*, run this once and try again:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Skillbase.app"
+```
 
 Or run from source / build your own:
 

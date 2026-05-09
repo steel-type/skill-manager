@@ -6,8 +6,8 @@
 //   1. Welcome
 //   2. Agent (a/b/c/d/e shortcuts) → primary agent + auto-scan its default
 //      skills dir so the next step can branch.
-//   3. Location → "Use {agent}'s skills dir" vs. "Move to Skill Manager
-//      library (recommended)" when skills were found, or "Use Skill Manager
+//   3. Location → "Use {agent}'s skills dir" vs. "Move to Skillbase
+//      library (recommended)" when skills were found, or "Use Skillbase
 //      default" when nothing was found. "Choose folder…" + More options
 //      below for power users.
 //   4. Existing → review+confirm which detected skills to track.
@@ -508,7 +508,7 @@ export function SetupFlow() {
             textAlign: "center",
           }}
         >
-          Skill Manager
+          Skillbase
         </span>
         <span style={{ flex: 1 }} />
         <ThemeToggleInline
@@ -965,7 +965,7 @@ function LocationStep({
                 libraryChoice?.kind === "smCentralized"
               }
               onClick={() => setLibraryChoice({ kind: "smCentralized" })}
-              title="Move to Skill Manager library"
+              title="Move to Skillbase library"
               subtitle="~/.skill-stack/skills"
               hint={`Recommended. Brings the ${agentSkillCount} found skill${agentSkillCount === 1 ? "" : "s"}${agentPackageCount > 0 ? ` (and any of the ${agentPackageCount} other folder${agentPackageCount === 1 ? "" : "s"} you opt-in to)` : ""} into the SM library. With Symlink mode (below) the originals at ${agentDir} become symlinks pointing into the library, so ${agent.displayName} keeps working.`}
               recommended
@@ -989,7 +989,7 @@ function LocationStep({
           <PrimaryCard
             checked={libraryChoice?.kind === "smCentralized"}
             onClick={() => setLibraryChoice({ kind: "smCentralized" })}
-            title="Use Skill Manager default"
+            title="Use Skillbase default"
             subtitle="~/.skill-stack/skills"
             hint="Centralized location that works across agents. We'll create the directory if it doesn't exist."
             recommended
@@ -999,7 +999,7 @@ function LocationStep({
           <PrimaryCard
             checked={libraryChoice?.kind === "smCentralized"}
             onClick={() => setLibraryChoice({ kind: "smCentralized" })}
-            title="Use Skill Manager default"
+            title="Use Skillbase default"
             subtitle="~/.skill-stack/skills"
             hint="Agent-neutral location. Best for multi-agent workflows."
             recommended
@@ -1492,7 +1492,7 @@ function libraryChoiceLabel(c: LibraryChoice): string {
     case "agentInPlace":
       return `${c.agentId} (in place)`;
     case "smCentralized":
-      return "Skill Manager (centralized)";
+      return "Skillbase (centralized)";
     case "claudeDefault":
       return "Claude home";
     case "custom":

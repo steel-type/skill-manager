@@ -711,7 +711,7 @@ export async function scanForExistingSkills(
  * - `move`: relocate the source into the library, then leave a symlink at
  *   the original path pointing back. Makes the library the source of truth
  *   while keeping the agent's directory functional. Used when the user
- *   picks "move to Skill Manager library" during onboarding.
+ *   picks "move to Skillbase library" during onboarding.
  */
 export type ImportMode = "copy" | "move";
 
