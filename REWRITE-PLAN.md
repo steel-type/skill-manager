@@ -16,9 +16,14 @@ Secondary goal: stay in TypeScript end-to-end so AI-assisted velocity (currently
 - **Security parity** — the same input validation, atomic writes, config mutex, child-process tracking, and CSP guarantees survive the port.
 - **No regressions in the six currently-supported agents** (claude, codex, gemini, continue, cursor, cline).
 
-## Recommended stack: Tauri + Bun sidecar
+## Stack: Tauri + Bun sidecar
 
-> **Status: PROPOSED — not yet ratified. Push back if you want to try a different combo first.**
+> **Status: ACCEPTED 2026-05-09. Pending external audit.**
+>
+> Locked-in direction. Implementation begins with the Phase A spike. If
+> the spike surfaces a fundamental blocker (WebKit can't render the
+> wireframe aesthetic, Bun-sidecar IPC pain, etc.), revisit before
+> committing to Phase B — but the default plan of record is this combo.
 
 **Why this combo:**
 
@@ -186,10 +191,10 @@ Skillbase v0.3.0 ships when:
 - [ ] No `damaged-and-can't-be-opened` Gatekeeper issue (ad-hoc-signed at minimum)
 - [ ] README install section updated with three platform downloads
 
-## Open questions to ratify
+## Open questions
 
-1. **Stack acceptance** — Tauri + Bun sidecar, or push back to a different combo (pure Tauri, Wails, stay-on-Electron-with-cross-platform)?
-2. **App rename** — "Skillbase" is now the productName. Repo stays at `Steel-Type/skill-manager`, or rename the repo too?
+1. ~~**Stack acceptance**~~ — **RESOLVED 2026-05-09: Tauri + Bun sidecar.** Pending external audit.
+2. **App rename** — "Skillbase" is now the productName (shipped in v0.2.1). Repo stays at `Steel-Type/skill-manager`, or rename the repo to `Steel-Type/skillbase` too?
 3. **Apple Developer Program** ($99/year) — buy in for v0.3.0 to get real notarization, or stay ad-hoc-signed for free?
 4. **Linux tier** — first-class support from day one, or tier-2 best-effort while Mac+Windows mature?
 5. **Auto-updater** — defer to v0.4.0, or wire up Tauri's updater in Phase C? (Adds ~2–3 days but compounds: every future release auto-rolls.)
