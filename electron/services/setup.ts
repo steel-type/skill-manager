@@ -271,6 +271,110 @@ async function detectPackageMarkers(dir: string): Promise<string[]> {
   return found;
 }
 
+/**
+ * Wire every library entry into an agent's global skills dir so the
+ * agent can discover them. For each top-level dir in the library,
+ * ensure {agentSkillsDir}/{name} exists pointing at it.
+ *
+ * Behavior per entry:
+ *  - target missing            → create symlink (or copy when mode=copy)
+ *  - target is a symlink to lib → no-op
+ *  - target is a symlink elsewhere → replace with symlink to lib
+ *  - target is a real dir      → leave alone (we never overwrite real
+ *    user content at the agent dir without explicit confirmation)
+ *
+ * Returns counts so the caller can summarize. Best-effort per entry —
+ * one failure doesn't block the others.
+ */
+export async function wireLibraryIntoAgentDir(
+  agentSkillsDir: string,
+  libraryPath: string,
+  mode: DeployMode,
+): Promise<{
+  created: string[];
+  alreadyLinked: string[];
+  redirected: string[];
+  skipped: { name: string; reason: string }[];
+}> {
+  const result = {
+    created: [] as string[],
+    alreadyLinked: [] as string[],
+    redirected: [] as string[],
+    skipped: [] as { name: string; reason: string }[],
+  };
+
+  let entries: import("node:fs").Dirent[];
+  try {
+    entries = await fs.readdir(libraryPath, { withFileTypes: true });
+  } catch {
+    return result;
+  }
+  await fs.mkdir(agentSkillsDir, { recursive: true });
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith(".")) continue;
+    const source = join(libraryPath, entry.name);
+    const target = join(agentSkillsDir, entry.name);
+
+    let targetStat: import("node:fs").Stats | null = null;
+    try {
+      targetStat = await fs.lstat(target);
+    } catch {
+      targetStat = null;
+    }
+
+    try {
+      if (!targetStat) {
+        if (mode === "symlink") {
+          await fs.symlink(source, target);
+        } else {
+          await fs.cp(source, target, {
+            recursive: true,
+            verbatimSymlinks: false,
+          });
+        }
+        result.created.push(entry.name);
+        continue;
+      }
+
+      if (targetStat.isSymbolicLink()) {
+        const existingLink = await fs.readlink(target);
+        if (existingLink === source) {
+          result.alreadyLinked.push(entry.name);
+          continue;
+        }
+        // Symlink, but pointing somewhere else (e.g. an old library).
+        // Repoint at the canonical source.
+        await fs.rm(target, { force: true });
+        if (mode === "symlink") {
+          await fs.symlink(source, target);
+        } else {
+          await fs.cp(source, target, {
+            recursive: true,
+            verbatimSymlinks: false,
+          });
+        }
+        result.redirected.push(entry.name);
+        continue;
+      }
+
+      // Real dir at target — don't clobber. Skip with reason.
+      result.skipped.push({
+        name: entry.name,
+        reason: `Real directory exists at ${target} — not overwriting`,
+      });
+    } catch (err) {
+      result.skipped.push({
+        name: entry.name,
+        reason: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return result;
+}
+
 export interface ResolvedLibraryRoot {
   libraryPath: string;
   historyPath: string;

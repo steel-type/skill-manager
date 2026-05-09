@@ -80,6 +80,13 @@ const api = {
     ipcRenderer.invoke("complete-setup", args) as Promise<
       import("./services/setup").CompleteSetupResult
     >,
+  wireLibraryIntoAgent: (agentId: string) =>
+    ipcRenderer.invoke("wire-library-into-agent", { agentId }) as Promise<{
+      created: string[];
+      alreadyLinked: string[];
+      redirected: string[];
+      skipped: { name: string; reason: string }[];
+    }>,
 
   // ── Migration (relocate library between agent dirs / custom paths) ──
   planMigration: (args: {
@@ -123,6 +130,7 @@ const api = {
         supportsSymlinks: boolean;
         formatNotes: string | null;
         skillsDir: string | null;
+        projectSkillPath: string;
       }[]
     >,
 

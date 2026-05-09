@@ -175,7 +175,31 @@ export function SettingsView() {
       <PrimaryAgentRow
         agents={primaryAgents}
         primaryAgent={setup.primaryAgent}
-        onChange={(id) => setSetup({ primaryAgent: id })}
+        onChange={async (id) => {
+          // Flip the flag first so the rest of the app sees the new
+          // primary immediately, then wire the library into the new
+          // agent's global skills dir so promoted stacks + skills are
+          // discoverable from there. Best-effort: if wiring fails (e.g.
+          // agent has no global dir, or a real dir already squats the
+          // target name), surface the warning but don't block the flip.
+          await setSetup({ primaryAgent: id });
+          try {
+            const result = await window.api.wireLibraryIntoAgent(id);
+            if (result.skipped.length > 0) {
+              useAppStore
+                .getState()
+                .setError(
+                  `Primary agent set to ${id}, but ${result.skipped.length} library entr${result.skipped.length === 1 ? "y" : "ies"} couldn't be wired (real dirs already exist at the target).`,
+                );
+            }
+          } catch (err) {
+            useAppStore
+              .getState()
+              .setError(
+                err instanceof Error ? err.message : String(err),
+              );
+          }
+        }}
       />
       <PathRow
         label="Library location"

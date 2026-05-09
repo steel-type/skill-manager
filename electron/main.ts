@@ -61,6 +61,7 @@ import {
   resolveLibraryRoot,
   scanForExistingSkills,
   validateLibraryPath,
+  wireLibraryIntoAgentDir,
   type CompleteSetupArgs,
 } from "./services/setup";
 import { loadConfig, saveConfig, withConfigLock } from "./services/config";
@@ -371,6 +372,24 @@ ipcMain.handle("complete-setup", (_e, args: CompleteSetupArgs) =>
   completeSetup(args),
 );
 
+ipcMain.handle(
+  "wire-library-into-agent",
+  async (_e, args: { agentId: string }) => {
+    const config = await loadConfig();
+    const skillsDir = getAgentSkillsDir(args.agentId);
+    if (!skillsDir) {
+      throw new Error(
+        `Agent '${args.agentId}' has no global skills directory`,
+      );
+    }
+    return wireLibraryIntoAgentDir(
+      skillsDir,
+      config.setup.libraryPath,
+      config.settings.default_deploy_mode,
+    );
+  },
+);
+
 // ── Migration handlers ──
 
 ipcMain.handle(
@@ -426,6 +445,10 @@ ipcMain.handle("list-agents", () =>
      *  SetupFlow uses this to auto-scan the right place after the user
      *  picks an agent. */
     skillsDir: getAgentSkillsDir(a.id),
+    /** Per-project deploy template, e.g. ".claude/skills/{name}/".
+     *  DeployView renders this as a path preview so users can see
+     *  exactly where files will land before clicking Deploy. */
+    projectSkillPath: a.projectSkillPath,
   })),
 );
 

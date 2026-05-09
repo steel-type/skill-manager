@@ -22,6 +22,10 @@ interface AgentMeta {
   displayName: string;
   supportsSymlinks: boolean;
   formatNotes: string | null;
+  /** Per-project skill path template (e.g. ".claude/skills/{name}/").
+   *  Drives the deploy path preview rendered below the agent
+   *  checkboxes. */
+  projectSkillPath: string;
 }
 
 interface DeployRunMessage {
@@ -556,6 +560,43 @@ export function DeployView() {
               })}
             </div>
           )}
+          {/* Path preview — shows exactly where files will land for each
+              selected agent. Uses the queued item's id as the {name}
+              substitution; falls back to {skill-name} placeholder when
+              no item is queued yet. */}
+          {selectedAgents.size > 0 && (
+            <div
+              className="sk-box dashed"
+              style={{
+                marginTop: 8,
+                padding: 8,
+                fontFamily: "var(--mono)",
+                fontSize: 10,
+                lineHeight: 1.5,
+                color: "var(--ink-soft)",
+                background: "var(--paper-2)",
+              }}
+              title="Where files will land in each selected agent's per-project skills dir"
+            >
+              {agents
+                .filter((a) => selectedAgents.has(a.id))
+                .map((a) => {
+                  const sample = deployQueue?.id ?? "{skill-name}";
+                  const path = a.projectSkillPath.replace(
+                    /\{name\}/g,
+                    sample,
+                  );
+                  return (
+                    <div key={a.id}>
+                      <span style={{ color: "var(--ink)" }}>
+                        {a.displayName}
+                      </span>{" "}
+                      → {path}
+                    </div>
+                  );
+                })}
+            </div>
+          )}
         </Column>
 
         {/* PROJECTS */}
@@ -773,7 +814,11 @@ export function DeployView() {
           background: "var(--paper-2)",
         }}
       >
-        <ModeToggle mode={deployMode} onChange={setDeployMode} />
+        <ModeToggle
+          mode={deployMode}
+          onChange={setDeployMode}
+          defaultMode={settings.default_deploy_mode}
+        />
         <div style={{ flex: 1 }}>
           {deployQueue ? (
             <span
@@ -973,14 +1018,22 @@ function QueuedItemCard({
 function ModeToggle({
   mode,
   onChange,
+  defaultMode,
 }: {
   mode: DeployMode;
   onChange: (m: DeployMode) => void;
+  /** User's saved default. Drives the visual ordering of the segmented
+   *  pill so the user's preferred mode sits on the left (primary
+   *  position) regardless of which is currently selected for this
+   *  deploy. Matches the spec: "default option always on left." */
+  defaultMode: DeployMode;
 }) {
   // Segmented pill: outer track has fully-rounded ends, the active option
   // gets its own fully-rounded fill that hugs the track's inner padding so
   // both ends of the highlight read as a clean pill (not chopped at the
-  // midline). Inactive options stay transparent.
+  // midline). Inactive options stay transparent. Order = [default, other].
+  const order: DeployMode[] =
+    defaultMode === "copy" ? ["copy", "symlink"] : ["symlink", "copy"];
   return (
     <div
       role="radiogroup"
@@ -994,16 +1047,14 @@ function ModeToggle({
         background: "var(--paper-2)",
       }}
     >
-      <ModeButton
-        label="Symlink"
-        active={mode === "symlink"}
-        onClick={() => onChange("symlink")}
-      />
-      <ModeButton
-        label="Copy"
-        active={mode === "copy"}
-        onClick={() => onChange("copy")}
-      />
+      {order.map((m) => (
+        <ModeButton
+          key={m}
+          label={m === "symlink" ? "Symlink" : "Copy"}
+          active={mode === m}
+          onClick={() => onChange(m)}
+        />
+      ))}
     </div>
   );
 }
