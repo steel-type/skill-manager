@@ -475,7 +475,7 @@ function ThemeRow() {
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 13, fontWeight: 600 }}>Theme</div>
         <div style={{ fontSize: 11, color: "var(--ink-faint)" }}>
-          warm cream wireframe (light) or sharp dark minimal (SteelClaw)
+          warm cream wireframe or sharp dark minimal
         </div>
       </div>
       <ThemeToggle />

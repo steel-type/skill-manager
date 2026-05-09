@@ -1,4 +1,4 @@
-# THEME — Dark Minimal (SteelClaw)
+# THEME — Dark Minimal
 
 ## Color Palette
 

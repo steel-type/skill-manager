@@ -22,7 +22,6 @@ It gives you a real GUI for the things you'd otherwise do by hand:
   (`install`, `deploy <skill> to <project>`, `update --all`, `rollback`,
   `rm`, `list --updates`, `help`, …)
 - **Light + Dark themes** — warm cream/terracotta or sharp green-on-black
-  ("SteelClaw")
 - **Export / Import** the whole library as a markdown bullet list
 
 Library lives at `~/.claude/skills/`. Config lives at `~/.claude/skill-manager.json`.
@@ -197,7 +196,7 @@ design-reference/         original wireframes (Skill Manager Wireframes.html, JS
 legacy/                   v0.1 Python + CustomTkinter implementation, frozen
 assets/                   icon source (SVG) + built .icns
 scripts/                  build-icons.sh
-DARK_THEME.md             SteelClaw spec
+DARK_THEME.md             dark theme spec
 LIGHT_THEME.md            wireframe-cream spec
 ```
 
@@ -206,7 +205,7 @@ LIGHT_THEME.md            wireframe-cream spec
 The app ships with two complete themes; user choice is persisted in
 `~/.claude/skill-manager.json` under `settings.theme`.
 
-| | Light (default) | Dark (SteelClaw) |
+| | Light (default) | Dark |
 |---|---|---|
 | Page background | `#fdfcf8` warm cream | `#050505` near-black |
 | Surface (sidebar/cards) | `#f5f3ec` | `#111213` |

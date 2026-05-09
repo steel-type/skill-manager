@@ -304,7 +304,7 @@ body { background: #e8e4d8; margin: 0; font-family: var(--read); color: var(--in
 .spec b { color: var(--ink); }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   DARK THEME — "SteelClaw" colors, wireframe shapes
+   DARK THEME — sharp dark minimal colors, wireframe shapes
    Inherits the entire layout/radii/shadow vocabulary from light. Only the
    color tokens swap, plus a couple of card-bg adjustments so elevated
    surfaces still read as elevated against the (now) very dark page.
