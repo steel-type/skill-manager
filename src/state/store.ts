@@ -110,6 +110,13 @@ interface AppState {
   updateInfo: Record<string, UpdateInfo>;
   isLoading: boolean;
   isCheckingUpdates: boolean;
+  /** ISO timestamp of the last successful runUpdateCheck completion. Drives
+   *  the "✓ All current" feedback in LibraryView when updatesCount === 0,
+   *  so a Check that finds nothing isn't a hollow gesture. Null until the
+   *  user has run at least one check this session. */
+  lastUpdateCheckAt: string | null;
+  /** Skills examined / updates found on the last check. */
+  lastUpdateCheckSummary: { total: number; updatesAvailable: number } | null;
   lastError: string | null;
 
   refreshSkills: () => Promise<void>;
@@ -223,6 +230,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   updateInfo: {},
   isLoading: false,
   isCheckingUpdates: false,
+  lastUpdateCheckAt: null,
+  lastUpdateCheckSummary: null,
   lastError: null,
 
   refreshSkills: async () => {
@@ -252,7 +261,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ isCheckingUpdates: true, lastError: null });
     try {
       const updateInfo = await window.api.checkUpdates();
-      set({ updateInfo, isCheckingUpdates: false });
+      const total = Object.keys(updateInfo).length;
+      const updatesAvailable = Object.values(updateInfo).filter(
+        (u) => u.hasUpdate,
+      ).length;
+      set({
+        updateInfo,
+        isCheckingUpdates: false,
+        lastUpdateCheckAt: new Date().toISOString(),
+        lastUpdateCheckSummary: { total, updatesAvailable },
+      });
     } catch (err) {
       set({
         isCheckingUpdates: false,

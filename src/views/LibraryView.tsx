@@ -38,6 +38,10 @@ export function LibraryView() {
   const filter = useAppStore((s) => s.filter);
   const updateInfo = useAppStore((s) => s.updateInfo);
   const isCheckingUpdates = useAppStore((s) => s.isCheckingUpdates);
+  const lastUpdateCheckAt = useAppStore((s) => s.lastUpdateCheckAt);
+  const lastUpdateCheckSummary = useAppStore(
+    (s) => s.lastUpdateCheckSummary,
+  );
   const layout = useAppStore((s) => s.libraryLayout);
   const selectedSkill = useAppStore((s) => s.selectedSkill);
   const setSelectedSkill = useAppStore((s) => s.setSelectedSkill);
@@ -143,14 +147,39 @@ export function LibraryView() {
         }}
       >
         <LayoutToggle />
-        <button
-          className="sk-btn sm ghost"
-          disabled={isCheckingUpdates}
-          onClick={() => runUpdateCheck()}
-          title="git ls-remote for every skill with a source URL"
-        >
-          {isCheckingUpdates ? "Checking…" : "Check updates"}
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* Inline status pill — surfaces the result of the last completed
+              update check. Without this, a check that finds zero updates is
+              indistinguishable from a no-op (the UpdateBanner only shows for
+              count > 0). The pill is intentionally low-contrast so it
+              doesn't compete with the banner when there ARE updates. */}
+          {!isCheckingUpdates &&
+            lastUpdateCheckAt &&
+            lastUpdateCheckSummary &&
+            lastUpdateCheckSummary.updatesAvailable === 0 && (
+              <span
+                style={{
+                  fontFamily: "var(--read)",
+                  fontSize: 11,
+                  color: "var(--ink-soft)",
+                }}
+                title={`Checked ${lastUpdateCheckSummary.total} skill${
+                  lastUpdateCheckSummary.total === 1 ? "" : "s"
+                } at ${new Date(lastUpdateCheckAt).toLocaleTimeString()}`}
+              >
+                ✓ All current ({lastUpdateCheckSummary.total} skill
+                {lastUpdateCheckSummary.total === 1 ? "" : "s"})
+              </span>
+            )}
+          <button
+            className="sk-btn sm ghost"
+            disabled={isCheckingUpdates}
+            onClick={() => runUpdateCheck()}
+            title="git ls-remote for every skill with a source URL"
+          >
+            {isCheckingUpdates ? "Checking…" : "Check updates"}
+          </button>
+        </div>
       </div>
 
       {updatesCount > 0 && layout === "cards" && (

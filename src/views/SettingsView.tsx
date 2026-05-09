@@ -380,7 +380,9 @@ export function SettingsView() {
               ? "click again within 4s to confirm"
               : historyBytes && historyBytes > 0
                 ? `wipe all snapshots (${formatBytes(historyBytes)})`
-                : "no snapshots to clear"
+                : settings.update_history_retention === 0
+                  ? "Snapshot retention is 0 — no snapshots are being kept. Raise retention above to enable rollback."
+                  : "No snapshots yet. They're created automatically when you update an installed skill."
           }
         >
           {armed === "clear"

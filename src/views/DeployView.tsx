@@ -103,6 +103,10 @@ export function DeployView() {
   );
   const [picker, setPicker] = useState("");
   const [running, setRunning] = useState(false);
+  /** Guard against multi-clicks on the HomeLibraryPrompt's "Add" button —
+   *  the underlying deployStackToHomeLibrary writes to disk + config and
+   *  shouldn't fire concurrently from a hammered button. */
+  const [addingToHomeLibrary, setAddingToHomeLibrary] = useState(false);
 
   useEffect(() => {
     refreshSkills();
@@ -325,6 +329,19 @@ export function DeployView() {
     !!deployQueue &&
     selectedAgents.size > 0 &&
     selectedProjects.size > 0;
+
+  // Surface WHY the Deploy button is disabled so users don't stare at a
+  // greyed-out button wondering what's missing. Order matches the user's
+  // expected workflow: pick skill → pick agent(s) → pick project(s).
+  const deployDisabledReason = !deployQueue
+    ? "Pick a skill or stack on the left first."
+    : selectedAgents.size === 0
+      ? "Select at least one agent."
+      : selectedProjects.size === 0
+        ? "Select at least one project."
+        : running
+          ? "Deploy in progress…"
+          : null;
 
   return (
     <div
@@ -790,6 +807,8 @@ export function DeployView() {
         <HomeLibraryPrompt
           stack={queuedStack}
           onDeploy={async () => {
+            if (addingToHomeLibrary) return;
+            setAddingToHomeLibrary(true);
             try {
               await useAppStore.getState().deployStackToHomeLibrary(
                 queuedStack.id,
@@ -798,6 +817,8 @@ export function DeployView() {
               useAppStore
                 .getState()
                 .setError(err instanceof Error ? err.message : String(err));
+            } finally {
+              setAddingToHomeLibrary(false);
             }
           }}
         />
@@ -850,6 +871,7 @@ export function DeployView() {
           className="sk-btn"
           disabled={!canDeploy}
           onClick={performDeploy}
+          title={deployDisabledReason ?? "Deploy now"}
           style={{
             background: canDeploy ? "var(--accent)" : "var(--paper-2)",
             color: canDeploy ? "var(--on-accent)" : "var(--ink-faint)",
