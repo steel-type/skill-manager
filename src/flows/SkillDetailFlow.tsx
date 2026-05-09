@@ -154,14 +154,26 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
 
   return (
     <ScreenShell title={skill.displayName} onBack={goBack}>
+      {/* Three-region layout: sticky upper (header → metadata → Files
+          header), scrolling middle (just the tree), sticky bottom
+          (action buttons). Keeps key context visible regardless of
+          tree depth. */}
       <div
         style={{
-          padding: 18,
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+      <div
+        style={{
+          padding: "18px 18px 10px",
           display: "flex",
           flexDirection: "column",
           gap: 10,
-          overflow: "auto",
-          flex: 1,
+          flexShrink: 0,
+          borderBottom: "1px solid var(--line-soft)",
         }}
       >
         {/* Header — tags inline directly under the name (no separate
@@ -332,44 +344,50 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
           </div>
         )}
 
-        {/* File tree — primary content of this view. Has a generous
-            min-height so it doesn't get squeezed when the upper sections
-            grow, and flex:1 so it fills any remaining vertical space. */}
+        {/* Files header — last thing in the sticky upper region. The
+            count + reveal-in-Finder hint stays visible regardless of
+            tree scroll. */}
         {tree && tree.children && tree.children.length > 0 && (
-          <>
-            <div className="sk-divider soft" />
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <div className="rail-section" style={{ padding: 0 }}>
-                Files
-              </div>
-              <span
-                style={{ fontSize: 11, color: "var(--ink-faint)" }}
-              >
-                {countNodes(tree)} entries · double-click to reveal in Finder
-              </span>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginTop: 4,
+            }}
+          >
+            <div className="rail-section" style={{ padding: 0 }}>
+              Files
             </div>
-            <div
-              className="sk-box"
-              style={{
-                padding: 8,
-                fontFamily: "var(--mono)",
-                fontSize: 11,
-                lineHeight: 1.55,
-                minHeight: 360,
-                flex: 1,
-                overflow: "auto",
-                background: "var(--paper-2)",
-              }}
-            >
-              <TreeView root={tree} skillName={skill.name} />
-            </div>
-          </>
+            <span style={{ fontSize: 11, color: "var(--ink-faint)" }}>
+              {countNodes(tree)} entries · double-click to reveal in
+              Finder
+            </span>
+          </div>
+        )}
+      </div>
+      {/* ── Scrolling middle: the file tree ── */}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflow: "auto",
+          padding: "10px 18px",
+        }}
+      >
+        {tree && tree.children && tree.children.length > 0 && (
+          <div
+            className="sk-box"
+            style={{
+              padding: 8,
+              fontFamily: "var(--mono)",
+              fontSize: 11,
+              lineHeight: 1.55,
+              background: "var(--paper-2)",
+            }}
+          >
+            <TreeView root={tree} skillName={skill.name} />
+          </div>
         )}
 
         {/* Bundle children */}
@@ -499,26 +517,35 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
           </>
         )}
 
-        <div style={{ flex: 1, minHeight: 4 }} />
-
-        {/* Actions */}
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <button className="sk-btn ghost" onClick={handleBrowse}>
-            Browse files
+      </div>
+      {/* ── Sticky bottom: action buttons always reachable ── */}
+      <div
+        style={{
+          display: "flex",
+          gap: 6,
+          flexWrap: "wrap",
+          flexShrink: 0,
+          padding: "10px 18px",
+          borderTop: "1px solid var(--line-soft)",
+          background: "var(--paper)",
+        }}
+      >
+        <button className="sk-btn ghost" onClick={handleBrowse}>
+          Browse files
+        </button>
+        {!skill.isLocal && (
+          <button className="sk-btn ghost" onClick={handleUpdate}>
+            Update from GitHub
           </button>
-          {!skill.isLocal && (
-            <button className="sk-btn ghost" onClick={handleUpdate}>
-              Update from GitHub
-            </button>
-          )}
-          <div style={{ flex: 1 }} />
-          <button className="sk-btn primary" onClick={handleDeploy}>
-            Send to Deploy
-          </button>
-          <button className="sk-btn" onClick={goBack}>
-            Back to library
-          </button>
-        </div>
+        )}
+        <div style={{ flex: 1 }} />
+        <button className="sk-btn primary" onClick={handleDeploy}>
+          Send to Deploy
+        </button>
+        <button className="sk-btn" onClick={goBack}>
+          Back to library
+        </button>
+      </div>
       </div>
     </ScreenShell>
   );

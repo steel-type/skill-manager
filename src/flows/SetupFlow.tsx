@@ -520,7 +520,37 @@ export function SetupFlow() {
       >
         <div style={{ width: "100%", maxWidth: 560 }}>
           {step === "welcome" && (
-            <Welcome onNext={() => setStep("agent")} />
+            <Welcome
+              onNext={() => setStep("agent")}
+              onSkip={async () => {
+                // "Skip setup" — completes onboarding with safe defaults
+                // (centralized library, symlink mode, no imports). The
+                // user can re-run from Settings later if they want to
+                // pick something different.
+                setStep("running");
+                setProgress(["Creating directories with defaults…"]);
+                try {
+                  await window.api.completeSetup({
+                    libraryRoot: "centralized",
+                    customPath: null,
+                    primaryAgent: "claude",
+                    defaultDeployMode: "symlink",
+                    importSkills: [],
+                  });
+                  await loadSetup();
+                  await loadSettings();
+                  await refreshSkills();
+                  await refreshProjects();
+                  await loadStacks();
+                  await loadStackDeployments();
+                } catch (err) {
+                  setError(
+                    err instanceof Error ? err.message : String(err),
+                  );
+                  setStep("welcome");
+                }
+              }}
+            />
           )}
           {step === "agent" && (
             <AgentStep
@@ -654,7 +684,13 @@ export function SetupFlow() {
 
 // ── Steps ──────────────────────────────────────────────────────────────
 
-function Welcome({ onNext }: { onNext: () => void }) {
+function Welcome({
+  onNext,
+  onSkip,
+}: {
+  onNext: () => void;
+  onSkip: () => void;
+}) {
   return (
     <div style={{ textAlign: "center", paddingTop: 40 }}>
       <div
@@ -695,6 +731,20 @@ function Welcome({ onNext }: { onNext: () => void }) {
           }}
         >
           Get started →
+        </button>
+      </div>
+      {/* Escape hatch — flagged as Medium severity by ui-ux-pro-max
+          ("Don't force linear unskippable tour"). Defaults to a
+          centralized library + symlink mode + no imports; everything is
+          changeable in Settings later. */}
+      <div style={{ marginTop: 14 }}>
+        <button
+          type="button"
+          className="sk-btn sm ghost"
+          onClick={onSkip}
+          style={{ fontSize: 12 }}
+        >
+          Skip setup, use defaults
         </button>
       </div>
     </div>
@@ -1123,17 +1173,21 @@ function ExistingStep({
   // packages — see the entering effect in <SetupFlow>.
   const skills = detected.filter((d) => d.kind !== "package");
   const packages = detected.filter((d) => d.kind === "package");
-  const allPackagesChecked =
-    packages.length > 0 && packages.every((p) => selected.has(p.name));
-  const togglePackagesAll = () => {
+  const toggleAll = (group: DetectedSkill[]) => {
+    const allChecked =
+      group.length > 0 && group.every((g) => selected.has(g.name));
     const next = new Set(selected);
-    if (allPackagesChecked) {
-      for (const p of packages) next.delete(p.name);
+    if (allChecked) {
+      for (const g of group) next.delete(g.name);
     } else {
-      for (const p of packages) next.add(p.name);
+      for (const g of group) next.add(g.name);
     }
     setSelected(next);
   };
+  const allSkillsChecked =
+    skills.length > 0 && skills.every((s) => selected.has(s.name));
+  const allPackagesChecked =
+    packages.length > 0 && packages.every((p) => selected.has(p.name));
   return (
     <div>
       <h2 style={{ fontFamily: "var(--hand)", fontSize: 28, margin: 0 }}>
@@ -1158,7 +1212,34 @@ function ExistingStep({
           {skills.length > 0 && (
             <div
               style={{
-                marginTop: 12,
+                marginTop: 8,
+                display: "flex",
+                alignItems: "baseline",
+                gap: 10,
+              }}
+            >
+              <h3
+                style={{
+                  fontFamily: "var(--hand)",
+                  fontSize: 18,
+                  margin: 0,
+                }}
+              >
+                Skills ({skills.length})
+              </h3>
+              <button
+                type="button"
+                className="sk-btn sm ghost"
+                onClick={() => toggleAll(skills)}
+              >
+                {allSkillsChecked ? "Uncheck all" : "Check all"}
+              </button>
+            </div>
+          )}
+          {skills.length > 0 && (
+            <div
+              style={{
+                marginTop: 8,
                 padding: 4,
                 background: "var(--paper-2)",
                 borderRadius: 6,
@@ -1200,7 +1281,7 @@ function ExistingStep({
                 <button
                   type="button"
                   className="sk-btn sm ghost"
-                  onClick={togglePackagesAll}
+                  onClick={() => toggleAll(packages)}
                 >
                   {allPackagesChecked ? "Uncheck all" : "Check all"}
                 </button>
