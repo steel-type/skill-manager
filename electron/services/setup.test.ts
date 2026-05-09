@@ -23,6 +23,7 @@ vi.mock("./paths", async () => {
 import { CONFIG_PATH } from "./paths";
 import { loadConfig, saveConfig } from "./config";
 import {
+  compareSkillDirs,
   completeSetup,
   resolveLibraryRoot,
   scanForExistingSkills,
@@ -257,6 +258,52 @@ describe("scanForExistingSkills", () => {
   });
 });
 
+describe("compareSkillDirs", () => {
+  it("returns 'missing' when one side doesn't exist", async () => {
+    const root = join(dirname(CONFIG_PATH), "compare-missing");
+    await fs.mkdir(root, { recursive: true });
+    expect(
+      await compareSkillDirs(join(root, "a"), join(root, "b")),
+    ).toBe("missing");
+  });
+
+  it("returns 'identical' for byte-equal trees", async () => {
+    const root = join(dirname(CONFIG_PATH), "compare-identical");
+    for (const name of ["a", "b"]) {
+      await fs.mkdir(join(root, name, "sub"), { recursive: true });
+      await fs.writeFile(join(root, name, "SKILL.md"), "same\n");
+      await fs.writeFile(join(root, name, "sub", "x.txt"), "hello");
+    }
+    expect(
+      await compareSkillDirs(join(root, "a"), join(root, "b")),
+    ).toBe("identical");
+  });
+
+  it("returns 'differs' for any content mismatch", async () => {
+    const root = join(dirname(CONFIG_PATH), "compare-differs");
+    await fs.mkdir(join(root, "a"), { recursive: true });
+    await fs.writeFile(join(root, "a", "SKILL.md"), "one");
+    await fs.mkdir(join(root, "b"), { recursive: true });
+    await fs.writeFile(join(root, "b", "SKILL.md"), "two");
+    expect(
+      await compareSkillDirs(join(root, "a"), join(root, "b")),
+    ).toBe("differs");
+  });
+
+  it("ignores .git/.DS_Store/node_modules in comparison", async () => {
+    const root = join(dirname(CONFIG_PATH), "compare-skip");
+    await fs.mkdir(join(root, "a", ".git"), { recursive: true });
+    await fs.writeFile(join(root, "a", ".git", "HEAD"), "ref:");
+    await fs.writeFile(join(root, "a", "SKILL.md"), "core");
+    await fs.mkdir(join(root, "b"), { recursive: true });
+    await fs.writeFile(join(root, "b", ".DS_Store"), "noise");
+    await fs.writeFile(join(root, "b", "SKILL.md"), "core");
+    expect(
+      await compareSkillDirs(join(root, "a"), join(root, "b")),
+    ).toBe("identical");
+  });
+});
+
 describe("completeSetup", () => {
   beforeEach(async () => {
     // Seed an empty config so loadConfig/saveConfig have something to read.
@@ -373,6 +420,151 @@ describe("completeSetup", () => {
     ).toBe("library copy");
   });
 
+  it("move + identical: drops agent dir, leaves symlink to library", async () => {
+    const tmpRoot = join(dirname(CONFIG_PATH), "setup-resolve-identical");
+    const lib = join(tmpRoot, "skills");
+    const agent = join(tmpRoot, "agent");
+    await fs.mkdir(join(lib, "alpha"), { recursive: true });
+    await fs.writeFile(join(lib, "alpha", "SKILL.md"), "same body");
+    await fs.mkdir(join(agent, "alpha"), { recursive: true });
+    await fs.writeFile(join(agent, "alpha", "SKILL.md"), "same body");
+
+    const result = await completeSetup({
+      libraryRoot: "custom",
+      customPath: lib,
+      primaryAgent: "claude",
+      defaultDeployMode: "symlink",
+      importSkills: [
+        {
+          name: "alpha",
+          sourcePath: join(agent, "alpha"),
+          mode: "move",
+          resolution: "identical",
+        },
+      ],
+    });
+    expect(result.imported).toEqual(["alpha"]);
+    expect(result.skipped).toEqual([]);
+    // Agent path is now a symlink to lib/alpha.
+    const agentStat = await fs.lstat(join(agent, "alpha"));
+    expect(agentStat.isSymbolicLink()).toBe(true);
+    expect(await fs.readlink(join(agent, "alpha"))).toBe(
+      join(lib, "alpha"),
+    );
+  });
+
+  it("move + keep-agent: overwrites library with agent version, symlinks back", async () => {
+    const tmpRoot = join(dirname(CONFIG_PATH), "setup-resolve-keep-agent");
+    const lib = join(tmpRoot, "skills");
+    const agent = join(tmpRoot, "agent");
+    await fs.mkdir(join(lib, "alpha"), { recursive: true });
+    await fs.writeFile(join(lib, "alpha", "SKILL.md"), "old library");
+    await fs.mkdir(join(agent, "alpha"), { recursive: true });
+    await fs.writeFile(join(agent, "alpha", "SKILL.md"), "new agent");
+
+    await completeSetup({
+      libraryRoot: "custom",
+      customPath: lib,
+      primaryAgent: "claude",
+      defaultDeployMode: "symlink",
+      importSkills: [
+        {
+          name: "alpha",
+          sourcePath: join(agent, "alpha"),
+          mode: "move",
+          resolution: "keep-agent",
+        },
+      ],
+    });
+    // Library now has the agent's version.
+    expect(
+      await fs.readFile(join(lib, "alpha", "SKILL.md"), "utf8"),
+    ).toBe("new agent");
+    // Agent path is now a symlink.
+    expect((await fs.lstat(join(agent, "alpha"))).isSymbolicLink()).toBe(
+      true,
+    );
+  });
+
+  it("move + keep-library: drops agent, symlinks to (older) library copy", async () => {
+    const tmpRoot = join(
+      dirname(CONFIG_PATH),
+      "setup-resolve-keep-library",
+    );
+    const lib = join(tmpRoot, "skills");
+    const agent = join(tmpRoot, "agent");
+    await fs.mkdir(join(lib, "alpha"), { recursive: true });
+    await fs.writeFile(join(lib, "alpha", "SKILL.md"), "library wins");
+    await fs.mkdir(join(agent, "alpha"), { recursive: true });
+    await fs.writeFile(join(agent, "alpha", "SKILL.md"), "agent loses");
+
+    await completeSetup({
+      libraryRoot: "custom",
+      customPath: lib,
+      primaryAgent: "claude",
+      defaultDeployMode: "symlink",
+      importSkills: [
+        {
+          name: "alpha",
+          sourcePath: join(agent, "alpha"),
+          mode: "move",
+          resolution: "keep-library",
+        },
+      ],
+    });
+    // Library untouched.
+    expect(
+      await fs.readFile(join(lib, "alpha", "SKILL.md"), "utf8"),
+    ).toBe("library wins");
+    // Agent now a symlink to library.
+    expect((await fs.lstat(join(agent, "alpha"))).isSymbolicLink()).toBe(
+      true,
+    );
+    // Reading via symlink returns library content.
+    expect(
+      await fs.readFile(join(agent, "alpha", "SKILL.md"), "utf8"),
+    ).toBe("library wins");
+  });
+
+  it("skip resolution leaves both untouched", async () => {
+    const tmpRoot = join(dirname(CONFIG_PATH), "setup-resolve-skip");
+    const lib = join(tmpRoot, "skills");
+    const agent = join(tmpRoot, "agent");
+    await fs.mkdir(join(lib, "alpha"), { recursive: true });
+    await fs.writeFile(join(lib, "alpha", "SKILL.md"), "library");
+    await fs.mkdir(join(agent, "alpha"), { recursive: true });
+    await fs.writeFile(join(agent, "alpha", "SKILL.md"), "agent");
+
+    const result = await completeSetup({
+      libraryRoot: "custom",
+      customPath: lib,
+      primaryAgent: "claude",
+      defaultDeployMode: "symlink",
+      importSkills: [
+        {
+          name: "alpha",
+          sourcePath: join(agent, "alpha"),
+          mode: "move",
+          resolution: "skip",
+        },
+      ],
+    });
+    expect(result.imported).toEqual([]);
+    expect(result.skipped).toEqual([
+      { name: "alpha", reason: "skipped by user" },
+    ]);
+    // Both still regular dirs with original contents.
+    expect(
+      await fs.readFile(join(lib, "alpha", "SKILL.md"), "utf8"),
+    ).toBe("library");
+    expect(
+      await fs.readFile(join(agent, "alpha", "SKILL.md"), "utf8"),
+    ).toBe("agent");
+    expect((await fs.lstat(join(agent, "alpha"))).isDirectory()).toBe(
+      true,
+    );
+  });
+
   it("imports selected skills and skips name conflicts", async () => {
     const tmpRoot = join(dirname(CONFIG_PATH), "setup-import");
     const libraryPath = join(tmpRoot, "skills");
@@ -403,7 +595,10 @@ describe("completeSetup", () => {
 
     expect(result.imported).toEqual(["beta"]);
     expect(result.skipped).toEqual([
-      { name: "alpha", reason: expect.stringMatching(/Already exists/) },
+      {
+        name: "alpha",
+        reason: expect.stringMatching(/Library entry exists/),
+      },
     ]);
     // alpha was NOT overwritten.
     expect(

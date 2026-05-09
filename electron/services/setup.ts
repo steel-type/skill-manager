@@ -126,6 +126,119 @@ const PACKAGE_FILE_MARKERS = [
 ] as const;
 
 /**
+ * Recursively compare two skill directories. Returns:
+ *  - "identical": every file present in both with matching contents
+ *  - "differs": at least one file differs, is missing on one side, or
+ *    a directory entry has different type
+ *  - "missing": one side doesn't exist
+ *
+ * Used during onboarding to decide whether an agent-side skill that
+ * collides with an existing library entry can be auto-symlinked
+ * (identical, no data loss) or needs explicit conflict resolution.
+ *
+ * Skips noise: .git, node_modules, .DS_Store. Caps total bytes read at
+ * ~64 MB so a runaway bundle doesn't lock the main process; if the cap
+ * is exceeded we conservatively return "differs".
+ */
+const COMPARE_SKIP = new Set([".git", "node_modules", ".DS_Store"]);
+const COMPARE_BYTE_CAP = 64 * 1024 * 1024;
+
+export async function compareSkillDirs(
+  a: string,
+  b: string,
+): Promise<"identical" | "differs" | "missing"> {
+  const aExists = await fs.stat(a).then(
+    (s) => s.isDirectory(),
+    () => false,
+  );
+  const bExists = await fs.stat(b).then(
+    (s) => s.isDirectory(),
+    () => false,
+  );
+  if (!aExists || !bExists) return "missing";
+
+  let bytesRead = 0;
+  let result: "identical" | "differs" = "identical";
+
+  async function walk(relPath: string): Promise<boolean> {
+    const aDir = relPath ? join(a, relPath) : a;
+    const bDir = relPath ? join(b, relPath) : b;
+    let aEntries: import("node:fs").Dirent[];
+    let bEntries: import("node:fs").Dirent[];
+    try {
+      aEntries = await fs.readdir(aDir, { withFileTypes: true });
+      bEntries = await fs.readdir(bDir, { withFileTypes: true });
+    } catch {
+      result = "differs";
+      return false;
+    }
+    const aNames = new Map(
+      aEntries
+        .filter((e) => !COMPARE_SKIP.has(e.name))
+        .map((e) => [e.name, e]),
+    );
+    const bNames = new Map(
+      bEntries
+        .filter((e) => !COMPARE_SKIP.has(e.name))
+        .map((e) => [e.name, e]),
+    );
+    if (aNames.size !== bNames.size) {
+      result = "differs";
+      return false;
+    }
+    for (const [name, aEntry] of aNames) {
+      const bEntry = bNames.get(name);
+      if (!bEntry) {
+        result = "differs";
+        return false;
+      }
+      // Type must match (both file, both dir, both symlink, etc).
+      if (aEntry.isDirectory() !== bEntry.isDirectory()) {
+        result = "differs";
+        return false;
+      }
+      const childRel = relPath ? `${relPath}/${name}` : name;
+      if (aEntry.isDirectory()) {
+        const ok = await walk(childRel);
+        if (!ok) return false;
+      } else if (aEntry.isFile()) {
+        const aPath = join(aDir, name);
+        const bPath = join(bDir, name);
+        const [aStat, bStat] = await Promise.all([
+          fs.stat(aPath),
+          fs.stat(bPath),
+        ]);
+        if (aStat.size !== bStat.size) {
+          result = "differs";
+          return false;
+        }
+        bytesRead += aStat.size;
+        if (bytesRead > COMPARE_BYTE_CAP) {
+          result = "differs"; // conservative: too big to fully verify
+          return false;
+        }
+        const [aBuf, bBuf] = await Promise.all([
+          fs.readFile(aPath),
+          fs.readFile(bPath),
+        ]);
+        if (!aBuf.equals(bBuf)) {
+          result = "differs";
+          return false;
+        }
+      } else {
+        // symlink or other special — bail conservatively
+        result = "differs";
+        return false;
+      }
+    }
+    return true;
+  }
+
+  await walk("");
+  return result;
+}
+
+/**
  * Probe a directory for package markers. Returns the human-readable list
  * of markers found (used as the `reason` chip in the UI), or null if the
  * directory has nothing that would make it useful to track.
@@ -200,6 +313,37 @@ export function resolveLibraryRoot(
       };
     }
   }
+}
+
+/**
+ * Move a source dir into the library and leave a symlink at the original
+ * location. fs.rename is atomic within a filesystem; falls back to
+ * copy+rm if the source crosses filesystems (EXDEV).
+ *
+ * Symlink-back failures are not silent — they throw, since the caller
+ * needs to surface the partial-success state to the user (skill is at
+ * dest, original location won't see it).
+ */
+async function moveAndSymlink(source: string, dest: string): Promise<void> {
+  try {
+    await fs.rename(source, dest);
+  } catch (err) {
+    if (
+      err &&
+      typeof err === "object" &&
+      "code" in err &&
+      (err as NodeJS.ErrnoException).code === "EXDEV"
+    ) {
+      await fs.cp(source, dest, {
+        recursive: true,
+        verbatimSymlinks: false,
+      });
+      await fs.rm(source, { recursive: true, force: true });
+    } else {
+      throw err;
+    }
+  }
+  await fs.symlink(dest, source);
 }
 
 /** Forbidden roots that would make the library unsafe or accidentally
@@ -448,15 +592,44 @@ export async function scanForExistingSkills(
  */
 export type ImportMode = "copy" | "move";
 
+/**
+ * What to do when a skill's destination in the library already exists.
+ *
+ * - "new": no library entry — proceed (move or copy depending on mode).
+ * - "identical": same name, byte-equal contents. With move mode this
+ *   means "drop agent dir and symlink to library" (no data move). With
+ *   copy mode this is a no-op.
+ * - "keep-agent": library has an entry but it differs; user chose to
+ *   keep the agent-side version. We overwrite the library entry, then
+ *   (move) symlink the agent dir, or (copy) leave the agent dir alone.
+ * - "keep-library": library entry differs; user chose to keep it. With
+ *   move mode the agent dir is replaced with a symlink to library. With
+ *   copy mode this is a no-op (agent stays as independent older copy).
+ * - "skip": no action; both stay as they are.
+ */
+export type ImportResolution =
+  | "new"
+  | "identical"
+  | "keep-agent"
+  | "keep-library"
+  | "skip";
+
 export interface CompleteSetupArgs {
   libraryRoot: LibraryRoot;
   customPath: string | null;
   primaryAgent: string;
   defaultDeployMode: DeployMode;
-  /** Optional — skills to bring into the new library during setup. Each
-   *  entry's `name` becomes the destination folder; `mode` defaults to
-   *  "copy" if omitted (preserves prior behaviour). */
-  importSkills?: { name: string; sourcePath: string; mode?: ImportMode }[];
+  /** Optional — skills to bring into the new library during setup.
+   *  Each entry pairs a source path with an import mode and a per-skill
+   *  resolution that determines how conflicts at the destination are
+   *  handled. `mode` and `resolution` default to "copy"/"new" if omitted
+   *  (preserves prior call sites). */
+  importSkills?: {
+    name: string;
+    sourcePath: string;
+    mode?: ImportMode;
+    resolution?: ImportResolution;
+  }[];
 }
 
 export interface CompleteSetupResult {
@@ -484,16 +657,19 @@ export async function completeSetup(
   await fs.mkdir(libraryPath, { recursive: true });
   await fs.mkdir(historyPath, { recursive: true });
 
-  // Import phase: copy or move selected skills into the new library.
-  // Conflicts (name already exists at the destination) are skipped — the
-  // SetupFlow pre-warned the user and we never overwrite during setup.
   const imported: string[] = [];
   const skipped: { name: string; reason: string }[] = [];
   for (const entry of args.importSkills ?? []) {
     const mode: ImportMode = entry.mode ?? "copy";
+    const resolution: ImportResolution = entry.resolution ?? "new";
     const dest = join(libraryPath, entry.name);
 
-    // Source must exist.
+    if (resolution === "skip") {
+      skipped.push({ name: entry.name, reason: "skipped by user" });
+      continue;
+    }
+
+    // Source must exist (lstat — symlinks count).
     try {
       await fs.lstat(entry.sourcePath);
     } catch {
@@ -504,8 +680,8 @@ export async function completeSetup(
       continue;
     }
 
-    // Source already pointing at dest (already a symlink to dest, or same
-    // path) — nothing to do. Helpful when the user re-runs onboarding.
+    // Already-symlinked: source resolves to dest. No-op regardless of
+    // mode/resolution — re-running onboarding on a symlinked agent dir.
     try {
       const real = await fs.realpath(entry.sourcePath);
       const realDest = await fs.realpath(dest).catch(() => dest);
@@ -517,64 +693,68 @@ export async function completeSetup(
       // realpath may throw on broken symlinks — fall through.
     }
 
-    // Conflict at destination — skip, don't overwrite.
-    let destExists = false;
     try {
-      await fs.lstat(dest);
-      destExists = true;
-    } catch {
-      // OK — destination free.
-    }
-    if (destExists) {
-      skipped.push({
-        name: entry.name,
-        reason: `Already exists at ${dest}`,
-      });
-      continue;
-    }
+      // Per (mode, resolution), decide what to do with library/dest and
+      // with agent/source. The combinations are documented in the
+      // ImportResolution doc above.
+      const destExists = await fs
+        .lstat(dest)
+        .then(() => true)
+        .catch(() => false);
 
-    try {
       if (mode === "move") {
-        // 1. Move source → dest. fs.rename is atomic within a filesystem;
-        //    falls back to copy+rm if the source crosses filesystems.
-        try {
-          await fs.rename(entry.sourcePath, dest);
-        } catch (err) {
-          if (
-            err &&
-            typeof err === "object" &&
-            "code" in err &&
-            (err as NodeJS.ErrnoException).code === "EXDEV"
-          ) {
-            await fs.cp(entry.sourcePath, dest, {
-              recursive: true,
-              verbatimSymlinks: false,
+        if (resolution === "new") {
+          if (destExists) {
+            skipped.push({
+              name: entry.name,
+              reason: `Library entry exists at ${dest} but resolution was 'new'; expected scanner to flag conflict`,
             });
-            await fs.rm(entry.sourcePath, { recursive: true, force: true });
-          } else {
-            throw err;
+            continue;
           }
-        }
-        // 2. Leave a symlink behind so the agent's directory still works.
-        //    Best-effort: if the symlink fails, the skill is safe at dest
-        //    and we surface the partial-success in the skipped reason.
-        try {
+          await moveAndSymlink(entry.sourcePath, dest);
+        } else if (resolution === "identical") {
+          // Library already has an identical copy — drop agent dir,
+          // symlink it to library. Library is canonical.
+          await fs.rm(entry.sourcePath, { recursive: true, force: true });
           await fs.symlink(dest, entry.sourcePath);
-        } catch (err) {
-          skipped.push({
-            name: entry.name,
-            reason: `Moved to ${dest} but symlink-back failed: ${
-              err instanceof Error ? err.message : String(err)
-            }`,
-          });
-          imported.push(entry.name);
-          continue;
+        } else if (resolution === "keep-agent") {
+          // Replace library with agent's version, then symlink.
+          if (destExists) {
+            await fs.rm(dest, { recursive: true, force: true });
+          }
+          await moveAndSymlink(entry.sourcePath, dest);
+        } else if (resolution === "keep-library") {
+          // Library wins — drop agent copy, symlink to library.
+          await fs.rm(entry.sourcePath, { recursive: true, force: true });
+          await fs.symlink(dest, entry.sourcePath);
         }
       } else {
-        await fs.cp(entry.sourcePath, dest, {
-          recursive: true,
-          verbatimSymlinks: false,
-        });
+        // copy mode: never modify the agent dir.
+        if (resolution === "new") {
+          if (destExists) {
+            skipped.push({
+              name: entry.name,
+              reason: `Library entry exists at ${dest} but resolution was 'new'`,
+            });
+            continue;
+          }
+          await fs.cp(entry.sourcePath, dest, {
+            recursive: true,
+            verbatimSymlinks: false,
+          });
+        } else if (resolution === "identical") {
+          // Library already has it. Nothing to do.
+        } else if (resolution === "keep-agent") {
+          if (destExists) {
+            await fs.rm(dest, { recursive: true, force: true });
+          }
+          await fs.cp(entry.sourcePath, dest, {
+            recursive: true,
+            verbatimSymlinks: false,
+          });
+        } else if (resolution === "keep-library") {
+          // Library wins — agent dir stays as-is (independent copy).
+        }
       }
       imported.push(entry.name);
     } catch (err) {

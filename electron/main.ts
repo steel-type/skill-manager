@@ -54,6 +54,7 @@ import {
   updateStackComposition,
 } from "./services/stacks";
 import {
+  compareSkillDirs,
   completeSetup,
   resolveLibraryRoot,
   scanForExistingSkills,
@@ -351,6 +352,11 @@ ipcMain.handle(
 ipcMain.handle(
   "scan-existing-skills",
   (_e, args: { rootPath: string }) => scanForExistingSkills(args.rootPath),
+);
+
+ipcMain.handle(
+  "compare-skill-dirs",
+  (_e, args: { a: string; b: string }) => compareSkillDirs(args.a, args.b),
 );
 
 ipcMain.handle(

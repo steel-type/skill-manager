@@ -20,6 +20,7 @@ import type {
   CompleteSetupArgs,
   DetectedSkill,
   ImportMode,
+  ImportResolution,
 } from "../../electron/services/setup";
 import type {
   DeployMode,
@@ -80,7 +81,6 @@ export function SetupFlow() {
   const [libraryChoice, setLibraryChoice] = useState<LibraryChoice | null>(
     null,
   );
-  const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [customPath, setCustomPath] = useState<string>("");
   const [resolvedPaths, setResolvedPaths] = useState<{
     libraryPath: string;
@@ -95,6 +95,16 @@ export function SetupFlow() {
   const [selectedToImport, setSelectedToImport] = useState<Set<string>>(
     new Set(),
   );
+  // Per-skill resolution computed from compareSkillDirs (agent vs
+  // library) when entering existing-step. Drives the conflict UI:
+  //  - "new":          no library entry; default action by sync mode
+  //  - "identical":    same name, byte-equal contents; auto-handled
+  //  - "keep-agent":   contents differ; user keeps agent (default)
+  //  - "keep-library": contents differ; user keeps library
+  //  - "skip":         user opted out for this row
+  const [resolutions, setResolutions] = useState<
+    Record<string, ImportResolution>
+  >({});
   // JSON entries pulled from a skills.json the user picked. We don't clone
   // these during setup — that's slow and can fail. Instead, after
   // completeSetup the ImportFlow opens with these pre-loaded.
@@ -235,35 +245,61 @@ export function SetupFlow() {
     };
   }, [libraryChoice]);
 
-  // When entering the Existing step, scan the chosen library — UNLESS the
-  // user picked "Move to SM" with skills already detected at the agent
-  // dir; in that case prefill with the agent-scan results so we move them.
+  // When entering the Existing step, decide what's in scope and compute
+  // per-skill conflict resolution.
+  //
+  // Source of candidates:
+  //  - If the user is moving from agent → centralized/custom AND the
+  //    agent had skills, the candidates ARE the agent skills (we'll
+  //    bring them across).
+  //  - Otherwise, scan the chosen library path itself (handles re-runs
+  //    and custom paths with pre-existing content).
+  //
+  // For each candidate, compare against the library entry of the same
+  // name and tag with a default resolution:
+  //  - no library entry → "new"
+  //  - byte-equal       → "identical"
+  //  - differs          → "keep-agent" (user can override per-row)
   useEffect(() => {
     if (step !== "existing" || !resolvedPaths || !libraryChoice) return;
     let cancelled = false;
     setScanLoading(true);
     (async () => {
       try {
-        // Source of detected skills depends on the library choice.
-        let found: DetectedSkill[] = [];
-        if (
-          libraryChoice.kind === "smCentralized" &&
-          agentScanResult.length > 0
-        ) {
-          // Move-from-agent flow: the candidates ARE the agent's skills.
-          found = agentScanResult;
-        } else {
-          // Default: scan the chosen library location for anything already
-          // there (idempotent re-runs, custom paths with prior data).
-          found = await window.api.scanForExistingSkills(
-            resolvedPaths.libraryPath,
-          );
-        }
+        const libraryPath = resolvedPaths.libraryPath;
+        const importingFromAgent =
+          libraryChoice.kind !== "agentInPlace" &&
+          agentScanResult.length > 0;
+        const found: DetectedSkill[] = importingFromAgent
+          ? agentScanResult
+          : await window.api.scanForExistingSkills(libraryPath);
+        if (cancelled) return;
+
+        // Compute resolutions in parallel. compareSkillDirs returns
+        // "missing" when the library doesn't have the entry — that's
+        // our "new" case.
+        const computed: Record<string, ImportResolution> = {};
+        await Promise.all(
+          found.map(async (s) => {
+            try {
+              const libDest = `${libraryPath}/${s.name}`;
+              const cmp = await window.api.compareSkillDirs(
+                s.path,
+                libDest,
+              );
+              if (cmp === "missing") computed[s.name] = "new";
+              else if (cmp === "identical") computed[s.name] = "identical";
+              else computed[s.name] = "keep-agent";
+            } catch {
+              computed[s.name] = "new";
+            }
+          }),
+        );
         if (cancelled) return;
         setDetectedSkills(found);
+        setResolutions(computed);
         // Default-check skills + bundles, leave packages unticked. The
-        // user can opt them in via the "Check all" button on the
-        // Other-folders section, or per-row.
+        // user opts packages in via the Check all button.
         setSelectedToImport(
           new Set(
             found.filter((s) => s.kind !== "package").map((s) => s.name),
@@ -327,20 +363,31 @@ export function SetupFlow() {
     setStep("running");
     setProgress(["Creating directories…"]);
     try {
-      // Decide import mode from libraryChoice.
+      // The Symlink/Copy pill now governs onboarding import too. When the
+      // user is making the agent dir THE library (agentInPlace) there's
+      // no import phase regardless. Otherwise:
+      //   pill=Symlink → mode=move (move + symlink-back per resolution)
+      //   pill=Copy    → mode=copy
       const importMode: ImportMode =
-        libraryChoice.kind === "smCentralized" &&
-        agentScanResult.length > 0
-          ? "move"
-          : "copy";
-      const importSkills = Array.from(selectedToImport).map((name) => {
-        const detected = detectedSkills.find((d) => d.name === name);
-        return {
-          name,
-          sourcePath: detected?.path ?? "",
-          mode: importMode,
-        };
-      }).filter((s) => s.sourcePath !== "");
+        libraryChoice.kind === "agentInPlace"
+          ? "copy" // unused: agentInPlace produces no importSkills
+          : deployMode === "symlink"
+            ? "move"
+            : "copy";
+      const importSkills =
+        libraryChoice.kind === "agentInPlace"
+          ? []
+          : Array.from(selectedToImport)
+              .map((name) => {
+                const detected = detectedSkills.find((d) => d.name === name);
+                return {
+                  name,
+                  sourcePath: detected?.path ?? "",
+                  mode: importMode,
+                  resolution: resolutions[name] ?? "new",
+                };
+              })
+              .filter((s) => s.sourcePath !== "");
 
       // libraryRoot/customPath args mirror the LibraryChoice.
       let libraryRoot: LibraryRoot;
@@ -507,8 +554,6 @@ export function SetupFlow() {
               setCustomPath={setCustomPath}
               resolvedPaths={resolvedPaths}
               pathError={pathError}
-              showMoreOptions={showMoreOptions}
-              setShowMoreOptions={setShowMoreOptions}
               deployMode={deployMode}
               setDeployMode={setDeployMode}
               onBack={() => setStep("agent")}
@@ -522,10 +567,12 @@ export function SetupFlow() {
               detected={detectedSkills}
               selected={selectedToImport}
               setSelected={setSelectedToImport}
+              resolutions={resolutions}
+              setResolutions={setResolutions}
               libraryPath={resolvedPaths?.libraryPath ?? ""}
               moveMode={
-                libraryChoice?.kind === "smCentralized" &&
-                agentScanResult.length > 0
+                libraryChoice?.kind !== "agentInPlace" &&
+                deployMode === "symlink"
               }
               jsonEntries={jsonEntries}
               jsonSourcePath={jsonSourcePath}
@@ -589,8 +636,8 @@ export function SetupFlow() {
               deployMode={deployMode}
               importCount={selectedToImport.size}
               moveMode={
-                libraryChoice.kind === "smCentralized" &&
-                agentScanResult.length > 0
+                libraryChoice.kind !== "agentInPlace" &&
+                deployMode === "symlink"
               }
               onBack={() => setStep("existing")}
               onComplete={onComplete}
@@ -795,8 +842,6 @@ function LocationStep({
   setCustomPath,
   resolvedPaths,
   pathError,
-  showMoreOptions,
-  setShowMoreOptions,
   deployMode,
   setDeployMode,
   onBack,
@@ -815,8 +860,6 @@ function LocationStep({
   setCustomPath: (p: string) => void;
   resolvedPaths: { libraryPath: string; historyPath: string } | null;
   pathError: string | null;
-  showMoreOptions: boolean;
-  setShowMoreOptions: (v: boolean) => void;
   deployMode: DeployMode;
   setDeployMode: (m: DeployMode) => void;
   onBack: () => void;
@@ -863,7 +906,7 @@ function LocationStep({
               onClick={() => setLibraryChoice({ kind: "smCentralized" })}
               title="Move to Skill Manager library"
               subtitle="~/.skill-stack/skills"
-              hint={`Recommended. Moves the ${agentSkillCount} found skill${agentSkillCount === 1 ? "" : "s"}${agentPackageCount > 0 ? ` (and any of the ${agentPackageCount} other folder${agentPackageCount === 1 ? "" : "s"} you opt-in to)` : ""} into the SM library and leaves a symlink at ${agentDir} so ${agent.displayName} keeps working. One source of truth across agents.`}
+              hint={`Recommended. Brings the ${agentSkillCount} found skill${agentSkillCount === 1 ? "" : "s"}${agentPackageCount > 0 ? ` (and any of the ${agentPackageCount} other folder${agentPackageCount === 1 ? "" : "s"} you opt-in to)` : ""} into the SM library. With Symlink mode (below) the originals at ${agentDir} become symlinks pointing into the library, so ${agent.displayName} keeps working.`}
               recommended
             />
             <PrimaryCard
@@ -903,6 +946,68 @@ function LocationStep({
         )}
       </div>
 
+      {/* Sync mode — load-bearing for both onboarding (move+symlink-back
+          vs copy) AND future per-project deploys. We lift this out of
+          a "More options" disclosure because it determines what happens
+          next, not a future-only preference. */}
+      {libraryChoice?.kind !== "agentInPlace" && (
+        <div
+          style={{
+            marginTop: 18,
+            padding: 12,
+            border: "1.5px solid var(--line-soft)",
+            borderRadius: 8,
+            background: "var(--paper-2)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              gap: 10,
+              marginBottom: 6,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--hand)",
+                fontSize: 18,
+              }}
+            >
+              Sync mode
+            </div>
+            <span
+              style={{
+                fontSize: 11,
+                color: "var(--ink-faint)",
+              }}
+            >
+              applies to onboarding and future project deploys
+            </span>
+          </div>
+          <p style={{ color: "var(--ink-soft)", fontSize: 12, marginTop: 0 }}>
+            <strong>Symlink</strong> (recommended): library is the canonical
+            source. Onboarding moves skills into the library and leaves a
+            symlink at the original location; future project deploys
+            symlink too. Edits propagate.{" "}
+            <strong>Copy</strong>: independent copies everywhere. No drift
+            propagation.
+          </p>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <ModePill
+              active={deployMode === "symlink"}
+              onClick={() => setDeployMode("symlink")}
+              label="Symlink"
+            />
+            <ModePill
+              active={deployMode === "copy"}
+              onClick={() => setDeployMode("copy")}
+              label="Copy"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Smaller folder-picker affordance below the primary cards. */}
       <div
         style={{
@@ -938,52 +1043,7 @@ function LocationStep({
           </span>
         )}
         <div style={{ flex: 1 }} />
-        <button
-          type="button"
-          className="sk-btn sm ghost"
-          onClick={() => setShowMoreOptions(!showMoreOptions)}
-        >
-          {showMoreOptions ? "Less options" : "More options"}
-        </button>
       </div>
-
-      {showMoreOptions && (
-        <div
-          style={{
-            marginTop: 14,
-            padding: 12,
-            border: "1.5px dashed var(--line-soft)",
-            borderRadius: 8,
-            background: "var(--paper-2)",
-          }}
-        >
-          <div
-            style={{
-              fontFamily: "var(--hand)",
-              fontSize: 18,
-              marginBottom: 8,
-            }}
-          >
-            Default deploy mode
-          </div>
-          <p style={{ color: "var(--ink-soft)", fontSize: 12, marginTop: 0 }}>
-            Symlink: edits propagate automatically. Copy: independent
-            per-project copies. You can change this per-deploy.
-          </p>
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-            <ModePill
-              active={deployMode === "symlink"}
-              onClick={() => setDeployMode("symlink")}
-              label="Symlink"
-            />
-            <ModePill
-              active={deployMode === "copy"}
-              onClick={() => setDeployMode("copy")}
-              label="Copy"
-            />
-          </div>
-        </div>
-      )}
 
       {resolvedPaths && (
         <div
@@ -1017,6 +1077,8 @@ function ExistingStep({
   detected,
   selected,
   setSelected,
+  resolutions,
+  setResolutions,
   libraryPath,
   moveMode,
   jsonEntries,
@@ -1031,6 +1093,12 @@ function ExistingStep({
   detected: DetectedSkill[];
   selected: Set<string>;
   setSelected: (s: Set<string>) => void;
+  resolutions: Record<string, ImportResolution>;
+  setResolutions: (
+    update: (
+      prev: Record<string, ImportResolution>,
+    ) => Record<string, ImportResolution>,
+  ) => void;
   libraryPath: string;
   moveMode: boolean;
   jsonEntries: { name: string; url: string }[];
@@ -1041,6 +1109,8 @@ function ExistingStep({
   onBack: () => void;
   onNext: () => void;
 }) {
+  const setResolutionFor = (name: string, r: ImportResolution) =>
+    setResolutions((prev) => ({ ...prev, [name]: r }));
   const toggle = (name: string) => {
     const next = new Set(selected);
     if (next.has(name)) next.delete(name);
@@ -1102,6 +1172,8 @@ function ExistingStep({
                   detected={s}
                   checked={selected.has(s.name)}
                   onToggle={() => toggle(s.name)}
+                  resolution={resolutions[s.name]}
+                  onResolutionChange={(r) => setResolutionFor(s.name, r)}
                 />
               ))}
             </div>
@@ -1430,47 +1502,120 @@ function DetectedRow({
   detected,
   checked,
   onToggle,
+  resolution,
+  onResolutionChange,
 }: {
   detected: DetectedSkill;
   checked: boolean;
   onToggle: () => void;
+  resolution?: ImportResolution;
+  onResolutionChange?: (r: ImportResolution) => void;
 }) {
+  // Conflict UI is only shown when resolution requires user input —
+  // i.e., when contents differ. "new" and "identical" are auto-handled.
+  const showConflict =
+    resolution === "keep-agent" ||
+    resolution === "keep-library" ||
+    (resolution === "skip" && checked);
   return (
-    <label
+    <div
       style={{
         display: "flex",
-        alignItems: "center",
-        gap: 8,
+        flexDirection: "column",
         padding: "6px 8px",
         fontSize: 12,
-        cursor: "pointer",
       }}
     >
-      <input type="checkbox" checked={checked} onChange={onToggle} />
-      <span style={{ fontFamily: "var(--mono)", flex: 1 }}>
-        {detected.name}
-      </span>
-      <span
-        className="sk-tag"
-        style={{ fontSize: 9 }}
-        title={detected.reason}
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          cursor: "pointer",
+        }}
       >
-        {detected.kind === "skill"
-          ? detected.reason
-          : detected.kind === "bundle"
-            ? `bundle · ${detected.nestedCount}`
-            : detected.reason}
-      </span>
-      {detected.viaContainer && (
+        <input type="checkbox" checked={checked} onChange={onToggle} />
+        <span style={{ fontFamily: "var(--mono)", flex: 1 }}>
+          {detected.name}
+        </span>
+        {resolution === "identical" && (
+          <span
+            className="sk-tag"
+            style={{ fontSize: 9, color: "var(--ink-faint)" }}
+            title="library already has an identical copy"
+          >
+            already in library
+          </span>
+        )}
+        {showConflict && (
+          <span
+            className="sk-tag"
+            style={{
+              fontSize: 9,
+              background: "var(--warn)",
+              color: "var(--on-accent)",
+            }}
+            title="library has a different version"
+          >
+            differs
+          </span>
+        )}
         <span
           className="sk-tag"
           style={{ fontSize: 9 }}
-          title={`found via ${detected.viaContainer}/`}
+          title={detected.reason}
         >
-          via {detected.viaContainer}/
+          {detected.kind === "skill"
+            ? detected.reason
+            : detected.kind === "bundle"
+              ? `bundle · ${detected.nestedCount}`
+              : detected.reason}
         </span>
+        {detected.viaContainer && (
+          <span
+            className="sk-tag"
+            style={{ fontSize: 9 }}
+            title={`found via ${detected.viaContainer}/`}
+          >
+            via {detected.viaContainer}/
+          </span>
+        )}
+      </label>
+      {showConflict && onResolutionChange && checked && (
+        <div
+          style={{
+            marginTop: 4,
+            marginLeft: 24,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 11,
+            color: "var(--ink-soft)",
+          }}
+        >
+          <span>resolve:</span>
+          <select
+            value={resolution}
+            onChange={(e) =>
+              onResolutionChange(e.target.value as ImportResolution)
+            }
+            style={{
+              fontFamily: "var(--read)",
+              fontSize: 11,
+              padding: "2px 6px",
+              border: "1.5px solid var(--line-soft)",
+              borderRadius: 4,
+              background: "var(--paper)",
+              color: "var(--ink)",
+            }}
+          >
+            <option value="keep-agent">keep agent (overwrite library)</option>
+            <option value="keep-library">keep library (drop agent)</option>
+            <option value="skip">skip (leave both untouched)</option>
+          </select>
+        </div>
       )}
-    </label>
+    </div>
   );
 }
 

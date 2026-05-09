@@ -65,6 +65,10 @@ const api = {
     ipcRenderer.invoke("scan-existing-skills", { rootPath }) as Promise<
       import("./services/setup").DetectedSkill[]
     >,
+  compareSkillDirs: (a: string, b: string) =>
+    ipcRenderer.invoke("compare-skill-dirs", { a, b }) as Promise<
+      "identical" | "differs" | "missing"
+    >,
   resolveLibraryRoot: (
     root: import("./services/types").LibraryRoot,
     customPath: string | null,
