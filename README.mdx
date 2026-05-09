@@ -2,6 +2,8 @@
 
 > The macOS desktop app for installing, stacking, and deploying skills across every AI coding agent you use.
 
+[![Latest release](https://img.shields.io/github/v/release/steel-type/skill-manager?label=Download%20.dmg&color=c96442&style=for-the-badge)](https://github.com/steel-type/skill-manager/releases/latest)
+
 **Supported agents:** Claude Code · OpenAI Codex · Gemini CLI · Continue.dev · Cursor · Cline
 
 A real GUI on top of the `SKILL.md` / `AGENTS.md` ecosystem. Install skills from any GitHub URL, group them into reusable **Stacks**, and deploy a single skill or an entire stack into a project's per-agent skills directory — copy or symlink, your choice — with version history and one-click rollback.
@@ -18,22 +20,16 @@ A real GUI on top of the `SKILL.md` / `AGENTS.md` ecosystem. Install skills from
 
 ## Install
 
-Download the DMG:
+Grab the latest `.dmg` from the [Releases page](https://github.com/steel-type/skill-manager/releases/latest), open it, drag **Skill Manager** to Applications. Unsigned — first launch may need right-click → **Open** to bypass Gatekeeper. Apple Silicon only for now.
 
-```bash
-npm run dist
-# → release/Skill Manager-<version>.dmg
-```
-
-The `.app` is unsigned — first launch may need right-click → **Open** to bypass Gatekeeper.
-
-Or run from source:
+Or run from source / build your own:
 
 ```bash
 git clone https://github.com/Steel-Type/skill-manager.git
 cd skill-manager
 npm install
-npm run dev
+npm run dev      # boot Vite + Electron with hot reload
+npm run dist     # build a fresh DMG → release/
 ```
 
 **Requirements:** macOS, Node.js 20+, `git` on `PATH`.
