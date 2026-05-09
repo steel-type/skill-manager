@@ -298,11 +298,22 @@ export function SetupFlow() {
         if (cancelled) return;
         setDetectedSkills(found);
         setResolutions(computed);
-        // Default-check skills + bundles, leave packages unticked. The
-        // user opts packages in via the Check all button.
+        // Default-check rows that have something useful to do:
+        //  - skills + bundles with resolution !== "identical" (i.e.
+        //    they're "new" or "keep-agent" — actual imports)
+        //  - packages stay unticked (user opts in via Check all)
+        //  - "identical" rows skip default-check; the row's own
+        //    'already in library' badge tells the user nothing's
+        //    needed here. Prevents the misleading "we'll import these"
+        //    UX when the source path already resolves to the library.
         setSelectedToImport(
           new Set(
-            found.filter((s) => s.kind !== "package").map((s) => s.name),
+            found
+              .filter(
+                (s) =>
+                  s.kind !== "package" && computed[s.name] !== "identical",
+              )
+              .map((s) => s.name),
           ),
         );
       } catch (err) {

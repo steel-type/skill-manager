@@ -551,13 +551,32 @@ export async function scanForExistingSkills(
     }
     throw err;
   }
+  // Helper: a name is dir-shaped if the entry itself is a directory OR
+  // it's a symlink whose target resolves to a directory. The latter is
+  // the on-disk reality after onboarding's "move + symlink-back" path,
+  // so missing it makes the agent-scan come up empty when in fact
+  // every skill is reachable via symlink.
+  async function resolvesAsDir(
+    base: string,
+    entry: import("node:fs").Dirent,
+  ): Promise<boolean> {
+    if (entry.isDirectory()) return true;
+    if (!entry.isSymbolicLink()) return false;
+    try {
+      const targetStat = await fs.stat(join(base, entry.name));
+      return targetStat.isDirectory();
+    } catch {
+      return false; // broken symlink
+    }
+  }
+
   // Map keyed by skill name so a duplicate (same name nested in a container
   // and at top level) collapses to one row. Last-wins.
   const found = new Map<string, DetectedSkill>();
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
     if (entry.name.startsWith(".")) continue;
     if (SCAN_EXCLUDE_NAMES.has(entry.name)) continue;
+    if (!(await resolvesAsDir(rootPath, entry))) continue;
     const dir = join(rootPath, entry.name);
     let detection;
     try {
@@ -599,9 +618,9 @@ export async function scanForExistingSkills(
         continue;
       }
       for (const child of childEntries) {
-        if (!child.isDirectory()) continue;
         if (child.name.startsWith(".")) continue;
         if (SCAN_EXCLUDE_NAMES.has(child.name)) continue;
+        if (!(await resolvesAsDir(dir, child))) continue;
         const childDir = join(dir, child.name);
         let childDetection;
         try {

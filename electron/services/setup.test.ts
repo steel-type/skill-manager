@@ -247,6 +247,29 @@ describe("scanForExistingSkills", () => {
     expect(result[0].viaContainer).toBe("skills");
   });
 
+  it("detects symlinked dirs (the move+symlink-back agent dir state)", async () => {
+    // Mirrors the on-disk shape after onboarding's symlink mode:
+    // ~/.claude/skills/foo is a symlink to ~/.skill-stack/skills/foo.
+    // Without the symlink-aware resolvesAsDir helper, the scanner
+    // would skip these and report "no skills found" on re-run.
+    const root = join(dirname(CONFIG_PATH), "scan-symlinks");
+    const lib = join(root, "lib");
+    const agent = join(root, "agent");
+    await fs.mkdir(join(lib, "alpha"), { recursive: true });
+    await fs.writeFile(join(lib, "alpha", "SKILL.md"), "a");
+    await fs.mkdir(join(lib, "beta"), { recursive: true });
+    await fs.writeFile(join(lib, "beta", "AGENTS.md"), "b");
+    await fs.mkdir(agent, { recursive: true });
+    await fs.symlink(join(lib, "alpha"), join(agent, "alpha"));
+    await fs.symlink(join(lib, "beta"), join(agent, "beta"));
+    // Broken symlink — should be ignored, not crash the scan.
+    await fs.symlink(join(root, "ghost"), join(agent, "missing"));
+
+    const result = await scanForExistingSkills(agent);
+    expect(result.map((s) => s.name).sort()).toEqual(["alpha", "beta"]);
+    expect(result[0].isSkill).toBe(true);
+  });
+
   it("dedupes by name when same skill appears at top level and inside container", async () => {
     const root = join(dirname(CONFIG_PATH), "scan-dedupe");
     await fs.mkdir(join(root, "alpha"), { recursive: true });
