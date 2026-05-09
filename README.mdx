@@ -1,0 +1,269 @@
+# Skill Manager
+
+> The macOS desktop app for installing, stacking, and deploying skills across every AI coding agent you use.
+
+**Supported agents:** Claude Code · OpenAI Codex · Gemini CLI · Continue.dev · Cursor · Cline
+
+A real GUI on top of the `SKILL.md` / `AGENTS.md` ecosystem. Install skills from any GitHub URL, group them into reusable **Stacks**, and deploy a single skill or an entire stack into a project's per-agent skills directory — copy or symlink, your choice — with version history and one-click rollback.
+
+---
+
+## What you get
+
+- **Stacks** — Name a bundle of skills, write a description, pick members. Skill Manager writes a generated meta-`SKILL.md` to your library and deploys members + meta as a unit. Update composition once and the change cascades to every project the stack lives in.
+- **Multi-agent deploy** — One Library, six target agents. Each deploy resolves to the agent's expected location and entry-file shape (e.g. `~/.claude/skills/<name>/SKILL.md`, `.cursor/rules/<name>.mdc`, `.cline/skills/<name>/SKILL.md`) — no per-agent copy-paste.
+- **Safety net** — Snapshot retention (configurable, default 2) on every update; one-click rollback; cascade-on-update so a library update propagates to every project the skill is deployed to.
+
+---
+
+## Install
+
+Download the DMG:
+
+```bash
+npm run dist
+# → release/Skill Manager-<version>.dmg
+```
+
+The `.app` is unsigned — first launch may need right-click → **Open** to bypass Gatekeeper.
+
+Or run from source:
+
+```bash
+git clone https://github.com/Steel-Type/skill-manager.git
+cd skill-manager
+npm install
+npm run dev
+```
+
+**Requirements:** macOS, Node.js 20+, `git` on `PATH`.
+
+---
+
+## Quick start
+
+1. **First launch — Setup.** SetupFlow walks you through:
+   - Pick a **primary agent** (Claude Code, Codex, Gemini, or Continue — these are the ones with a global skills dir; Cursor and Cline are project-only and can't be primary).
+   - Pick a **library location** — keep your primary agent's default dir, move to a centralized `~/.skill-stack/skills`, or browse to a custom path.
+   - **Reconcile existing skills** — Skill Manager scans the agent's default location for `SKILL.md` / `AGENTS.md` folders and lets you import each one (keep agent-side, keep library-side, or skip).
+2. **Install a skill.** Paste any GitHub URL into the Library tab's install bar. Skill Manager runs a shallow clone, captures the commit SHA, and detects bundles (repos with multiple `SKILL.md` files).
+3. **Build a stack.** Stacks tab → **New Stack** → pick members, write a description. The meta-skill is staged in your library at `<library>/<stack-id>/SKILL.md` so it deploys uniformly with regular skills.
+4. **Deploy.** Pick a project, pick a target agent, pick copy or symlink. The Deploy tab tracks every (skill or stack, project, agent) row.
+
+---
+
+## Concepts
+
+| Term | Meaning |
+|---|---|
+| **Skill** | A folder with a `SKILL.md` or `AGENTS.md` at its root. Installed from a GitHub URL or imported from disk. |
+| **Stack** | A named, ordered bundle of skills. Generates a meta-skill that activates members by name; deployed as a unit. |
+| **Agent** | A deploy target — Claude Code, Cursor, Cline, Codex, Gemini, or Continue. Each has its own path and entry-file shape. |
+| **Deploy** | Place a skill (or stack) into a project's per-agent skills dir, by copy or symlink. Tracked in a per-row deployment ledger. |
+
+---
+
+## Supported agents
+
+Read live from `electron/services/agents.ts`:
+
+| Agent | Global path | Project path | Entry file | Single-file alt |
+|---|---|---|---|---|
+| **Claude Code** | `~/.claude/skills/<name>/` | `.claude/skills/<name>/` | `SKILL.md` | `CLAUDE.md` |
+| **OpenAI Codex** | `~/.codex/skills/<name>/` | `.codex/skills/<name>/` | `SKILL.md` | `AGENTS.md` |
+| **Gemini CLI** | `~/.gemini/skills/<name>/` | `.gemini/skills/<name>/` | `SKILL.md` | `GEMINI.md` |
+| **Continue.dev** | `~/.continue/skills/<name>/` | `.continue/skills/<name>/` | `SKILL.md` | — |
+| **Cursor** | — (project only) | `.cursor/rules/` | `<name>.mdc` | `.cursorrules` |
+| **Cline** | — (project only) | `.cline/skills/<name>/` | `SKILL.md` | `.clinerules` |
+
+Cursor and Cline have no global skills concept and so can't be the primary agent during Setup, but both are valid deploy targets at the project level.
+
+---
+
+## Features
+
+### Library
+
+- Install any skill from a GitHub URL (shallow clone, captures commit SHA).
+- `SKILL.md` *and* `AGENTS.md` are first-class skill identifiers.
+- Bundles (repos with multiple skills) are auto-detected and expandable.
+- Track every skill's source URL, install/update timestamps, and which projects + agents it lives in.
+- Check updates across the whole library in parallel (`git ls-remote`).
+- Update a skill — and cascade that update into every project where it's deployed.
+- Roll back to any snapshot in `~/.<library>/skills-history/<name>/<sha>/` (configurable retention, default 2).
+- Export / import the library as a markdown bullet list.
+
+### Stacks
+
+- Auto-generated meta-`SKILL.md` lists members by name so any agentskills.io-conformant agent can activate the bundle.
+- Edit composition; added members are pushed to every existing deployment automatically.
+- Optional **cascade-remove orphans** when removing a member — preview before commit shows what will and won't be removed (a member still claimed by another deployed stack at the same project is left in place).
+- **Deploy to home library** — promote a stack into the Library view *and* wire it into your primary agent's global skills dir so it's invokable from any project.
+
+### Deploy
+
+- Per-row ledger: skill or stack × project × agent × mode × timestamp.
+- Copy or symlink, per deploy. Symlink lets library updates flow into the project automatically; copy gives you a frozen snapshot.
+- Cursor and other single-file agents are handled transparently — Skill Manager writes `<name>.mdc` instead of a directory.
+- Remove a deployment with optional file cleanup (and, for stacks, optional cascade-remove of member files).
+
+### Safety
+
+- Snapshot every update before swap; restore from any retained snapshot.
+- Cascade-on-update toggle (Settings → Behavior).
+- Atomic config writes via tmp + `fs.rename`; corrupt config detection with backup-and-recover.
+- Process-wide config mutex so parallel operations can't lose each other's edits.
+
+### Power-user
+
+- **`⌘K` global command palette** — verb parser with `install`, `deploy <skill> to <project>`, `update`, `list`, `rm`, `rollback`, `browse`, `stack <name>`, `check`, `help`. Reachable from any tab.
+- **Library relocation** — Settings → Library → migrate to a different path. Optional history move; symlink deployments are regenerated automatically.
+
+---
+
+## Keyboard shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `⌘K` (or `Ctrl+K`) | Toggle global command palette |
+| `⌘1` / `⌘2` / `⌘3` / `⌘4` | Library / Stacks / Deploy / Settings |
+| Arrow keys + ⏎ in palette | Navigate and trigger commands |
+| `Esc` | Close modal, clear command-palette input |
+
+---
+
+## Tech stack
+
+Electron 33 · React 18 · TypeScript 5 · Vite 6 · zustand · vitest. Frameless macOS-styled chrome with native traffic lights repositioned into the drawn titlebar (`titleBarStyle: 'hidden'` + `trafficLightPosition`). All `git` operations run in the main process via `child_process.spawn` with argv-form arguments and a `--` separator so URL injection is impossible.
+
+---
+
+<details>
+<summary><strong>Security model</strong></summary>
+
+- Renderer runs sandboxed (`sandbox: true`) with context isolation and no Node integration.
+- Preload uses `contextBridge` to expose a typed `window.api` surface; no `AbortSignal` or other non-cloneable types cross the bridge — cancellation uses `streamId` + `cancelOperation` IPC instead.
+- All user-supplied strings (URLs, skill names, stack ids, project paths, commits) pass through validators in `electron/services/validators.ts` before they touch the filesystem or `git`. Reject path-traversal, control chars, oversize, and `--`-prefixed values that could be parsed as git flags.
+- Atomic config writes via tmp + `fs.rename`; corrupt config detection with backup-and-recover.
+- Process-wide config mutex (`withConfigLock`) serialises every read-modify-write so parallel operations can't lose each other's edits.
+- Stack-id namespace collisions with library skills are refused — both in config and on disk — so a stack create can never clobber a real skill.
+- Symlinks are filtered out of clones during `fs.cp` so a malicious repo can't smuggle a symlink to `/etc/passwd` into your library.
+- Strict CSP: `script-src 'self'`, `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`, `connect-src` allow-list (Vite HMR in dev, `api.github.com` for stargazer fetches, Google Fonts).
+- All `git` children tracked; SIGTERM'd on `before-quit`.
+- Renderer crash auto-reloads up to 3 times then surfaces a dialog.
+- Drag-and-drop blocked at both renderer (`dragover` / `drop` `preventDefault`) and main (`will-navigate` guard) layers.
+
+</details>
+
+<details>
+<summary><strong>Project layout</strong></summary>
+
+```
+electron/
+├─ main.ts              window lifecycle, IPC, CSP, child-process tracker
+├─ preload.ts           typed window.api surface (contextBridge)
+├─ operations.ts        high-level operations behind each IPC handler
+└─ services/
+   ├─ agents.ts         6-agent definition table, path resolver
+   ├─ paths.ts          library + history path resolution (driven by setup)
+   ├─ types.ts          Skill, SkillStack, StackDeployment, SetupConfig, …
+   ├─ validators.ts     URL / skill-name / stack-name / project-path / commit
+   ├─ config.ts         load / save / reconcile, atomic writes, mutex
+   ├─ skills.ts         frontmatter parser, detect_skill_type, getSkillTree
+   ├─ stacks.ts         createStack, deployStack, deployStackToHomeLibrary
+   ├─ git.ts            clone (with cancellation + symlink filter), ls-remote
+   ├─ deploy.ts         copy + cascade to projects, per-agent path resolve
+   ├─ history.ts        snapshot archive / list / restore / reconcile
+   ├─ migration.ts      library relocation (planMigration + runMigration)
+   └─ exportImport.ts   markdown bullet roundtrip
+
+src/
+├─ App.tsx              tab + screen routing, theme application, shortcuts
+├─ state/store.ts       zustand: tabs, screens, modals, skills, stacks, settings
+├─ lib/cancellable.ts   AbortController ↔ streamId bridge for IPC
+├─ components/
+│  ├─ AppWindow.tsx        macOS chrome
+│  ├─ LeftRail.tsx         persistent sidebar
+│  ├─ VerticalNav.tsx      Library / Stacks / Deploy / Settings
+│  ├─ FilterRail.tsx       library filter pills + tracked-projects mini-list
+│  ├─ CommandOverlay.tsx   ⌘K global palette host
+│  ├─ CommandPalette.tsx   verb parser + suggestions
+│  ├─ SkillCard.tsx        library card
+│  ├─ StackCard.tsx        stacks card
+│  ├─ StackBadge.tsx       chip on member skill cards
+│  ├─ ThemeToggle.tsx, ScreenShell.tsx, Modal.tsx, OverflowMenu.tsx, …
+├─ views/
+│  ├─ LibraryView.tsx      card grid + install bar + filter results
+│  ├─ StacksView.tsx       stacks grid + create/edit/delete/deploy-to-library
+│  ├─ DeployView.tsx       tracked projects + per-row ledger
+│  └─ SettingsView.tsx     paths, behavior, theme, retention, library migration
+└─ flows/
+   ├─ SetupFlow.tsx          first-run: agent + library + reconcile existing skills
+   ├─ MigrationFlow.tsx      relocate library between paths
+   ├─ InstallFlow.tsx        modal — paste URL, watch git, see bundle preview
+   ├─ UpdateFlow.tsx         3-step review → progress → summary
+   ├─ SkillDetailFlow.tsx    meta, tree, GH stats, deployments
+   ├─ StackDetailFlow.tsx    members, deployments, edit composition
+   ├─ CreateStackFlow.tsx    new-stack composer
+   ├─ DeleteStackFlow.tsx    delete with optional per-project cleanup
+   ├─ RollbackFlow.tsx       pick snapshot, optionally cascade
+   ├─ RemoveSkillFlow.tsx    leave / cascade-clean radios
+   ├─ RemoveProjectFlow.tsx  same pattern for project tracking
+   └─ ImportFlow.tsx         markdown bullet → install batch
+
+design-reference/         original wireframes
+legacy/                   v0.1 Python + CustomTkinter implementation, frozen
+assets/                   icon source + built .icns
+scripts/                  build-icons.sh, check-theme-tokens.sh, afterPack.cjs
+DARK_THEME.md             dark theme spec
+LIGHT_THEME.md            wireframe-cream spec
+```
+
+</details>
+
+---
+
+## Theme system
+
+Two complete themes; user choice is persisted under `settings.theme`.
+
+| | Light | Dark (default) |
+|---|---|---|
+| Page background | `#fdfcf8` warm cream | `#050505` near-black |
+| Surface (sidebar/cards) | `#f5f3ec` | `#111213` |
+| Primary ink | `#2a2a2a` | `#f0f2f4` |
+| Accent | `#c96442` terracotta | `#3ee07a` green |
+| Slider accent | `#3d6e8c` slate blue | `#5ea3d0` lighter slate |
+| Heading font | Caveat | Caveat |
+| Body font | Kalam | Kalam |
+| Mono | JetBrains Mono | JetBrains Mono |
+
+The dark theme inherits all radii, shadows, and the wireframe shape language from light — only colors swap. `scripts/check-theme-tokens.sh` runs as part of `npm run build` to catch hardcoded colors in source. See `LIGHT_THEME.md` and `DARK_THEME.md` for the full token tables.
+
+---
+
+## Test
+
+```bash
+npm test            # vitest run — validators, parsers, IPC, stack collisions
+npm run typecheck   # both renderer (src/) and main (electron/) projects
+npm run lint:theme  # check-theme-tokens — flag hardcoded colors
+```
+
+The test suite focuses on security-critical code: input validators (URL, skill name, stack name, project path, commit token), the YAML frontmatter parser (with a 5 MB-file stress test), markdown export/import round-trip, and stack-id collision against on-disk orphans.
+
+---
+
+## Roadmap
+
+- **Filter toggle for the command palette** — opt-in honour of the active FilterRail selection.
+- **Type-scale rationalization** — pin SetupFlow + detail screens to a modular scale.
+- **Scanner depth/breadth caps** — protect against pathological monorepos imported as skills.
+- **Cursor + package-tier deploy** — synthesize a stub `SKILL.md` (or refuse cleanly) when a packaging-tier entry deploys to a single-file agent.
+- **MigrationFlow back-button hardening** — verify the back-button is fully disabled mid-run.
+
+---
+
+## License
+
+MIT — see `LICENSE`.
