@@ -47,6 +47,8 @@ import {
   createStack,
   deleteStack,
   deployStack,
+  deployStackToHomeLibrary,
+  removeStackFromHomeLibrary,
   getStackDeployments,
   listStacks,
   previewCompositionCascade,
@@ -720,6 +722,17 @@ ipcMain.handle(
     },
   ) =>
     deployStack(args.stackId, args.projectPath, args.agentId, args.deployMode),
+);
+
+ipcMain.handle(
+  "deploy-stack-to-home-library",
+  (_e, args: { stackId: string }) => deployStackToHomeLibrary(args.stackId),
+);
+
+ipcMain.handle(
+  "remove-stack-from-home-library",
+  (_e, args: { stackId: string }) =>
+    removeStackFromHomeLibrary(args.stackId),
 );
 
 ipcMain.handle(

@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import { dirname, join } from "node:path";
-import { AGENTS, resolveAgentPaths } from "./agents";
+import { AGENTS, getAgentSkillsDir, resolveAgentPaths } from "./agents";
 import { loadConfig, nowIso, saveConfig, withConfigLock } from "./config";
 import { deployToProject } from "./deploy";
 import { getLibraryPath } from "./paths";
@@ -159,6 +159,135 @@ export async function removeMetaSkillFromProject(
 ): Promise<void> {
   const { containerPath } = metaSkillDestination(stackId, projectPath, agentId);
   await fs.rm(containerPath, { recursive: true, force: true });
+}
+
+// ── Home library deployment ──────────────────────────────────────────────────
+//
+// "Deploy to home library" promotes a stack from a config-only entity into
+// a first-class library citizen + makes it discoverable from the user's
+// primary agent. After deploy:
+//   1. <library>/<id>/SKILL.md exists (already true on stack create — this
+//      makes it permanent rather than incidental)
+//   2. SkillStack.inHomeLibrary === true → listSkills surfaces it as a
+//      Library-view entry alongside regular skills
+//   3. The primary agent's global skills dir contains <stackId>/ (symlink
+//      when sync mode = symlink, copy when sync mode = copy) so the agent
+//      can discover and invoke the stack from any project.
+
+export interface DeployStackToLibraryResult {
+  stackId: string;
+  /** Agents we wired the stack into. Empty when the user's primary agent
+   *  has no global skills concept (cursor/cline) or library == agent dir. */
+  wiredAgents: string[];
+  warning: string | null;
+}
+
+export async function deployStackToHomeLibrary(
+  rawStackId: string,
+): Promise<DeployStackToLibraryResult> {
+  const stackId = validateStackName(rawStackId);
+  const config = await loadConfig();
+  const stack = config.stacks.find((s) => s.id === stackId);
+  if (!stack) throw new Error(`Stack '${stackId}' not found`);
+
+  // Always re-generate the meta-skill body — picks up any member-description
+  // drift since the last write.
+  const members = await loadStackMembers(stack.skillIds);
+  const metaContent = generateMetaSkill(stack, members);
+  await writeMetaSkillToLibrary(stackId, metaContent);
+
+  // Wire into the user's primary agent dir (if it has a global concept and
+  // it isn't the same dir as the library — in agent-in-place setups the
+  // library IS the agent dir, so the meta-skill is already discoverable).
+  const wiredAgents: string[] = [];
+  let warning: string | null = null;
+  const primaryAgent = config.setup.primaryAgent;
+  const agentSkillsDir = primaryAgent
+    ? getAgentSkillsDir(primaryAgent)
+    : null;
+  const libraryPath = getLibraryPath();
+  const mode: DeployMode = config.settings.default_deploy_mode;
+
+  if (agentSkillsDir && agentSkillsDir !== libraryPath) {
+    const target = join(agentSkillsDir, stackId);
+    const source = join(libraryPath, stackId);
+    try {
+      await fs.mkdir(agentSkillsDir, { recursive: true });
+      // Clear any prior copy/symlink at the target — overwrite-cleanly.
+      await fs.rm(target, { recursive: true, force: true });
+      if (mode === "symlink") {
+        await fs.symlink(source, target);
+      } else {
+        await fs.cp(source, target, {
+          recursive: true,
+          verbatimSymlinks: false,
+        });
+      }
+      wiredAgents.push(primaryAgent!);
+    } catch (err) {
+      warning = `Wrote stack to library, but failed to wire ${primaryAgent} dir: ${
+        err instanceof Error ? err.message : String(err)
+      }`;
+    }
+  }
+
+  // Persist the flag + agents list so listSkills + remove know about it.
+  await withConfigLock(async () => {
+    const fresh = await loadConfig();
+    const idx = fresh.stacks.findIndex((s) => s.id === stackId);
+    if (idx < 0) return;
+    fresh.stacks[idx] = {
+      ...fresh.stacks[idx],
+      inHomeLibrary: true,
+      homeLibraryAgents: wiredAgents,
+      updatedAt: nowIso(),
+    };
+    await saveConfig(fresh);
+  });
+
+  return { stackId, wiredAgents, warning };
+}
+
+export async function removeStackFromHomeLibrary(
+  rawStackId: string,
+): Promise<{ stackId: string; cleanedAgents: string[] }> {
+  const stackId = validateStackName(rawStackId);
+  const config = await loadConfig();
+  const stack = config.stacks.find((s) => s.id === stackId);
+  if (!stack) throw new Error(`Stack '${stackId}' not found`);
+
+  // Remove from each agent dir we previously wired into.
+  const cleanedAgents: string[] = [];
+  for (const agentId of stack.homeLibraryAgents ?? []) {
+    const agentSkillsDir = getAgentSkillsDir(agentId);
+    if (!agentSkillsDir) continue;
+    const target = join(agentSkillsDir, stackId);
+    try {
+      await fs.rm(target, { recursive: true, force: true });
+      cleanedAgents.push(agentId);
+    } catch {
+      // best-effort
+    }
+  }
+
+  // Note: the meta-skill at <library>/<id>/ stays in place. It's still the
+  // source of truth for any per-project deployments and gets regenerated
+  // on createStack/updateStackComposition. listSkills will hide it again
+  // as soon as inHomeLibrary flips false.
+  await withConfigLock(async () => {
+    const fresh = await loadConfig();
+    const idx = fresh.stacks.findIndex((s) => s.id === stackId);
+    if (idx < 0) return;
+    fresh.stacks[idx] = {
+      ...fresh.stacks[idx],
+      inHomeLibrary: false,
+      homeLibraryAgents: [],
+      updatedAt: nowIso(),
+    };
+    await saveConfig(fresh);
+  });
+
+  return { stackId, cleanedAgents };
 }
 
 // ── Orchestration ────────────────────────────────────────────────────────────
@@ -389,6 +518,33 @@ export async function updateStackComposition(
   // re-deploy below to refresh their on-disk file.
   await writeMetaSkillToLibrary(stackId, metaContent);
 
+  // If this stack is wired into the home library AND we're in copy mode,
+  // the agent-dir copy goes stale on every composition update. Refresh it
+  // so the user doesn't have to re-run "Deploy to home library" manually.
+  // Symlink-mode wiring resolves to the freshly-written library copy
+  // automatically and needs no action here.
+  if (existing.inHomeLibrary === true) {
+    const mode: DeployMode = config.settings.default_deploy_mode;
+    if (mode === "copy") {
+      const libraryPath = getLibraryPath();
+      for (const agentId of existing.homeLibraryAgents ?? []) {
+        const agentSkillsDir = getAgentSkillsDir(agentId);
+        if (!agentSkillsDir || agentSkillsDir === libraryPath) continue;
+        const target = join(agentSkillsDir, stackId);
+        try {
+          await fs.rm(target, { recursive: true, force: true });
+          await fs.cp(join(libraryPath, stackId), target, {
+            recursive: true,
+            verbatimSymlinks: false,
+          });
+        } catch {
+          // best-effort; user can re-run "Deploy to home library" if this
+          // diverges
+        }
+      }
+    }
+  }
+
   const pushed: UpdateStackCompositionResult["pushed"] = [];
   for (const dep of deployments) {
     const addedDeployed: string[] = [];
@@ -574,6 +730,22 @@ export async function deleteStack(
       } catch {
         // Best-effort cleanup — a project that's been moved or deleted
         // shouldn't block removing the stack from config.
+      }
+    }
+    // Tear down any home-library wiring (agent-dir symlink/copy) before
+    // dropping the meta-skill from the library. Best-effort — orphaned
+    // symlinks won't block deletion.
+    const stackEntry = config.stacks.find((s) => s.id === stackId);
+    for (const agentId of stackEntry?.homeLibraryAgents ?? []) {
+      const agentSkillsDir = getAgentSkillsDir(agentId);
+      if (!agentSkillsDir) continue;
+      try {
+        await fs.rm(join(agentSkillsDir, stackId), {
+          recursive: true,
+          force: true,
+        });
+      } catch {
+        // best-effort
       }
     }
     // Also remove the library staging directory so the stack is fully gone

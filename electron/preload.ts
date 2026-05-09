@@ -390,6 +390,18 @@ const api = {
       warning: string | null;
     }>,
 
+  deployStackToHomeLibrary: (stackId: string) =>
+    ipcRenderer.invoke("deploy-stack-to-home-library", { stackId }) as Promise<{
+      stackId: string;
+      wiredAgents: string[];
+      warning: string | null;
+    }>,
+
+  removeStackFromHomeLibrary: (stackId: string) =>
+    ipcRenderer.invoke("remove-stack-from-home-library", {
+      stackId,
+    }) as Promise<{ stackId: string; cleanedAgents: string[] }>,
+
   getStackDeployments: (stackId?: string) =>
     ipcRenderer.invoke("get-stack-deployments", { stackId }) as Promise<
       StackDeployment[]

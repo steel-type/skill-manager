@@ -19,6 +19,13 @@ export function StacksView() {
   const setScreen = useAppStore((s) => s.setScreen);
   const openModal = useAppStore((s) => s.openModal);
   const queueStackForDeploy = useAppStore((s) => s.queueStackForDeploy);
+  const deployStackToHomeLibrary = useAppStore(
+    (s) => s.deployStackToHomeLibrary,
+  );
+  const removeStackFromHomeLibrary = useAppStore(
+    (s) => s.removeStackFromHomeLibrary,
+  );
+  const setError = useAppStore((s) => s.setError);
 
   useEffect(() => {
     loadStacks();
@@ -111,6 +118,20 @@ export function StacksView() {
                 }
                 onOpen={() => handleOpen(stack.id)}
                 onSendToDeploy={() => queueStackForDeploy(stack.id)}
+                onDeployToHomeLibrary={() =>
+                  deployStackToHomeLibrary(stack.id).catch((err) =>
+                    setError(
+                      err instanceof Error ? err.message : String(err),
+                    ),
+                  )
+                }
+                onRemoveFromHomeLibrary={() =>
+                  removeStackFromHomeLibrary(stack.id).catch((err) =>
+                    setError(
+                      err instanceof Error ? err.message : String(err),
+                    ),
+                  )
+                }
                 onEdit={() => handleEdit(stack.id)}
                 onDelete={() => handleDelete(stack.id)}
               />

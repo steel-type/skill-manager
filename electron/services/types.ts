@@ -141,6 +141,16 @@ export interface SkillStack {
   skillIds: string[];
   createdAt: string;
   updatedAt: string;
+  /** True when this stack has been promoted into the user's home library
+   *  (visible in Library view + symlinked/copied into the primary agent's
+   *  global skills dir so it's invokable from any project). The
+   *  meta-skill is always WRITTEN to the library at <library>/<id>/SKILL.md
+   *  on stack create/update; this flag controls whether it's also
+   *  surfaced as a library entry and wired into agent dirs. */
+  inHomeLibrary?: boolean;
+  /** When inHomeLibrary === true, the agent dir(s) we wired the stack
+   *  into (so removeStackFromHomeLibrary knows what to clean up). */
+  homeLibraryAgents?: string[];
 }
 
 export interface StackDeployment {

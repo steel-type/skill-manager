@@ -171,6 +171,8 @@ interface AppState {
     cascadeSkipped: { skillId: string; projectPath: string; agentId: string; reason: string }[];
   }>;
   deleteStack: (stackId: string, cleanup: boolean) => Promise<void>;
+  deployStackToHomeLibrary: (stackId: string) => Promise<void>;
+  removeStackFromHomeLibrary: (stackId: string) => Promise<void>;
   setActiveStack: (stackId: string | null) => void;
   queueSkillForDeploy: (skillName: string) => void;
   queueStackForDeploy: (stackId: string) => void;
@@ -388,6 +390,23 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeStackId:
         state.activeStackId === stackId ? null : state.activeStackId,
     }));
+    // Library entries may have changed (a stack was removed from the
+    // home library implicitly via cleanup). Re-list so the Library view
+    // reflects reality.
+    await get().refreshSkills();
+  },
+
+  deployStackToHomeLibrary: async (stackId) => {
+    const result = await window.api.deployStackToHomeLibrary(stackId);
+    if (result.warning) get().setError(result.warning);
+    await get().loadStacks();
+    await get().refreshSkills();
+  },
+
+  removeStackFromHomeLibrary: async (stackId) => {
+    await window.api.removeStackFromHomeLibrary(stackId);
+    await get().loadStacks();
+    await get().refreshSkills();
   },
 
   setActiveStack: (activeStackId) => set({ activeStackId }),
