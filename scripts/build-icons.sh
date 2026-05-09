@@ -1,36 +1,34 @@
 #!/usr/bin/env bash
 #
-# Render assets/icon.svg → assets/icon.icns using only macOS-built-in tools.
-# Re-run any time you tweak the SVG.
+# Build assets/icon.icns from either assets/icon.svg (rasterised via
+# qlmanage) or assets/icon.png (used directly). macOS-built-in tools only.
 
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-SRC="assets/icon.svg"
+SVG="assets/icon.svg"
+PNG_SRC="assets/icon.png"
 DST="assets/icon.icns"
-
-if [[ ! -f "$SRC" ]]; then
-  echo "Missing $SRC" >&2
-  exit 1
-fi
-
-if ! command -v qlmanage >/dev/null 2>&1; then
-  echo "qlmanage not found — this script only runs on macOS" >&2
-  exit 1
-fi
 
 WORK="$(mktemp -d)"
 ICONSET="$WORK/icon.iconset"
 mkdir -p "$ICONSET"
 trap 'rm -rf "$WORK"' EXIT
 
-# QuickLook can rasterise an SVG straight to PNG without any external libs.
-echo "Rendering $SRC at 1024×1024…"
-qlmanage -t -s 1024 -o "$WORK" "$SRC" >/dev/null 2>&1
-PNG="$WORK/$(basename "$SRC").png"
-if [[ ! -f "$PNG" ]]; then
-  echo "qlmanage produced no PNG (looked for $PNG)" >&2
+PNG="$WORK/master.png"
+if [[ -f "$SVG" ]]; then
+  command -v qlmanage >/dev/null 2>&1 || { echo "qlmanage not found — macOS only" >&2; exit 1; }
+  echo "Rendering $SVG at 1024×1024…"
+  qlmanage -t -s 1024 -o "$WORK" "$SVG" >/dev/null 2>&1
+  RENDERED="$WORK/$(basename "$SVG").png"
+  [[ -f "$RENDERED" ]] || { echo "qlmanage produced no PNG (looked for $RENDERED)" >&2; exit 1; }
+  sips -z 1024 1024 "$RENDERED" --out "$PNG" >/dev/null
+elif [[ -f "$PNG_SRC" ]]; then
+  echo "Using $PNG_SRC as source (no SVG present)…"
+  sips -z 1024 1024 "$PNG_SRC" --out "$PNG" >/dev/null
+else
+  echo "Missing both $SVG and $PNG_SRC" >&2
   exit 1
 fi
 
@@ -53,6 +51,8 @@ for entry in "${SIZES_AND_NAMES[@]}"; do
   name="${entry#*:}"
   sips -z "$size" "$size" "$PNG" --out "$ICONSET/$name" >/dev/null
 done
+
+# (PNG above is the rendered/copied 1024 master inside $WORK.)
 
 echo "Packing iconset → $DST"
 iconutil -c icns "$ICONSET" -o "$DST"
