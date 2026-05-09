@@ -207,23 +207,23 @@ export function SettingsView() {
         hint="canonical source for all deployments"
         onOpen={() => setup.libraryPath && window.api.openInFinder(setup.libraryPath)}
         onCopy={() => setup.libraryPath && window.api.writeClipboard(setup.libraryPath)}
+        subAction={
+          <button
+            type="button"
+            className="sk-btn sm ghost"
+            onClick={async () => {
+              const picked = await window.api.pickFolder();
+              if (!picked) return;
+              useAppStore.getState().openModal({
+                type: "migrate",
+                toLibraryPath: picked,
+              });
+            }}
+          >
+            Move library to another folder…
+          </button>
+        }
       />
-      <div style={{ marginTop: -4, marginBottom: 4 }}>
-        <button
-          type="button"
-          className="sk-btn sm ghost"
-          onClick={async () => {
-            const picked = await window.api.pickFolder();
-            if (!picked) return;
-            useAppStore.getState().openModal({
-              type: "migrate",
-              toLibraryPath: picked,
-            });
-          }}
-        >
-          Move library to another folder…
-        </button>
-      </div>
       <PathRow
         label="History location"
         value={setup.historyPath || "(not set)"}
@@ -242,25 +242,25 @@ export function SettingsView() {
         onChange={(v) =>
           updateSettings({ default_deploy_mode: v as "symlink" | "copy" })
         }
+        subAction={
+          <button
+            type="button"
+            className="sk-btn sm ghost"
+            onClick={() =>
+              useAppStore.getState().openModal({
+                type: "confirm",
+                title: "Re-run onboarding?",
+                body:
+                  "Setup will start over so you can pick a different agent, library location, or re-import skills. Your skills and library files stay where they are — only the setup flag is reset.",
+                confirmLabel: "Re-run",
+                onConfirm: () => setSetup({ completed: false }),
+              })
+            }
+          >
+            Re-run onboarding…
+          </button>
+        }
       />
-      <div style={{ marginTop: 6 }}>
-        <button
-          type="button"
-          className="sk-btn sm ghost"
-          onClick={() =>
-            useAppStore.getState().openModal({
-              type: "confirm",
-              title: "Re-run onboarding?",
-              body:
-                "Setup will start over so you can pick a different agent, library location, or re-import skills. Your skills and library files stay where they are — only the setup flag is reset.",
-              confirmLabel: "Re-run",
-              onConfirm: () => setSetup({ completed: false }),
-            })
-          }
-        >
-          Re-run onboarding…
-        </button>
-      </div>
 
       <div className="rail-section" style={{ padding: "16px 0 0" }}>
         Appearance
@@ -345,7 +345,16 @@ export function SettingsView() {
       />
 
       <div style={{ flex: 1, minHeight: 8 }} />
-      <div style={{ display: "flex", gap: 6, paddingTop: 12, flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 6,
+          paddingTop: 12,
+          marginTop: 8,
+          borderTop: "1px dashed var(--line-soft)",
+          flexWrap: "wrap",
+        }}
+      >
         <button
           className="sk-btn ghost"
           onClick={() =>
@@ -419,7 +428,7 @@ function PrimaryAgentRow({
         display: "flex",
         alignItems: "center",
         gap: 14,
-        padding: "8px 4px",
+        padding: "12px 0",
         borderBottom: "1px dashed var(--line-soft)",
       }}
     >
@@ -481,6 +490,7 @@ function PathRow({
   onOpen,
   onCopy,
   readOnly,
+  subAction,
 }: {
   label: string;
   value: string;
@@ -488,54 +498,65 @@ function PathRow({
   onOpen?: () => void;
   onCopy?: () => void;
   readOnly?: boolean;
+  /** Optional sub-action button rendered below the row body, aligned
+   *  with the label column. Used for 'Move library to another folder'
+   *  type follow-on actions that belong to the row but shouldn't sit
+   *  inline with Copy / Open. */
+  subAction?: React.ReactNode;
 }) {
   return (
     <div
       style={{
-        display: "flex",
-        alignItems: "flex-start",
         padding: "12px 0",
         borderBottom: "1px dashed var(--line-soft)",
-        gap: 14,
       }}
     >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
-        {hint && (
-          <div style={{ fontSize: 11, color: "var(--ink-faint)" }}>
-            {hint}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 14,
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
+          {hint && (
+            <div style={{ fontSize: 11, color: "var(--ink-faint)" }}>
+              {hint}
+            </div>
+          )}
+        </div>
+        <div
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: 11,
+            color: "var(--ink-soft)",
+            textAlign: "right",
+            maxWidth: 280,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+          title={value}
+        >
+          {value.replace(/^\/Users\/[^/]+/, "~")}
+        </div>
+        {!readOnly && (
+          <div style={{ display: "flex", gap: 4 }}>
+            {onCopy && (
+              <button className="sk-btn sm ghost" onClick={onCopy} title="Copy path">
+                Copy
+              </button>
+            )}
+            {onOpen && (
+              <button className="sk-btn sm ghost" onClick={onOpen} title="Open">
+                Open
+              </button>
+            )}
           </div>
         )}
       </div>
-      <div
-        style={{
-          fontFamily: "var(--mono)",
-          fontSize: 11,
-          color: "var(--ink-soft)",
-          textAlign: "right",
-          maxWidth: 280,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-        title={value}
-      >
-        {value.replace(/^\/Users\/[^/]+/, "~")}
-      </div>
-      {!readOnly && (
-        <div style={{ display: "flex", gap: 4 }}>
-          {onCopy && (
-            <button className="sk-btn sm ghost" onClick={onCopy} title="Copy path">
-              Copy
-            </button>
-          )}
-          {onOpen && (
-            <button className="sk-btn sm ghost" onClick={onOpen} title="Open">
-              Open
-            </button>
-          )}
-        </div>
-      )}
+      {subAction && <div style={{ marginTop: 8 }}>{subAction}</div>}
     </div>
   );
 }
@@ -607,40 +628,50 @@ function SegmentedRow({
   value,
   onChange,
   options,
+  subAction,
 }: {
   label: string;
   hint?: string;
   value: string;
   onChange: (next: string) => void;
   options: { value: string; label: string }[];
+  /** Optional sub-action below the row body — same convention as
+   *  PathRow.subAction. */
+  subAction?: React.ReactNode;
 }) {
   return (
     <div
       style={{
-        display: "flex",
-        alignItems: "flex-start",
         padding: "12px 0",
         borderBottom: "1px dashed var(--line-soft)",
-        gap: 14,
       }}
     >
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
-        {hint && (
-          <div style={{ fontSize: 11, color: "var(--ink-faint)" }}>{hint}</div>
-        )}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 14,
+        }}
+      >
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
+          {hint && (
+            <div style={{ fontSize: 11, color: "var(--ink-faint)" }}>{hint}</div>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 4 }}>
+          {options.map((o) => (
+            <button
+              key={o.value}
+              className={`sk-btn sm ${value === o.value ? "primary" : ""}`}
+              onClick={() => onChange(o.value)}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
       </div>
-      <div style={{ display: "flex", gap: 4 }}>
-        {options.map((o) => (
-          <button
-            key={o.value}
-            className={`sk-btn sm ${value === o.value ? "primary" : ""}`}
-            onClick={() => onChange(o.value)}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
+      {subAction && <div style={{ marginTop: 8 }}>{subAction}</div>}
     </div>
   );
 }

@@ -130,40 +130,32 @@ async function seedLibrary() {
   const cfg = await loadConfig();
   cfg.skills = {
     "agent-skills": {
-      name: "agent-skills",
-      url: "",
-      commit: "",
+      url: null,
+      commit: null,
       installed_at: "",
       updated_at: null,
       projects: [],
-      history: [],
     },
     "ui-ux-pro-max-skill": {
-      name: "ui-ux-pro-max-skill",
-      url: "",
-      commit: "",
+      url: null,
+      commit: null,
       installed_at: "",
       updated_at: null,
       projects: [],
-      history: [],
     },
     "awesome-claude-code": {
-      name: "awesome-claude-code",
-      url: "",
-      commit: "",
+      url: null,
+      commit: null,
       installed_at: "",
       updated_at: null,
       projects: [],
-      history: [],
     },
     context7: {
-      name: "context7",
-      url: "",
-      commit: "",
+      url: null,
+      commit: null,
       installed_at: "",
       updated_at: null,
       projects: [],
-      history: [],
     },
   };
   await saveConfig(cfg);
