@@ -15,7 +15,6 @@ interface StackCardProps {
   onOpen: () => void;
   onSendToDeploy: () => void;
   onDeployToHomeLibrary: () => void;
-  onRemoveFromHomeLibrary: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }
@@ -45,7 +44,6 @@ export function StackCard({
   onOpen,
   onSendToDeploy,
   onDeployToHomeLibrary,
-  onRemoveFromHomeLibrary,
   onEdit,
   onDelete,
 }: StackCardProps) {
@@ -167,15 +165,14 @@ export function StackCard({
         <OverflowMenu
           items={[
             { label: "Edit composition", onClick: onEdit },
-            stack.inHomeLibrary
-              ? {
-                  label: "Remove from home library",
-                  onClick: onRemoveFromHomeLibrary,
-                }
-              : {
-                  label: "Deploy to home library",
-                  onClick: onDeployToHomeLibrary,
-                },
+            ...(stack.inHomeLibrary
+              ? []
+              : [
+                  {
+                    label: "Add to home library",
+                    onClick: onDeployToHomeLibrary,
+                  },
+                ]),
             { label: "Delete stack…", onClick: onDelete, destructive: true },
           ]}
         />

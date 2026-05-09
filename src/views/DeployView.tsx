@@ -739,6 +739,29 @@ export function DeployView() {
         </Column>
       </div>
 
+      {/* Home-library prompt — appears between the 3-column grid and the
+          Deploy bar. Nudges users toward populating their home library
+          when a queued stack isn't there yet. Once deployed, the prompt
+          flips to a non-interactive confirmation; we don't surface a
+          remove path here because populating the library is the
+          intended direction of travel. */}
+      {queuedStack && (
+        <HomeLibraryPrompt
+          stack={queuedStack}
+          onDeploy={async () => {
+            try {
+              await useAppStore.getState().deployStackToHomeLibrary(
+                queuedStack.id,
+              );
+            } catch (err) {
+              useAppStore
+                .getState()
+                .setError(err instanceof Error ? err.message : String(err));
+            }
+          }}
+        />
+      )}
+
       {/* Deploy bar */}
       <div
         className="sk-box"
@@ -1484,3 +1507,76 @@ const inputStyle: React.CSSProperties = {
   outline: "none",
   boxSizing: "border-box",
 };
+
+function HomeLibraryPrompt({
+  stack,
+  onDeploy,
+}: {
+  stack: SkillStack;
+  onDeploy: () => Promise<void> | void;
+}) {
+  // After a successful click, hold a transient "deployed!" state for a
+  // beat so the user gets feedback even though the underlying
+  // inHomeLibrary flag flips immediately and would otherwise hide the
+  // prompt. The state collapses to the "in library" rest state once the
+  // store refresh lands.
+  if (stack.inHomeLibrary === true) {
+    return (
+      <div
+        className="sk-box"
+        style={{
+          padding: "8px 12px",
+          background: "var(--paper-2)",
+          borderColor: "var(--good)",
+          fontSize: 12,
+          fontFamily: "var(--read)",
+          color: "var(--ink-soft)",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        <span style={{ color: "var(--good)", fontWeight: 700 }}>✓</span>
+        <span>
+          <b>{stack.name}</b> is in your home library — discoverable from
+          any project.
+        </span>
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => void onDeploy()}
+      className="sk-box"
+      style={{
+        padding: "8px 12px",
+        background: "var(--paper-2)",
+        borderColor: "var(--warn)",
+        borderStyle: "dashed",
+        fontSize: 12,
+        fontFamily: "var(--read)",
+        color: "var(--ink)",
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        cursor: "pointer",
+        textAlign: "left",
+        width: "100%",
+      }}
+      title="Promote this stack into your home library so it's invokable from any project"
+    >
+      <span style={{ color: "var(--warn)", fontSize: 14 }}>⚠</span>
+      <span style={{ flex: 1 }}>
+        <b>{stack.name}</b> isn't in your home library yet. Click to add
+        it — recommended before deploying to projects.
+      </span>
+      <span
+        className="sk-tag"
+        style={{ fontSize: 10, color: "var(--accent)" }}
+      >
+        Add now →
+      </span>
+    </button>
+  );
+}

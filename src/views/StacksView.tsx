@@ -22,9 +22,6 @@ export function StacksView() {
   const deployStackToHomeLibrary = useAppStore(
     (s) => s.deployStackToHomeLibrary,
   );
-  const removeStackFromHomeLibrary = useAppStore(
-    (s) => s.removeStackFromHomeLibrary,
-  );
   const setError = useAppStore((s) => s.setError);
 
   useEffect(() => {
@@ -120,13 +117,6 @@ export function StacksView() {
                 onSendToDeploy={() => queueStackForDeploy(stack.id)}
                 onDeployToHomeLibrary={() =>
                   deployStackToHomeLibrary(stack.id).catch((err) =>
-                    setError(
-                      err instanceof Error ? err.message : String(err),
-                    ),
-                  )
-                }
-                onRemoveFromHomeLibrary={() =>
-                  removeStackFromHomeLibrary(stack.id).catch((err) =>
                     setError(
                       err instanceof Error ? err.message : String(err),
                     ),

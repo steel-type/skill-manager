@@ -52,9 +52,6 @@ export function StackDetailFlow({ stackId }: StackDetailFlowProps) {
   const deployStackToHomeLibrary = useAppStore(
     (s) => s.deployStackToHomeLibrary,
   );
-  const removeStackFromHomeLibrary = useAppStore(
-    (s) => s.removeStackFromHomeLibrary,
-  );
   const setError = useAppStore((s) => s.setError);
 
   useEffect(() => {
@@ -139,17 +136,19 @@ export function StackDetailFlow({ stackId }: StackDetailFlowProps) {
         Edit composition
       </button>
       {stack.inHomeLibrary ? (
-        <button
-          className="sk-btn ghost"
-          onClick={() =>
-            removeStackFromHomeLibrary(stack.id).catch((err) =>
-              setError(err instanceof Error ? err.message : String(err)),
-            )
-          }
-          title="Remove from primary agent's global skills dir + flip the Library flag"
+        <span
+          className="sk-tag good"
+          style={{
+            fontSize: 11,
+            padding: "4px 10px",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+          title="Discoverable from any project via your primary agent. To take it out, delete the stack."
         >
-          Remove from home library
-        </button>
+          ✓ in home library
+        </span>
       ) : (
         <button
           className="sk-btn"
