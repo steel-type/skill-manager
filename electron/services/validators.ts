@@ -3,7 +3,10 @@
 // these double as defense-in-depth (a future XSS via SKILL.md description
 // would otherwise let renderer code call into main with arbitrary args).
 
-const URL_REGEX = /^https?:\/\/[^\s/$.?#].[^\s]*$/i;
+// https only. Plaintext http permits MITM on public networks to rewrite
+// the cloned repo body — the value of clone-from-URL is integrity, so we
+// don't allow downgrading.
+const URL_REGEX = /^https:\/\/[^\s/$.?#].[^\s]*$/i;
 const SKILL_NAME_REGEX = /^[a-zA-Z0-9._-]+$/;
 const MAX_SKILL_NAME_LENGTH = 100;
 const MAX_URL_LENGTH = 2048;
@@ -38,7 +41,7 @@ export function validateUrl(url: unknown): string {
   }
   if (!URL_REGEX.test(trimmed)) {
     throw new ValidationError(
-      `URL must start with http:// or https:// — got "${trimmed.slice(0, 60)}"`,
+      `URL must start with https:// — got "${trimmed.slice(0, 60)}"`,
     );
   }
   if (/[\x00-\x1f\x7f]/.test(trimmed)) {
@@ -143,6 +146,12 @@ export function validateCommitToken(token: unknown): string {
   if (token.length > 200) throw new ValidationError("Commit token too long");
   if (!SKILL_NAME_REGEX.test(token)) {
     throw new ValidationError("Commit token has invalid characters");
+  }
+  // Reject dotfile-style tokens for the same reason validateSkillName does:
+  // history paths join the token directly under the per-skill history dir,
+  // and `..` / `.` would escape or alias the parent.
+  if (token === "." || token === ".." || token.startsWith(".")) {
+    throw new ValidationError(`Commit token "${token}" is reserved`);
   }
   return token;
 }

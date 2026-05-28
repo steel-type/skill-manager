@@ -78,6 +78,19 @@ export function UpdateFlow({ prefillName }: UpdateFlowProps = {}) {
   const [runRows, setRunRows] = useState<RunRow[]>([]);
   const [activeLog, setActiveLog] = useState<string>("");
 
+  // Unmount-time abort. Without this, switching tabs (⌘1/2/3) mid-update
+  // leaves the for-loop iterating against a torn-down component — abort
+  // signals never fire, markUpdating flags leak, and the user has no UI
+  // surface to cancel from anymore. Set the cancel ref AND abort the live
+  // signal so the in-flight clone terminates instead of running to
+  // completion in the background.
+  useEffect(() => {
+    return () => {
+      cancelRequestedRef.current = true;
+      abortRef.current?.abort();
+    };
+  }, []);
+
   const selectedSkills = useMemo(
     () => selections.filter((s) => s.selected),
     [selections],
@@ -342,7 +355,7 @@ function ReviewStep({
                 justifyContent: "center",
                 // Always-dark check on the bright accent fill — passes
                 // contrast on both terracotta (light) and green (dark).
-                color: "#0a0a0a",
+                color: "var(--terminal-emphasis)",
                 fontSize: 11,
                 fontWeight: 700,
                 flexShrink: 0,
@@ -393,7 +406,7 @@ function ReviewStep({
       {cascadeProjects.size > 0 && (
         <div
           className="sk-box dashed"
-          style={{ padding: 10, background: "#f7f6ee" }}
+          style={{ padding: 10, background: "var(--paper-tint)" }}
         >
           <div className="rail-section" style={{ padding: 0, marginBottom: 4 }}>
             Will affect {cascadeProjects.size} deployment

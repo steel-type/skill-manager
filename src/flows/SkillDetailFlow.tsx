@@ -399,7 +399,7 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
           padding: "10px 18px",
         }}
       >
-        {tree && tree.children && tree.children.length > 0 && (
+        {tree && tree.children && tree.children.length > 0 ? (
           <div
             className="sk-box"
             style={{
@@ -411,6 +411,36 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
             }}
           >
             <TreeView root={tree} skillName={skill.name} />
+          </div>
+        ) : (
+          // Empty-state fallback. Local skills (and pathological cases where
+          // the tree walker returns nothing) previously rendered as a blank
+          // pane with no indication anything was wrong. Always show *some*
+          // surface plus a Reveal-in-Finder CTA so the user can always
+          // reach the files even if the in-app walker can't.
+          <div
+            className="sk-box dashed"
+            style={{
+              padding: 14,
+              fontFamily: "var(--read)",
+              fontSize: 12,
+              color: "var(--ink-faint)",
+              lineHeight: 1.5,
+              textAlign: "center",
+            }}
+          >
+            <div style={{ marginBottom: 8 }}>
+              {tree === null
+                ? "Couldn't read the skill directory."
+                : "No files indexed for this skill yet."}
+            </div>
+            <button
+              type="button"
+              className="sk-btn sm"
+              onClick={handleBrowse}
+            >
+              Reveal in Finder
+            </button>
           </div>
         )}
 

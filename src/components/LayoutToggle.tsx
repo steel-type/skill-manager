@@ -52,7 +52,7 @@ export function LayoutToggle() {
         padding: 3,
         border: `1.5px solid ${TOGGLE_COLOR}`,
         borderRadius: 18,
-        background: "rgba(61,110,140,0.06)",
+        background: "var(--toggle-tint)",
       }}
       title="Toggle library layout — Cards / List. Press ⌘K for the global command palette."
     >
@@ -67,7 +67,7 @@ export function LayoutToggle() {
           background: TOGGLE_COLOR,
           borderRadius: 14,
           transition: "left 0.28s cubic-bezier(.6,.2,.2,1)",
-          boxShadow: "0 1px 3px rgba(61,110,140,0.4)",
+          boxShadow: "0 1px 3px var(--toggle-shadow)",
         }}
       />
       {options.map((o, i) => (

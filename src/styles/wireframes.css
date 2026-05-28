@@ -45,6 +45,34 @@
   --accent-hover-bg: #b8593b;
   --ghost-hover-bg: rgba(0, 0, 0, 0.04);
   --neutral-hover-bg: var(--paper-2);
+
+  /* Modal scrim — sits behind dialogs. Theme-aware so dark-mode dialogs
+     don't get a slate-tinted scrim on a near-black backdrop. */
+  --scrim: rgba(42, 42, 42, 0.45);
+
+  /* Streaming log box used by Install/Update/Rollback flows. Always dark
+     to match terminal expectations, but the tokens isolate the hardcoded
+     hex from component code so a future theme swap is one-line. */
+  --terminal-bg:     #1c1c1c;
+  --terminal-fg:     #d8d8d8;
+  --terminal-border: #333333;
+  --terminal-emphasis: #0a0a0a;
+
+  /* Faintly-tinted highlight ground for empty-state preview cards. */
+  --paper-tint: #f7f6ee;
+
+  /* LayoutToggle tints — outer pill + drop shadow under the active tab. */
+  --toggle-tint:   rgba(61, 110, 140, 0.06);
+  --toggle-shadow: rgba(61, 110, 140, 0.4);
+
+  /* Inset shadow used by segmented nav controls (ViewSwitcher, VerticalNav)
+     and drop shadow that lifts the active segment. */
+  --inset-shadow:  rgba(0, 0, 0, 0.04);
+  --active-shadow: rgba(201, 100, 66, 0.35);
+
+  /* macOS traffic-light red — the only color we keep raw because it's an
+     OS-chrome match, not part of the theme system. */
+  --tl-red: #ff736a;
 }
 
 body { background: #e8e4d8; margin: 0; font-family: var(--read); color: var(--ink); }
@@ -350,6 +378,22 @@ body { background: #e8e4d8; margin: 0; font-family: var(--read); color: var(--in
   --accent-hover-bg: #58e88a;
   --ghost-hover-bg: rgba(255, 255, 255, 0.06);
   --neutral-hover-bg: rgba(255, 255, 255, 0.04);
+
+  /* Dark-mode scrim — denser than light so it actually dims the page. */
+  --scrim: rgba(0, 0, 0, 0.65);
+
+  /* Empty-state preview ground — slightly lifted from --paper. */
+  --paper-tint: var(--paper-2);
+
+  /* Re-tone LayoutToggle to the dark accent so it doesn't read as a
+     stray slate-blue chip on a black backdrop. */
+  --toggle-tint:   rgba(94, 163, 208, 0.10);
+  --toggle-shadow: rgba(94, 163, 208, 0.45);
+
+  /* Inset / active shadows pick up the dark accent so segmented nav
+     controls don't look like stray cream chips on a black backdrop. */
+  --inset-shadow:  rgba(255, 255, 255, 0.04);
+  --active-shadow: rgba(62, 224, 122, 0.45);
 }
 
 /* Body bg when window is frameless — pure black so the wf-window's #050505

@@ -13,6 +13,12 @@ export interface AgentDefinition {
   /** Filename of the entry document inside the skill directory. `{name}` is
    *  available for agents that name the entry file after the skill (cursor). */
   entryFile: string;
+  /** `directory` — deploy a whole skill folder (claude/codex/gemini/cline/
+   *  continue). `single-file` — deploy a single rendered entry file (cursor).
+   *  Authoritative data field replacing the older `/{name}/.test(entryFile)`
+   *  regex sniff so adding a new directory-style agent whose entryFile happens
+   *  to template `{name}` won't accidentally be misread as single-file. */
+  entryShape: "directory" | "single-file";
   supportsSymlinks: boolean;
   /** Single-file alternative location an agent supports as a fallback to
    *  per-skill directories (e.g. `AGENTS.md`, `.cursorrules`). null if none. */
@@ -28,6 +34,7 @@ export const AGENTS: Record<string, AgentDefinition> = {
     globalSkillPath: "~/.claude/skills/{name}/",
     projectSkillPath: ".claude/skills/{name}/",
     entryFile: "SKILL.md",
+    entryShape: "directory",
     supportsSymlinks: true,
     singleFileAlternative: "CLAUDE.md",
     formatNotes: null,
@@ -38,6 +45,7 @@ export const AGENTS: Record<string, AgentDefinition> = {
     globalSkillPath: "~/.codex/skills/{name}/",
     projectSkillPath: ".codex/skills/{name}/",
     entryFile: "SKILL.md",
+    entryShape: "directory",
     supportsSymlinks: true,
     singleFileAlternative: "AGENTS.md",
     formatNotes: null,
@@ -48,6 +56,7 @@ export const AGENTS: Record<string, AgentDefinition> = {
     globalSkillPath: "~/.gemini/skills/{name}/",
     projectSkillPath: ".gemini/skills/{name}/",
     entryFile: "SKILL.md",
+    entryShape: "directory",
     supportsSymlinks: true,
     singleFileAlternative: "GEMINI.md",
     formatNotes: null,
@@ -58,6 +67,7 @@ export const AGENTS: Record<string, AgentDefinition> = {
     globalSkillPath: null,
     projectSkillPath: ".cursor/rules/",
     entryFile: "{name}.mdc",
+    entryShape: "single-file",
     supportsSymlinks: true,
     singleFileAlternative: ".cursorrules",
     formatNotes:
@@ -69,6 +79,7 @@ export const AGENTS: Record<string, AgentDefinition> = {
     globalSkillPath: "~/.continue/skills/{name}/",
     projectSkillPath: ".continue/skills/{name}/",
     entryFile: "SKILL.md",
+    entryShape: "directory",
     supportsSymlinks: true,
     singleFileAlternative: null,
     formatNotes: null,
@@ -79,6 +90,7 @@ export const AGENTS: Record<string, AgentDefinition> = {
     globalSkillPath: null,
     projectSkillPath: ".cline/skills/{name}/",
     entryFile: "SKILL.md",
+    entryShape: "directory",
     supportsSymlinks: true,
     singleFileAlternative: ".clinerules",
     formatNotes: null,

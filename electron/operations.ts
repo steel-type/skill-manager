@@ -9,6 +9,7 @@
 //      so parallel operations can't lose each other's edits.
 
 import { promises as fs } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { getHistoryPath, getLibraryPath } from "./services/paths";
 import {
@@ -18,6 +19,7 @@ import {
   ensureLibraryDir,
   nowIso,
   withConfigLock,
+  withSkillLock,
 } from "./services/config";
 import {
   listSkills as listSkillsFromDisk,
@@ -163,6 +165,34 @@ export async function bootstrap(): Promise<void> {
   } catch (err) {
     console.warn("[skill-manager] history reconcile failed:", err);
   }
+
+  // Symmetric pass: prune phantom history entries whose snapshot dir was
+  // deleted outside the app. Without this, rollback against a phantom
+  // entry throws a raw "Snapshot not found" error from history.ts. After
+  // this prune, the UI just doesn't offer the missing snapshot.
+  try {
+    let mutated = false;
+    await withConfigLock(async () => {
+      const fresh = await loadConfig();
+      for (const [name, record] of Object.entries(fresh.skills)) {
+        if (!record.history?.length) continue;
+        const surviving: typeof record.history = [];
+        for (const snap of record.history) {
+          const dir = join(getHistoryPath(), name, snap.commit);
+          try {
+            await fs.access(dir);
+            surviving.push(snap);
+          } catch {
+            mutated = true;
+          }
+        }
+        record.history = surviving.length > 0 ? surviving : undefined;
+      }
+      if (mutated) await saveConfig(fresh);
+    });
+  } catch (err) {
+    console.warn("[skill-manager] phantom history prune failed:", err);
+  }
 }
 
 export async function getHistorySize(): Promise<number> {
@@ -216,6 +246,39 @@ export async function listSkills(): Promise<Skill[]> {
  * registers a config record with `url: null` so the skill shows up in the
  * library as "local" — it has no remote to update from.
  */
+// Reject source paths for local-skill installs that live under
+// credential or secret stores. The renderer's importer chooses these
+// paths interactively, but a malicious import file (or future XSS) could
+// otherwise feed us ~/.ssh, login keychains, browser profiles, etc.
+const FORBIDDEN_LOCAL_SOURCE_PREFIXES = (() => {
+  const home = homedir();
+  return [
+    `${home}/.ssh`,
+    `${home}/.aws`,
+    `${home}/.config/gh`,
+    `${home}/Library/Keychains`,
+    `${home}/Library/Application Support/Firefox`,
+    `${home}/Library/Application Support/Google/Chrome`,
+    `${home}/Library/Application Support/com.apple`,
+    "/private/etc",
+    "/private/var/db",
+    "/etc",
+    "/var",
+    "/System",
+    "/usr/libexec",
+  ];
+})();
+
+function rejectIfSensitiveSource(sourcePath: string): void {
+  for (const bad of FORBIDDEN_LOCAL_SOURCE_PREFIXES) {
+    if (sourcePath === bad || sourcePath.startsWith(bad + "/")) {
+      throw new Error(
+        `Refusing to install from a sensitive directory: ${bad}`,
+      );
+    }
+  }
+}
+
 export async function installLocalSkill(
   rawName: string,
   rawSourcePath: string,
@@ -225,6 +288,7 @@ export async function installLocalSkill(
   // absolute, no null bytes, sane length. Local skill sources live in the
   // user's filesystem; we don't need a separate abuse path.
   const sourcePath = validateProjectPath(rawSourcePath);
+  rejectIfSensitiveSource(sourcePath);
 
   let stat: Awaited<ReturnType<typeof fs.stat>>;
   try {
@@ -293,7 +357,6 @@ export async function installFromUrl(
   rawUrl: string,
   options: OpOptions = {},
 ): Promise<InstallResult> {
-  const { onLog, signal } = options;
   const url = validateUrl(rawUrl);
   const repoNameRaw = extractSkillName(url);
   if (!repoNameRaw) {
@@ -301,8 +364,23 @@ export async function installFromUrl(
   }
   const repoName = validateSkillName(repoNameRaw);
 
-  if (signal?.aborted) throw new CancelledError();
+  if (options.signal?.aborted) throw new CancelledError();
 
+  // Hold a per-skill lock across the whole install. Two concurrent installs
+  // of the same name (rare but possible: user double-clicks, or palette +
+  // background auto-import) would otherwise race the snapshot + clone +
+  // history RMW and silently drop the loser's edits.
+  return await withSkillLock(repoName, () =>
+    runInstall(repoName, url, options),
+  );
+}
+
+async function runInstall(
+  repoName: string,
+  url: string,
+  options: OpOptions,
+): Promise<InstallResult> {
+  const { onLog, signal } = options;
   // Pre-archive: snapshot the prior version if one exists. Done outside the
   // mutex so the long-running clone doesn't block other reads — only the
   // small RMW step at the end needs serialisation.
@@ -373,9 +451,16 @@ export async function updateSkill(
   rawName: string,
   options: OpOptions = {},
 ): Promise<UpdateResult> {
-  const { onLog, signal } = options;
   const name = validateSkillName(rawName);
-  if (signal?.aborted) throw new CancelledError();
+  if (options.signal?.aborted) throw new CancelledError();
+  return await withSkillLock(name, () => runUpdate(name, options));
+}
+
+async function runUpdate(
+  name: string,
+  options: OpOptions,
+): Promise<UpdateResult> {
+  const { onLog, signal } = options;
   const config = await loadConfig();
   const record = config.skills[name];
   if (!record) throw new Error(`Unknown skill: ${name}`);
@@ -449,19 +534,51 @@ export async function rollbackSkill(
   opts: { cascade: boolean },
   options: OpOptions = {},
 ): Promise<RollbackResult> {
-  const { onLog, signal } = options;
   const name = validateSkillName(rawName);
   const commit = validateCommitToken(rawCommit);
   if (!commit) throw new Error("Commit token is empty");
-  if (signal?.aborted) throw new CancelledError();
+  if (options.signal?.aborted) throw new CancelledError();
+  return await withSkillLock(name, () =>
+    runRollback(name, commit, opts, options),
+  );
+}
 
+async function runRollback(
+  name: string,
+  commit: string,
+  opts: { cascade: boolean },
+  options: OpOptions,
+): Promise<RollbackResult> {
+  const { onLog } = options;
   const config = await loadConfig();
   const record = config.skills[name];
   if (!record) throw new Error(`Unknown skill: ${name}`);
   const history = record.history ?? [];
   const target = history.find((h) => h.commit === commit);
   if (!target) {
-    throw new Error(`Snapshot not found in history: ${commit}`);
+    throw new Error(
+      `Snapshot ${commit} is no longer available for ${name} — the rollback list was stale. Refresh and try again.`,
+    );
+  }
+  // Check the snapshot dir actually exists; if it was deleted out from under
+  // us, prune the phantom entry and surface a clean message instead of the
+  // raw `Snapshot not found` thrown from restoreSnapshot.
+  const snapDir = join(getHistoryPath(), name, commit);
+  try {
+    await fs.access(snapDir);
+  } catch {
+    await withConfigLock(async () => {
+      const fresh = await loadConfig();
+      const r = fresh.skills[name];
+      if (r?.history) {
+        const next = r.history.filter((h) => h.commit !== commit);
+        r.history = next.length > 0 ? next : undefined;
+        await saveConfig(fresh);
+      }
+    });
+    throw new Error(
+      `Snapshot ${commit} was missing on disk — removed from history. Try a different snapshot.`,
+    );
   }
 
   const retention = config.settings.update_history_retention;
@@ -567,6 +684,134 @@ export async function deploySkill(
     warning: result.warning,
     destPath: result.destPath,
   };
+}
+
+// ── Global-deploy (agent skills dir, no project) ───────────────────────────
+//
+// The standard deploy flow requires a project. Power users also want to
+// publish a skill into an agent's global skills dir (`~/.claude/skills/foo`,
+// `~/.codex/skills/foo`, …) so it's invokable from any project that agent
+// runs in — no project picking required.
+//
+// The same primitive answers two related UI questions:
+//   1. "Send this skill to <agent>'s global dir."   → deploySkillGlobally
+//   2. "Is this skill already in <agent>'s global dir?" → getSkillGlobalStatus
+// Both go through agents.ts's `getAgentSkillsDir` so cursor/cline (which
+// don't have a global concept) are surfaced as not-available rather than
+// silently failing.
+
+export interface DeployGlobalResult {
+  agentId: string;
+  destPath: string;
+  warning: string | null;
+  deployMode: DeployMode;
+}
+
+export async function deploySkillGlobally(
+  rawName: string,
+  agentId: string,
+  deployMode: DeployMode,
+): Promise<DeployGlobalResult> {
+  const name = validateSkillName(rawName);
+  if (deployMode !== "copy" && deployMode !== "symlink") {
+    throw new Error(`Invalid deploy mode: ${deployMode}`);
+  }
+  const { AGENTS, getAgentSkillsDir } = await import("./services/agents");
+  const agent = AGENTS[agentId];
+  if (!agent) throw new Error(`Unknown agent: ${agentId}`);
+  const dir = getAgentSkillsDir(agentId);
+  if (!dir) {
+    throw new Error(
+      `${agent.displayName} has no global skills directory — deploy to a project instead`,
+    );
+  }
+  const src = join(getLibraryPath(), name);
+  const srcStat = await fs.stat(src).catch(() => null);
+  if (!srcStat || !srcStat.isDirectory()) {
+    throw new Error(`Skill '${name}' is not in the library`);
+  }
+  await fs.mkdir(dir, { recursive: true });
+  const dest = join(dir, name);
+  // Overwrite cleanly — same semantics as project-level deploys.
+  await fs.rm(dest, { recursive: true, force: true });
+  let actualMode: DeployMode = deployMode;
+  let warning: string | null = null;
+  if (deployMode === "symlink" && !agent.supportsSymlinks) {
+    actualMode = "copy";
+    warning = `${agent.displayName} does not support symlink — falling back to copy.`;
+  }
+  if (actualMode === "symlink") {
+    await fs.symlink(src, dest);
+  } else {
+    await fs.cp(src, dest, { recursive: true, verbatimSymlinks: false });
+  }
+  return { agentId, destPath: dest, warning, deployMode: actualMode };
+}
+
+export async function removeSkillFromAgentGlobal(
+  rawName: string,
+  agentId: string,
+): Promise<{ removed: boolean }> {
+  const name = validateSkillName(rawName);
+  const { AGENTS, getAgentSkillsDir } = await import("./services/agents");
+  if (!AGENTS[agentId]) throw new Error(`Unknown agent: ${agentId}`);
+  const dir = getAgentSkillsDir(agentId);
+  if (!dir) return { removed: false };
+  const dest = join(dir, name);
+  try {
+    await fs.access(dest);
+  } catch {
+    return { removed: false };
+  }
+  await fs.rm(dest, { recursive: true, force: true });
+  return { removed: true };
+}
+
+export async function getSkillGlobalStatus(
+  rawName: string,
+): Promise<Record<string, boolean>> {
+  const name = validateSkillName(rawName);
+  const { AGENTS, getAgentSkillsDir } = await import("./services/agents");
+  const out: Record<string, boolean> = {};
+  for (const agent of Object.values(AGENTS)) {
+    const dir = getAgentSkillsDir(agent.id);
+    if (!dir) {
+      out[agent.id] = false;
+      continue;
+    }
+    try {
+      await fs.access(join(dir, name));
+      out[agent.id] = true;
+    } catch {
+      out[agent.id] = false;
+    }
+  }
+  return out;
+}
+
+export async function getStackGlobalStatus(
+  rawStackId: string,
+): Promise<Record<string, boolean>> {
+  // Stacks land in agent dirs as <agentSkillsDir>/<stackId>/ — same shape as
+  // a regular skill — so the disk-existence check is identical. Validation
+  // is looser here (stack ids share the same charset as skill names).
+  const name = validateSkillName(rawStackId);
+  const { AGENTS, getAgentSkillsDir } = await import("./services/agents");
+  const out: Record<string, boolean> = {};
+  for (const agent of Object.values(AGENTS)) {
+    const dir = getAgentSkillsDir(agent.id);
+    if (!dir) {
+      out[agent.id] = false;
+      continue;
+    }
+    try {
+      await fs.access(join(dir, name));
+      out[agent.id] = true;
+    } catch {
+      out[agent.id] = false;
+    }
+  }
+  return out;
 }
 
 export async function removeSkill(
@@ -759,7 +1004,7 @@ export async function removeProjectTracking(
     if (!agent) return null;
     const resolved = resolveAgentPaths(agentId, name, projectPath);
     if (!resolved.projectPath) return null;
-    const isSingleFile = /{name}/.test(agent.entryFile);
+    const isSingleFile = agent.entryShape === "single-file";
     return isSingleFile
       ? join(resolved.projectPath, resolved.entryFile)
       : resolved.projectPath;

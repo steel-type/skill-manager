@@ -15,9 +15,9 @@ describe("validateUrl", () => {
     );
   });
 
-  it("accepts http URLs", () => {
-    expect(validateUrl("http://example.com/repo.git")).toBe(
-      "http://example.com/repo.git",
+  it("rejects http:// URLs (plaintext clone allows MITM rewrite)", () => {
+    expect(() => validateUrl("http://example.com/repo.git")).toThrow(
+      ValidationError,
     );
   });
 

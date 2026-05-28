@@ -22,6 +22,68 @@ const GIT_TIMEOUT_MS = 60_000;
 const LS_REMOTE_TIMEOUT_MS = 15_000;
 const LS_REMOTE_RETRIES = 1; // one retry on transient failures (DNS, packet loss)
 
+// Strip everything inherited from the user shell that could redirect git
+// (proxy via arbitrary command, SSH wrapper that execs anything, alternate
+// gitconfig, askpass helper) before we spawn a child. Whitelisted env vars
+// stay so git can still find itself.
+function sanitizedGitEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  const passthrough = ["PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "USER"];
+  for (const key of passthrough) {
+    const v = process.env[key];
+    if (v !== undefined) env[key] = v;
+  }
+  // Hard-disable interactive prompts. A malicious URL embedding credentials
+  // would otherwise pop a TTY prompt the renderer never sees.
+  env.GIT_TERMINAL_PROMPT = "0";
+  env.GIT_ASKPASS = "/bin/echo";
+  return env;
+}
+
+// Hardened protocol allow-list, applied via `git -c …` so a redirect or
+// submodule reference can't slip in over file://, ext::, or similar. Only
+// the https smart transport remains enabled.
+const SAFE_PROTOCOL_ARGS = [
+  "-c",
+  "protocol.allow=never",
+  "-c",
+  "protocol.https.allow=always",
+];
+
+// Userinfo redaction — `https://user:token@host/...` -> `https://***@host/...`
+// so a clone log line never carries a PAT into the renderer or any saved
+// log file.
+export function redactUrl(url: string): string {
+  return url.replace(/(https?:\/\/)[^/@\s]+@/i, "$1***@");
+}
+
+// Process-wide concurrency pool for ls-remote. A 200-skill library on a
+// flaky network would otherwise fork-bomb the OS with simultaneous git
+// children and saturate the connection. 8 is generous on broadband and
+// kind on tethered 5G.
+const LS_REMOTE_MAX_CONCURRENT = 8;
+let lsRemoteActive = 0;
+const lsRemoteQueue: (() => void)[] = [];
+
+function acquireLsRemoteSlot(): Promise<void> {
+  if (lsRemoteActive < LS_REMOTE_MAX_CONCURRENT) {
+    lsRemoteActive += 1;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    lsRemoteQueue.push(() => {
+      lsRemoteActive += 1;
+      resolve();
+    });
+  });
+}
+
+function releaseLsRemoteSlot(): void {
+  lsRemoteActive -= 1;
+  const next = lsRemoteQueue.shift();
+  if (next) next();
+}
+
 // Track every git child we spawn so the main process can SIGTERM them on
 // quit. Without this, an in-flight clone keeps running as a zombie after the
 // app window closes.
@@ -71,19 +133,25 @@ export async function cloneToLibrary(
   const tmp = join(tmpdir(), `skill-download-${repoName}-${Date.now()}`);
   await rmrf(tmp);
 
-  onLog?.(`Cloning ${url} (depth 1)…`);
+  const safeUrl = redactUrl(url);
+  onLog?.(`Cloning ${safeUrl} (depth 1)…`);
 
   await new Promise<void>((resolve, reject) => {
     const child = trackChild(
-      spawn("git", [
-        "clone",
-        "--depth",
-        "1",
-        "--progress",
-        "--",
-        url,
-        tmp,
-      ]),
+      spawn(
+        "git",
+        [
+          ...SAFE_PROTOCOL_ARGS,
+          "clone",
+          "--depth",
+          "1",
+          "--progress",
+          "--",
+          url,
+          tmp,
+        ],
+        { env: sanitizedGitEnv() },
+      ),
     );
     let stderrBuf = "";
     let cancelled = false;
@@ -104,14 +172,14 @@ export async function cloneToLibrary(
 
     child.stdout?.on("data", (chunk: Buffer) => {
       for (const line of chunk.toString().split(/\r?\n/)) {
-        if (line.trim()) onLog?.(line);
+        if (line.trim()) onLog?.(redactUrl(line));
       }
     });
     child.stderr?.on("data", (chunk: Buffer) => {
       const s = chunk.toString();
       stderrBuf += s;
       for (const line of s.split(/\r?\n/)) {
-        if (line.trim()) onLog?.(line);
+        if (line.trim()) onLog?.(redactUrl(line));
       }
     });
     child.on("error", (err) => {
@@ -133,7 +201,7 @@ export async function cloneToLibrary(
       if (code === 0) {
         resolve();
       } else {
-        const trimmed = stderrBuf.trim();
+        const trimmed = redactUrl(stderrBuf.trim());
         const lastError =
           trimmed.split("\n").reverse().find((l) => /error|fatal/i.test(l)) ??
           trimmed;
@@ -157,7 +225,10 @@ export async function cloneToLibrary(
   try {
     commit = await new Promise<string | null>((resolve) => {
       const child = trackChild(
-        spawn("git", ["rev-parse", "--short", "HEAD"], { cwd: tmp }),
+        spawn("git", ["rev-parse", "--short", "HEAD"], {
+          cwd: tmp,
+          env: sanitizedGitEnv(),
+        }),
       );
       let stdout = "";
       const t = setTimeout(() => {
@@ -227,21 +298,30 @@ export async function cloneToLibrary(
  * transient failures (network blip, slow DNS).
  */
 export async function checkRemoteSha(url: string): Promise<string | null> {
-  for (let attempt = 0; attempt <= LS_REMOTE_RETRIES; attempt++) {
-    const sha = await runLsRemote(url);
-    if (sha) return sha;
-    if (attempt < LS_REMOTE_RETRIES) {
-      // Brief backoff so a flapping network has a moment to settle.
-      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+  await acquireLsRemoteSlot();
+  try {
+    for (let attempt = 0; attempt <= LS_REMOTE_RETRIES; attempt++) {
+      const sha = await runLsRemote(url);
+      if (sha) return sha;
+      if (attempt < LS_REMOTE_RETRIES) {
+        // Brief backoff so a flapping network has a moment to settle.
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      }
     }
+    return null;
+  } finally {
+    releaseLsRemoteSlot();
   }
-  return null;
 }
 
 function runLsRemote(url: string): Promise<string | null> {
   return new Promise((resolve) => {
     const child = trackChild(
-      spawn("git", ["ls-remote", "--", url, "HEAD"]),
+      spawn(
+        "git",
+        [...SAFE_PROTOCOL_ARGS, "ls-remote", "--", url, "HEAD"],
+        { env: sanitizedGitEnv() },
+      ),
     );
     let stdout = "";
     const timer = setTimeout(() => {

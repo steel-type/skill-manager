@@ -103,6 +103,31 @@ export function withConfigLock<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /**
+ * Per-skill lock used to span a clone + RMW window. The process-wide
+ * `withConfigLock` is too coarse for this — holding it across a 60s clone
+ * blocks every unrelated write — but two cascading updates of the SAME
+ * skill must serialize so the second one snapshots against the result of
+ * the first, not the original.
+ */
+const skillLocks = new Map<string, Promise<unknown>>();
+
+export function withSkillLock<T>(
+  name: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const prev = skillLocks.get(name) ?? Promise.resolve();
+  const next = prev.then(fn, fn);
+  const tail = next.catch(() => undefined);
+  skillLocks.set(name, tail);
+  // Drop the lock entry once nothing else is waiting on it — keeps the map
+  // from growing unbounded across the lifetime of the process.
+  void tail.then(() => {
+    if (skillLocks.get(name) === tail) skillLocks.delete(name);
+  });
+  return next;
+}
+
+/**
  * Load config, auto-migrating from the original Python app's older flat-list
  * format (`installed_skills[]`) to the current keyed map (`skills{}`), and
  * filling in any missing `settings` keys with defaults.
@@ -185,8 +210,21 @@ export async function saveConfig(config: SkillManagerConfig): Promise<void> {
   await fs.mkdir(dirname(CONFIG_PATH), { recursive: true });
   const tmp = `${CONFIG_PATH}.tmp-${process.pid}-${Date.now()}`;
   try {
-    await fs.writeFile(tmp, JSON.stringify(config, null, 2), "utf8");
+    // mode 0o600 — config carries every installed source URL, which is
+    // private to the user. Default umask leaves it world-readable on
+    // shared machines.
+    await fs.writeFile(tmp, JSON.stringify(config, null, 2), {
+      encoding: "utf8",
+      mode: 0o600,
+    });
     await fs.rename(tmp, CONFIG_PATH);
+    // Belt-and-braces: fs.rename preserves the existing mode if a prior file
+    // was world-readable. Re-apply on the canonical path.
+    try {
+      await fs.chmod(CONFIG_PATH, 0o600);
+    } catch {
+      // Non-fatal — best effort on platforms where chmod is restricted.
+    }
   } catch (err) {
     await fs.rm(tmp, { force: true });
     throw err;

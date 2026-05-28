@@ -1,6 +1,6 @@
 {
   "name": "skillbase",
-  "version": "0.2.2",
+  "version": "0.2.5",
   "description": "Skillbase — macOS desktop app for installing, stacking, and deploying skills across every AI coding agent.",
   "main": "dist-electron/main.js",
   "type": "module",
@@ -13,8 +13,9 @@
     "test:watch": "vitest",
     "lint:theme": "scripts/check-theme-tokens.sh",
     "build": "npm run typecheck && npm run lint:theme && vite build",
+    "smoke": "scripts/smoke.sh",
     "start": "npm run build && electron .",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run build && npm run smoke && electron-builder"
   },
   "dependencies": {
     "electron-window-state": "^5.0.3",

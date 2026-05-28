@@ -60,6 +60,10 @@ export interface AppSettings {
   default_deploy_mode: DeployMode;
 }
 
+// Single source of truth for default settings. Imported by both the main
+// process (config.withDefaults) and the renderer store. README documents
+// "light (default)"; honor that — the dark-by-default for the SetupFlow
+// pre-completion phase is handled separately in App.tsx.
 export const DEFAULT_SETTINGS: AppSettings = {
   auto_check_updates: false,
   cascade_updates: true,
@@ -67,9 +71,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   show_resource_only: false,
   default_layout: "cards",
   update_history_retention: 2,
-  // Default to dark — users open this app late at night and white mode
-  // is harsh. They can flip to light or system in Settings.
-  theme: "dark",
+  theme: "light",
   default_deploy_mode: "copy",
 };
 

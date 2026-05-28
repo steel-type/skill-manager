@@ -96,7 +96,7 @@ export function Modal({
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(42,42,42,0.45)",
+        background: "var(--scrim)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -123,7 +123,7 @@ export function Modal({
               aria-label="Close"
               onClick={onClose}
               style={{
-                background: "#ff736a",
+                background: "var(--tl-red)",
                 cursor: "pointer",
                 padding: 0,
                 border: "1px solid var(--line)",

@@ -194,6 +194,38 @@ const api = {
   ): Promise<{ removedFromProjects: string[] }> =>
     ipcRenderer.invoke("remove-skill", { name, cascade }),
 
+  deploySkillGlobally: (
+    name: string,
+    agentId: string,
+    deployMode: DeployMode,
+  ): Promise<{
+    agentId: string;
+    destPath: string;
+    warning: string | null;
+    deployMode: DeployMode;
+  }> =>
+    ipcRenderer.invoke("deploy-skill-globally", {
+      name,
+      agentId,
+      deployMode,
+    }),
+
+  removeSkillFromAgentGlobal: (
+    name: string,
+    agentId: string,
+  ): Promise<{ removed: boolean }> =>
+    ipcRenderer.invoke("remove-skill-from-agent-global", { name, agentId }),
+
+  getSkillGlobalStatus: (name: string) =>
+    ipcRenderer.invoke("get-skill-global-status", name) as Promise<
+      Record<string, boolean>
+    >,
+
+  getStackGlobalStatus: (stackId: string) =>
+    ipcRenderer.invoke("get-stack-global-status", stackId) as Promise<
+      Record<string, boolean>
+    >,
+
   listProjects: () =>
     ipcRenderer.invoke("list-projects") as Promise<TrackedProject[]>,
 
@@ -284,6 +316,10 @@ const api = {
 
   openPath: (p: string) =>
     ipcRenderer.invoke("open-path", p) as Promise<string>,
+
+  getLogsDir: () => ipcRenderer.invoke("get-logs-dir") as Promise<string>,
+
+  revealLogs: () => ipcRenderer.invoke("reveal-logs") as Promise<string>,
 
   pickFolder: () =>
     ipcRenderer.invoke("pick-folder") as Promise<string | null>,

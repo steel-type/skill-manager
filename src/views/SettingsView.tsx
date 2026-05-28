@@ -372,7 +372,7 @@ export function SettingsView() {
           disabled={!historyBytes || historyBytes === 0}
           style={{
             background: armed === "clear" ? "var(--warn)" : undefined,
-            color: armed === "clear" ? "#0a0a0a" : "var(--warn)",
+            color: armed === "clear" ? "var(--terminal-emphasis)" : "var(--warn)",
             borderColor: armed === "clear" ? "var(--warn)" : undefined,
           }}
           title={
@@ -399,7 +399,7 @@ export function SettingsView() {
           onClick={onResetConfig}
           style={{
             background: armed === "reset" ? "var(--warn)" : undefined,
-            color: armed === "reset" ? "#0a0a0a" : "var(--warn)",
+            color: armed === "reset" ? "var(--terminal-emphasis)" : "var(--warn)",
             borderColor: armed === "reset" ? "var(--warn)" : undefined,
           }}
           title={

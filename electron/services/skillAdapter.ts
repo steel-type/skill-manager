@@ -24,6 +24,35 @@ export type SkillFormat =
   | "clinerules"
   | "unknown";
 
+/**
+ * Detection-priority list shared across the codebase. Anything in the
+ * library that matches one of these entries is a real skill. Order is
+ * load-bearing: SKILL.md wins outright when multiple are present (see
+ * detectFormat below).
+ *
+ *  - kind `file`: presence of the named file (exact match).
+ *  - kind `ext`:  presence of any file with the given extension.
+ */
+export const FORMAT_PRIORITY: ReadonlyArray<
+  | { kind: "file"; name: string; format: Exclude<SkillFormat, "unknown" | "cursor-mdc"> }
+  | { kind: "ext"; ext: string; format: "cursor-mdc" }
+> = [
+  { kind: "file", name: "SKILL.md", format: "standard" },
+  { kind: "file", name: "AGENTS.md", format: "agents-md" },
+  { kind: "ext", ext: ".mdc", format: "cursor-mdc" },
+  { kind: "file", name: ".cursorrules", format: "cursorrules" },
+  { kind: "file", name: ".clinerules", format: "clinerules" },
+] as const;
+
+/** Files that, when present at the root of a directory, mean the directory
+ *  IS a skill (regardless of which agent's preferred format it uses).
+ *  Includes the canonical exact names; `.mdc` files are matched separately
+ *  via FORMAT_PRIORITY. Library scanners use this to decide whether a
+ *  directory is a top-level skill versus a passive folder. */
+export const SKILL_IDENTIFIER_FILES: ReadonlyArray<string> = FORMAT_PRIORITY
+  .filter((e): e is Extract<typeof e, { kind: "file" }> => e.kind === "file")
+  .map((e) => e.name);
+
 export interface NormalizedSkill {
   name: string;
   description: string;
@@ -69,14 +98,15 @@ async function safeReaddir(dir: string): Promise<DirEntry[]> {
 export async function detectFormat(directory: string): Promise<SkillFormat> {
   const entries = await safeReaddir(directory);
   const names = new Set(entries.filter((e) => e.isFile).map((e) => e.name));
-
-  if (names.has("SKILL.md")) return "standard";
-  if (names.has("AGENTS.md")) return "agents-md";
-  if (entries.some((e) => e.isFile && e.name.endsWith(".mdc"))) {
-    return "cursor-mdc";
+  for (const rule of FORMAT_PRIORITY) {
+    if (rule.kind === "file" && names.has(rule.name)) return rule.format;
+    if (
+      rule.kind === "ext" &&
+      entries.some((e) => e.isFile && e.name.endsWith(rule.ext))
+    ) {
+      return rule.format;
+    }
   }
-  if (names.has(".cursorrules")) return "cursorrules";
-  if (names.has(".clinerules")) return "clinerules";
   return "unknown";
 }
 

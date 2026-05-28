@@ -169,7 +169,7 @@ export async function planMigration(args: {
     if (!agent) return;
     const resolved = resolveAgentPaths(agentId, entryName, projectPath);
     if (!resolved.projectPath) return;
-    const isSingleFile = /{name}/.test(agent.entryFile);
+    const isSingleFile = agent.entryShape === "single-file";
     const symlinkPath = isSingleFile
       ? join(resolved.projectPath, resolved.entryFile)
       : resolved.projectPath;

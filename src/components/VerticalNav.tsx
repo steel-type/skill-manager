@@ -91,7 +91,7 @@ export function VerticalNav() {
         border: "1.5px solid var(--line)",
         borderRadius: 14,
         background: "var(--paper-2)",
-        boxShadow: "inset 0 1px 2px rgba(0,0,0,0.04)",
+        boxShadow: "inset 0 1px 2px var(--inset-shadow)",
       }}
     >
       {/* Sliding terracotta indicator — y-axis travel mirrors the original
@@ -107,7 +107,7 @@ export function VerticalNav() {
           background: "var(--accent)",
           borderRadius: 10,
           transition: "top 0.32s cubic-bezier(.6,.2,.2,1)",
-          boxShadow: "0 1px 3px rgba(201,100,66,0.35)",
+          boxShadow: "0 1px 3px var(--active-shadow)",
         }}
       />
       {tabs.map((t, i) => {

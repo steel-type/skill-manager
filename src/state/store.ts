@@ -9,7 +9,7 @@ import type {
   TrackedProject,
   UpdateInfo,
 } from "../../electron/services/types";
-import { DEFAULT_SETUP } from "../../electron/services/types";
+import { DEFAULT_SETTINGS, DEFAULT_SETUP } from "../../electron/services/types";
 
 export type Tab = "library" | "stacks" | "deploy" | "settings";
 export type LibraryFilter =
@@ -91,6 +91,20 @@ export type Screen =
       exportedAt: string | null;
     };
 
+// Error queue replaces the old single-slot lastError. Multiple async
+// operations can surface errors concurrently — under the old model, a
+// fast failure overwrote a slower one's message and the user only saw
+// the noisier one. Each entry auto-dismisses on a 6s timer (handled in
+// App.tsx) but the queue ordering survives.
+export interface AppError {
+  id: string;
+  source: "skills" | "projects" | "updateCheck" | "settings" | "setup" | "stacks" | "deploy" | "generic";
+  message: string;
+  /** ISO timestamp the error was raised. Used for sorting + auto-dismiss
+   *  scheduling. */
+  raisedAt: string;
+}
+
 interface AppState {
   activeTab: Tab;
   setActiveTab: (tab: Tab) => void;
@@ -117,13 +131,20 @@ interface AppState {
   lastUpdateCheckAt: string | null;
   /** Skills examined / updates found on the last check. */
   lastUpdateCheckSummary: { total: number; updatesAvailable: number } | null;
+  errors: AppError[];
+  /** Back-compat alias — last error message, or null when the queue is
+   *  empty. Read-only derived. */
   lastError: string | null;
 
   refreshSkills: () => Promise<void>;
   refreshProjects: () => Promise<void>;
   runUpdateCheck: () => Promise<void>;
   setUpdateInfo: (info: Record<string, UpdateInfo>) => void;
-  setError: (msg: string | null) => void;
+  /** Push an error onto the queue. Pass `null` to clear ALL errors.
+   *  Internally records source + auto-id so multiple toasts can render. */
+  setError: (msg: string | null, source?: AppError["source"]) => void;
+  /** Dismiss a specific error by id. */
+  dismissError: (id: string) => void;
 
   // Names of skills currently being updated. Drives the inline "updating…"
   // pip on SkillCard so users get immediate visual feedback even when the
@@ -134,7 +155,19 @@ interface AppState {
 
   // Modals — all driven by a single discriminated union for predictability.
   modal: ModalState;
-  openModal: (m: NonNullable<ModalState>) => void;
+  /**
+   * Open a modal. When a modal that the user is actively deciding on (any
+   * `confirm` or destructive flow) is already mounted, a background event
+   * (auto-dismiss of a deploy result, an arriving import summary, etc.)
+   * MUST NOT clobber it — the user clicks "Confirm" expecting to confirm
+   * what's on screen. Background-class openers can pass `{ background:
+   * true }` to defer instead of clobbering; foreground (user-clicked)
+   * openers always win.
+   */
+  openModal: (
+    m: NonNullable<ModalState>,
+    opts?: { background?: boolean },
+  ) => void;
   closeModal: () => void;
 
   // Right-pane screens. `update` is the multi-step bulk update flow; it
@@ -191,17 +224,6 @@ interface AppState {
   clearDeployQueue: () => void;
 }
 
-const DEFAULT_SETTINGS: AppSettings = {
-  auto_check_updates: false,
-  cascade_updates: true,
-  confirm_before_remove: true,
-  show_resource_only: false,
-  default_layout: "cards",
-  update_history_retention: 2,
-  theme: "light",
-  default_deploy_mode: "copy",
-};
-
 export const useAppStore = create<AppState>((set, get) => ({
   activeTab: "library",
   // Switching the primary tab always returns the right pane to its main
@@ -232,18 +254,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   isCheckingUpdates: false,
   lastUpdateCheckAt: null,
   lastUpdateCheckSummary: null,
+  errors: [],
   lastError: null,
 
   refreshSkills: async () => {
-    set({ isLoading: true, lastError: null });
+    set({ isLoading: true });
     try {
       const skills = await window.api.listSkills();
       set({ skills, isLoading: false });
     } catch (err) {
-      set({
-        isLoading: false,
-        lastError: err instanceof Error ? err.message : String(err),
-      });
+      set({ isLoading: false });
+      get().setError(
+        err instanceof Error ? err.message : String(err),
+        "skills",
+      );
     }
   },
 
@@ -252,13 +276,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       const projects = await window.api.listProjects();
       set({ projects });
     } catch (err) {
-      set({ lastError: err instanceof Error ? err.message : String(err) });
+      get().setError(
+        err instanceof Error ? err.message : String(err),
+        "projects",
+      );
     }
   },
 
   runUpdateCheck: async () => {
     if (get().isCheckingUpdates) return;
-    set({ isCheckingUpdates: true, lastError: null });
+    set({ isCheckingUpdates: true });
     try {
       const updateInfo = await window.api.checkUpdates();
       const total = Object.keys(updateInfo).length;
@@ -272,15 +299,39 @@ export const useAppStore = create<AppState>((set, get) => ({
         lastUpdateCheckSummary: { total, updatesAvailable },
       });
     } catch (err) {
-      set({
-        isCheckingUpdates: false,
-        lastError: err instanceof Error ? err.message : String(err),
-      });
+      set({ isCheckingUpdates: false });
+      get().setError(
+        err instanceof Error ? err.message : String(err),
+        "updateCheck",
+      );
     }
   },
 
   setUpdateInfo: (updateInfo) => set({ updateInfo }),
-  setError: (lastError) => set({ lastError }),
+  setError: (msg, source) => {
+    if (msg === null) {
+      set({ errors: [], lastError: null });
+      return;
+    }
+    const entry: AppError = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      source: source ?? "generic",
+      message: msg,
+      raisedAt: new Date().toISOString(),
+    };
+    set((state) => {
+      // Bound the queue. Five concurrent errors is already too noisy; older
+      // ones drop off so the user sees current state, not a wall of stale.
+      const next = [...state.errors, entry].slice(-5);
+      return { errors: next, lastError: next[next.length - 1]?.message ?? null };
+    });
+  },
+  dismissError: (id) => {
+    set((state) => {
+      const next = state.errors.filter((e) => e.id !== id);
+      return { errors: next, lastError: next[next.length - 1]?.message ?? null };
+    });
+  },
 
   updatingNames: new Set<string>(),
   markUpdating: (name) =>
@@ -298,7 +349,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
 
   modal: null,
-  openModal: (modal) => set({ modal }),
+  openModal: (modal, opts) => {
+    const current = get().modal;
+    const userDeciding =
+      current?.type === "confirm" ||
+      current?.type === "removeSkill" ||
+      current?.type === "removeProject" ||
+      current?.type === "deleteStack" ||
+      current?.type === "rollback";
+    if (opts?.background === true && userDeciding) {
+      // Background event tried to clobber a decision dialog — drop it.
+      // The originating system surfaces its result through `errors` (a
+      // toast) so the information isn't lost.
+      return;
+    }
+    set({ modal });
+  },
   closeModal: () => set({ modal: null }),
 
   screen: { kind: "main" },
@@ -310,7 +376,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const settings = await window.api.getSettings();
       set({ settings, libraryLayout: settings.default_layout });
     } catch (err) {
-      set({ lastError: err instanceof Error ? err.message : String(err) });
+      get().setError(err instanceof Error ? err.message : String(err));
     }
   },
   setup: DEFAULT_SETUP,
@@ -319,7 +385,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const setup = await window.api.getSetup();
       set({ setup });
     } catch (err) {
-      set({ lastError: err instanceof Error ? err.message : String(err) });
+      get().setError(err instanceof Error ? err.message : String(err));
     }
   },
   setSetup: async (partial) => {
@@ -327,7 +393,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const setup = await window.api.setSetup(partial);
       set({ setup });
     } catch (err) {
-      set({ lastError: err instanceof Error ? err.message : String(err) });
+      get().setError(err instanceof Error ? err.message : String(err));
     }
   },
 
@@ -347,7 +413,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       set(next);
     } catch (err) {
-      set({ lastError: err instanceof Error ? err.message : String(err) });
+      get().setError(err instanceof Error ? err.message : String(err));
     }
   },
 
@@ -363,7 +429,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const stacks = await window.api.listStacks();
       set({ stacks });
     } catch (err) {
-      set({ lastError: err instanceof Error ? err.message : String(err) });
+      get().setError(err instanceof Error ? err.message : String(err));
     }
   },
 
@@ -372,7 +438,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const stackDeployments = await window.api.getStackDeployments();
       set({ stackDeployments });
     } catch (err) {
-      set({ lastError: err instanceof Error ? err.message : String(err) });
+      get().setError(err instanceof Error ? err.message : String(err));
     }
   },
 

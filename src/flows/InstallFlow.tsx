@@ -170,9 +170,9 @@ export function InstallFlow({ prefillUrl }: InstallFlowProps) {
                 fontFamily: "var(--mono)",
                 fontSize: 11,
                 lineHeight: 1.6,
-                background: "#1c1c1c",
-                color: "#d8d8d8",
-                borderColor: "#333",
+                background: "var(--terminal-bg)",
+                color: "var(--terminal-fg)",
+                borderColor: "var(--terminal-border)",
                 flex: 1,
                 minHeight: 120,
                 overflow: "auto",
@@ -199,7 +199,7 @@ export function InstallFlow({ prefillUrl }: InstallFlowProps) {
             {phase === "done" && result?.isBundle && (
               <div
                 className="sk-box dashed"
-                style={{ padding: 10, background: "#f7f6ee" }}
+                style={{ padding: 10, background: "var(--paper-tint)" }}
               >
                 <div
                   className="rail-section"

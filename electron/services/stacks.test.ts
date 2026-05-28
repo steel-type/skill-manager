@@ -906,10 +906,14 @@ describe("updateStackComposition cascadeRemoveOrphans", () => {
     }
   });
 
-  it("leaves orphan files when cascadeRemoveOrphans is false (legacy)", async () => {
+  it("leaves orphan files when cascadeRemoveOrphans is explicitly false (opt-out)", async () => {
     const { stack, project } = await seedTwoMemberStackDeployedClaude();
     try {
-      const result = await updateStackComposition(stack.id, ["alpha"]);
+      // Default flipped to TRUE (README symmetry); the legacy "leave files
+      // in place" behavior is now opt-in via an explicit false.
+      const result = await updateStackComposition(stack.id, ["alpha"], {
+        cascadeRemoveOrphans: false,
+      });
       expect(result.cascadeRemoved).toEqual([]);
       // beta file still on disk.
       expect(

@@ -782,6 +782,15 @@ export async function completeSetup(
 
   const imported: string[] = [];
   const skipped: { name: string; reason: string }[] = [];
+
+  // Stack-id collision guard. createStack already refuses to land a stack
+  // whose id matches an existing library dir; the inverse — refusing an
+  // imported skill whose name matches an existing stack id — needs to
+  // happen here so a sloppy onboarding import can't clobber a meta-skill.
+  const { loadConfig } = await import("./config");
+  const preConfig = await loadConfig();
+  const stackIds = new Set(preConfig.stacks.map((s) => s.id));
+
   for (const entry of args.importSkills ?? []) {
     const mode: ImportMode = entry.mode ?? "copy";
     const resolution: ImportResolution = entry.resolution ?? "new";
@@ -789,6 +798,13 @@ export async function completeSetup(
 
     if (resolution === "skip") {
       skipped.push({ name: entry.name, reason: "skipped by user" });
+      continue;
+    }
+    if (stackIds.has(entry.name)) {
+      skipped.push({
+        name: entry.name,
+        reason: `Name collides with stack '${entry.name}' — rename the source folder before importing`,
+      });
       continue;
     }
 

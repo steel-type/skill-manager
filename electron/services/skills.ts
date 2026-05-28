@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import { join, basename, relative } from "node:path";
 import { getLibraryPath } from "./paths";
 import { loadConfig } from "./config";
+import { detectFormat, SKILL_IDENTIFIER_FILES } from "./skillAdapter";
 import type {
   NestedSkill,
   Skill,
@@ -9,7 +10,11 @@ import type {
   SkillFrontmatter,
 } from "./types";
 
-const SKILL_IDENTIFIERS = ["SKILL.md", "AGENTS.md"] as const;
+// Files whose presence at the root of a directory marks it as a skill.
+// Sourced from skillAdapter so every detector agrees on the priority list
+// (was previously two places — .mdc / .cursorrules / .clinerules silently
+// disappeared from the Library scan).
+const SKILL_IDENTIFIERS = SKILL_IDENTIFIER_FILES;
 const SKILL_CONTENT = ["references", "scripts", "data", "commands"] as const;
 const SKIP_DIRS = new Set([
   ".git",
@@ -151,8 +156,22 @@ async function isDir(p: string): Promise<boolean> {
 async function findNestedSkills(root: string): Promise<NestedSkill[]> {
   const found: NestedSkill[] = [];
   const seen = new Set<string>();
+  // Visited-inode guard. Without it, a symlink loop inside the library
+  // (e.g. `skills/foo/loop -> skills/foo/`) walks forever and locks the
+  // main process — even SKIP_DIRS can't help because the cycle hides
+  // under arbitrary names. Track resolved (dev,ino) pairs so we recurse
+  // into each directory at most once.
+  const visitedInodes = new Set<string>();
 
   async function walk(dir: string) {
+    try {
+      const st = await fs.stat(dir);
+      const key = `${st.dev}:${st.ino}`;
+      if (visitedInodes.has(key)) return;
+      visitedInodes.add(key);
+    } catch {
+      return;
+    }
     let entries: import("node:fs").Dirent[];
     try {
       entries = await fs.readdir(dir, { withFileTypes: true });
@@ -192,6 +211,20 @@ export async function detectSkillType(dirPath: string): Promise<SkillDetection> 
   const identifiers: string[] = [];
   for (const f of SKILL_IDENTIFIERS) {
     if (await isFile(join(dirPath, f))) identifiers.push(f);
+  }
+  // Cursor-style multi-rule skills are a folder of *.mdc files with no
+  // SKILL.md. Surface them in the Library by recording the first .mdc as
+  // the identifier so isSkill = true.
+  if (identifiers.length === 0) {
+    try {
+      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+      const firstMdc = entries.find(
+        (e) => e.isFile() && e.name.endsWith(".mdc"),
+      );
+      if (firstMdc) identifiers.push(firstMdc.name);
+    } catch {
+      // unreadable dir — skip
+    }
   }
 
   const content: string[] = [];

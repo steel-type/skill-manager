@@ -1050,14 +1050,18 @@ function suggestDeploy(
   return out;
 }
 
+// Cached home directory, populated by the first envInfo IPC. Without
+// this, `deploy <skill> to ~/projects/foo` reached the validator as a
+// relative path and was silently rejected even though the suggestion UI
+// previewed it as valid.
+let cachedHome: string | null = null;
+void window.api.envInfo().then((info) => {
+  cachedHome = info.home;
+});
+
 function expandTilde(p: string): string {
-  if (p.startsWith("~/")) {
-    // Resolve via env-info path. We don't have process.env here; use a
-    // best-guess HOME from the env-info IPC if we ever cache it. For now,
-    // pass the literal — the main process won't accept it (validator
-    // requires absolute), surfacing an error the user can correct.
-    return p;
-  }
+  if (p === "~" && cachedHome) return cachedHome;
+  if (p.startsWith("~/") && cachedHome) return cachedHome + p.slice(1);
   return p;
 }
 

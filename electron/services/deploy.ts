@@ -96,7 +96,7 @@ export async function deployToProject(
 
   // Single-file agents (cursor today) write one entry file inside the
   // resolved directory. Everything else replaces a per-skill subdirectory.
-  const isSingleFile = /{name}/.test(agent.entryFile);
+  const isSingleFile = agent.entryShape === "single-file";
   const dest = isSingleFile
     ? join(resolved.projectPath, resolved.entryFile)
     : resolved.projectPath;

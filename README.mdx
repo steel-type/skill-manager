@@ -106,6 +106,7 @@ Cursor and Cline are project-only — they have no global skills concept, so the
 
 - Per-row ledger: skill or stack × project × agent × mode × timestamp.
 - Copy or symlink, per deploy. Symlink lets library updates flow into the project automatically; copy gives you a frozen snapshot.
+  - **Symlinks are bidirectional.** Editing a symlinked deployment in your IDE writes to the canonical library copy, so every project that symlinks the same skill (and every agent target — Claude, Cursor, Codex, …) sees the edit. Use **copy** when you want a project-local fork; use **symlink** when you want one source of truth.
 - Cursor and other single-file agents are handled transparently — Skill Manager writes `<name>.mdc` instead of a directory.
 - Remove a deployment with optional file cleanup (and, for stacks, optional cascade-remove of member files).
 

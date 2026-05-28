@@ -59,7 +59,7 @@ export function ViewSwitcher({ active, onChange }: ViewSwitcherProps) {
         border: "1.5px solid var(--line)",
         borderRadius: 22,
         background: "var(--paper-2)",
-        boxShadow: "inset 0 1px 2px rgba(0,0,0,0.04)",
+        boxShadow: "inset 0 1px 2px var(--inset-shadow)",
       }}
     >
       <div
@@ -72,7 +72,7 @@ export function ViewSwitcher({ active, onChange }: ViewSwitcherProps) {
           background: "var(--accent)",
           borderRadius: 18,
           transition: "left 0.32s cubic-bezier(.6,.2,.2,1)",
-          boxShadow: "0 1px 3px rgba(201,100,66,0.35)",
+          boxShadow: "0 1px 3px var(--active-shadow)",
         }}
       />
       {tabs.map((t, i) => (

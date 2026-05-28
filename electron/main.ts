@@ -10,12 +10,14 @@ import {
 } from "electron";
 import windowStateKeeper from "electron-window-state";
 import { randomUUID } from "node:crypto";
+import { promises as fs } from "node:fs";
 import * as path from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { CONFIG_PATH, getClaudeDir, getLibraryPath } from "./services/paths";
-import { getAgentSkillsDir, getSupportedAgents } from "./services/agents";
+import { CONFIG_PATH, getClaudeDir, getHistoryPath, getLibraryPath } from "./services/paths";
+import { AGENTS, getAgentSkillsDir, getSupportedAgents } from "./services/agents";
 import { killAllGitChildren } from "./services/git";
+import { getLogsDir, logError, logInfo } from "./services/logger";
 import {
   bootstrap,
   listSkills,
@@ -24,7 +26,11 @@ import {
   checkUpdates,
   updateSkill,
   deploySkill,
+  deploySkillGlobally,
   removeSkill,
+  removeSkillFromAgentGlobal,
+  getSkillGlobalStatus,
+  getStackGlobalStatus,
   listTrackedProjects,
   removeProjectTracking,
   exportMarkdown,
@@ -107,21 +113,73 @@ function attachCsp(session: Session) {
         ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
         : "script-src 'self'",
       "img-src 'self' data: blob:",
+      // SkillDetailFlow does a renderer-side fetch to the GitHub REST API
+      // for the stars / forks / last-push panel — the call is
+      // unauthenticated and only fires on detail-view open. Keep that
+      // origin allowed in both dev and prod.
       isDev
         ? `connect-src 'self' ws://localhost:* http://localhost:* https://fonts.googleapis.com https://fonts.gstatic.com https://api.github.com`
         : "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com https://api.github.com",
       "frame-ancestors 'none'",
       "object-src 'none'",
       "base-uri 'self'",
+      "form-action 'none'",
     ].join("; ");
 
     callback({
       responseHeaders: {
         ...details.responseHeaders,
         "Content-Security-Policy": [csp],
+        "X-Content-Type-Options": ["nosniff"],
+        "Referrer-Policy": ["no-referrer"],
       },
     });
   });
+
+  // Explicit deny on every renderer-side permission request — Electron's
+  // default is also deny, but stating it removes any room for a future
+  // Electron release to flip the default and surprise us.
+  session.setPermissionRequestHandler((_wc, _permission, callback) => {
+    callback(false);
+  });
+}
+
+// Trusted roots an `open-path` call may target. Renderer-side flows only
+// ever reveal locations the app itself put there: library + history +
+// per-agent skill dirs + the app's own logs/config. Anything else is
+// rejected so a future renderer compromise can't shell-open arbitrary
+// .app bundles or LaunchServices-registered files.
+function trustedRoots(): string[] {
+  const roots = new Set<string>();
+  roots.add(getLibraryPath());
+  roots.add(getHistoryPath());
+  roots.add(path.dirname(CONFIG_PATH));
+  for (const agent of Object.values(AGENTS)) {
+    const dir = getAgentSkillsDir(agent.id);
+    if (dir) roots.add(dir);
+  }
+  try {
+    roots.add(app.getPath("userData"));
+    roots.add(path.join(app.getPath("userData"), "logs"));
+  } catch {
+    // app paths may not be available pre-ready in tests
+  }
+  return [...roots];
+}
+
+function isUnderTrustedRoot(target: string): boolean {
+  if (typeof target !== "string" || target.length === 0) return false;
+  if (target.includes("\x00")) return false;
+  // No relative paths, no shell expansion, no embedded ".." segments.
+  if (!target.startsWith("/")) return false;
+  if (target.split("/").includes("..")) return false;
+  const normalized = path.normalize(target);
+  for (const root of trustedRoots()) {
+    const r = path.normalize(root);
+    if (normalized === r) return true;
+    if (normalized.startsWith(r + path.sep)) return true;
+  }
+  return false;
 }
 
 function createWindow() {
@@ -172,16 +230,30 @@ function createWindow() {
   });
 
   // Prevent in-place navigation away from the app's own origin (vite dev
-  // server in dev, file:// in prod). Any external link attempt is routed to
-  // the OS browser instead.
+  // server in dev, the bundled index.html in prod). Drag-dropping a file
+  // or URL onto the window would otherwise replace the renderer entirely;
+  // tightening from "any file://" to "exactly our index.html" plugs that
+  // hole. External URLs route to the OS browser.
+  const prodIndex = isDev
+    ? ""
+    : `file://${path.join(__dirname, "..", "dist", "index.html")}`;
   mainWindow.webContents.on("will-navigate", (event, url) => {
     const allowed = isDev
       ? url.startsWith(process.env.VITE_DEV_SERVER_URL!)
-      : url.startsWith("file://");
+      : url === prodIndex || url.startsWith(prodIndex + "#") ||
+        url.startsWith(prodIndex + "?");
     if (!allowed) {
       event.preventDefault();
-      void shell.openExternal(url);
+      if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
     }
+  });
+
+  // Block drag-and-drop of files / URLs onto the renderer. Even with
+  // will-navigate in place, a dropped local file can reach the renderer
+  // via beforeunload semantics on some platforms. Belt-and-braces:
+  // intercept and route through the browser instead.
+  mainWindow.webContents.on("will-prevent-unload", (event) => {
+    event.preventDefault();
   });
 
   // Auto-recover from renderer crashes (white-screen avoidance). After a
@@ -242,10 +314,31 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   attachCsp(defaultSession.defaultSession);
+  let bootstrapOk = true;
   try {
     await bootstrap();
+    logInfo("bootstrap ok");
   } catch (err) {
-    console.error("bootstrap failed:", err);
+    bootstrapOk = false;
+    logError("bootstrap failed", {
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+  }
+  // Smoke-test mode (scripts/smoke.sh). When this env var is set, we
+  // prove the main bundle loaded and bootstrap completed — then exit
+  // immediately without opening a window. Catches CJS/ESM regressions
+  // and broken dynamic imports that pass typecheck + tests but die at
+  // runtime. Sentinel string is parsed by the shell script.
+  if (process.env.SKILLBASE_SMOKE_TEST === "1") {
+    // eslint-disable-next-line no-console
+    console.log(
+      bootstrapOk
+        ? "SKILLBASE_SMOKE_TEST: bootstrap ok"
+        : "SKILLBASE_SMOKE_TEST: bootstrap failed",
+    );
+    app.exit(bootstrapOk ? 0 : 1);
+    return;
   }
   createWindow();
   app.on("activate", () => {
@@ -513,6 +606,28 @@ ipcMain.handle(
     removeSkill(args.name, { cascade: args.cascade }),
 );
 
+ipcMain.handle(
+  "deploy-skill-globally",
+  (
+    _e,
+    args: { name: string; agentId: string; deployMode: "copy" | "symlink" },
+  ) => deploySkillGlobally(args.name, args.agentId, args.deployMode),
+);
+
+ipcMain.handle(
+  "remove-skill-from-agent-global",
+  (_e, args: { name: string; agentId: string }) =>
+    removeSkillFromAgentGlobal(args.name, args.agentId),
+);
+
+ipcMain.handle("get-skill-global-status", (_e, name: string) =>
+  getSkillGlobalStatus(name),
+);
+
+ipcMain.handle("get-stack-global-status", (_e, stackId: string) =>
+  getStackGlobalStatus(stackId),
+);
+
 ipcMain.handle("list-projects", () => listTrackedProjects());
 
 ipcMain.handle(
@@ -615,10 +730,27 @@ ipcMain.handle("get-last-project", () => getLastProject());
 ipcMain.handle("set-last-project", (_e, p: string) => setLastProject(p));
 
 ipcMain.handle("open-in-finder", (_e, p: string) => {
+  // Even though the renderer only ever calls this with paths the main
+  // process previously handed it, validate against the trusted-roots
+  // allowlist so a renderer compromise can't reveal an attacker's path.
+  if (!isUnderTrustedRoot(p)) {
+    console.warn("[skill-manager] open-in-finder denied:", p);
+    return;
+  }
   shell.showItemInFolder(p);
 });
 
-ipcMain.handle("open-path", (_e, p: string) => shell.openPath(p));
+ipcMain.handle("open-path", async (_e, p: string) => {
+  // shell.openPath honors LaunchServices — opening an attacker-supplied
+  // path could execute a .command/.app, install a URL handler payload, or
+  // pop the wrong folder for the user. Gate strictly on the same trusted-
+  // roots set.
+  if (!isUnderTrustedRoot(p)) {
+    console.warn("[skill-manager] open-path denied:", p);
+    return "denied: path not under a trusted root";
+  }
+  return await shell.openPath(p);
+});
 
 ipcMain.handle("pick-folder", async () => {
   if (!mainWindow) return null;
@@ -682,6 +814,15 @@ ipcMain.handle("cancel-operation", (_e, streamId: string) => {
   return true;
 });
 
+ipcMain.handle("get-logs-dir", () => getLogsDir());
+
+ipcMain.handle("reveal-logs", async () => {
+  const dir = await getLogsDir();
+  await fs.mkdir(dir, { recursive: true });
+  shell.openPath(dir);
+  return dir;
+});
+
 ipcMain.handle("get-history-size", () => getHistorySize());
 
 ipcMain.handle("clear-all-history", () => clearAllHistory());
@@ -716,8 +857,11 @@ ipcMain.handle(
       cascadeRemoveOrphans?: boolean;
     },
   ) =>
+    // Default cascade-remove ON: README implies symmetric add/remove, and
+    // leaving orphan files behind by default is a foot-gun. Callers that
+    // want the legacy "leave files" behavior must explicitly pass false.
     updateStackComposition(args.stackId, args.skillIds, {
-      cascadeRemoveOrphans: args.cascadeRemoveOrphans === true,
+      cascadeRemoveOrphans: args.cascadeRemoveOrphans !== false,
     }),
 );
 

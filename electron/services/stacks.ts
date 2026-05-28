@@ -96,7 +96,7 @@ function metaSkillDestination(
   if (!resolved.projectPath) {
     throw new Error(`Agent '${agentId}' has no project-level deployment path`);
   }
-  const isSingleFile = /\{name\}/.test(agent.entryFile);
+  const isSingleFile = agent.entryShape === "single-file";
   if (isSingleFile) {
     const entryPath = join(resolved.projectPath, resolved.entryFile);
     return { entryPath, containerPath: entryPath, isSingleFile };
@@ -425,7 +425,8 @@ export interface UpdateStackCompositionOptions {
   /** When true, after composition is saved, remove the file deployments of
    *  removed members from every project where this stack was deployed —
    *  but only if no other deployed stack at that project still includes the
-   *  member. Default: false (legacy behavior, leaves orphan files). */
+   *  member. Default: true (matches README "added members are pushed
+   *  automatically" symmetry). Pass false to keep orphan files in place. */
   cascadeRemoveOrphans?: boolean;
 }
 
@@ -506,7 +507,7 @@ export async function updateStackComposition(
   }
   const stackId = validateStackName(rawStackId);
   const newSkillIds = rawNewSkillIds.map((s) => validateSkillName(s));
-  const cascade = opts.cascadeRemoveOrphans === true;
+  const cascade = opts.cascadeRemoveOrphans !== false;
 
   // Snapshot config + member-skill descriptions outside the lock so the
   // long-running filesystem work below can run concurrently with other
@@ -591,7 +592,7 @@ export async function updateStackComposition(
     // and don't need a touch — but we still resolve the canonical path for
     // the result summary.
     const agent = AGENTS[dep.agentId];
-    const isSingleFile = agent ? /{name}/.test(agent.entryFile) : false;
+    const isSingleFile = agent ? agent.entryShape === "single-file" : false;
     let metaSkillPath: string;
     if (dep.deployMode === "symlink") {
       const resolved = resolveAgentPaths(dep.agentId, stackId, dep.projectPath);
@@ -684,7 +685,7 @@ export async function updateStackComposition(
         const agent = AGENTS[dep.agentId];
         if (!agent) continue;
         const resolved = resolveAgentPaths(dep.agentId, skillId, dep.projectPath);
-        const isSingleFile = /{name}/.test(agent.entryFile);
+        const isSingleFile = agent.entryShape === "single-file";
         const target = isSingleFile
           ? join(resolved.projectPath ?? "", resolved.entryFile)
           : (resolved.projectPath ?? "");
@@ -879,7 +880,7 @@ export async function removeStackDeployment(
         const agent = AGENTS[rawAgentId];
         if (!agent) continue;
         const resolved = resolveAgentPaths(rawAgentId, skillId, projectPath);
-        const isSingleFile = /{name}/.test(agent.entryFile);
+        const isSingleFile = agent.entryShape === "single-file";
         const target = isSingleFile
           ? join(resolved.projectPath ?? "", resolved.entryFile)
           : (resolved.projectPath ?? "");
@@ -984,7 +985,7 @@ export async function deployStack(
   // deployToProject returns the directory for directory-style agents and
   // the entry file for single-file agents. metaSkillPath is documented as
   // the path to the SKILL.md (or .mdc) file — normalize accordingly.
-  const isSingleFile = /{name}/.test(AGENTS[agentId].entryFile);
+  const isSingleFile = AGENTS[agentId].entryShape === "single-file";
   const metaSkillPath = isSingleFile
     ? metaResult.destPath
     : join(metaResult.destPath, "SKILL.md");

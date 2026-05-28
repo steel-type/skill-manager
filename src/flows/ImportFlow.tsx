@@ -408,7 +408,7 @@ function ImportRow({
     : row.selected
       ? "var(--accent)"
       : "var(--paper)";
-  const checkColor = broken ? "var(--warn)" : "#0a0a0a";
+  const checkColor = broken ? "var(--warn)" : "var(--terminal-emphasis)";
   const symbol = broken ? "✗" : row.selected ? "✓" : "";
 
   return (

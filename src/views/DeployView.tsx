@@ -26,6 +26,10 @@ interface AgentMeta {
    *  Drives the deploy path preview rendered below the agent
    *  checkboxes. */
   projectSkillPath: string;
+  /** Absolute path to the agent's global skills dir, or null if the agent
+   *  has no global concept (cursor, cline). Drives the home-library ✓ pip
+   *  and the "Send to checked globally" button's per-agent eligibility. */
+  skillsDir: string | null;
 }
 
 interface DeployRunMessage {
@@ -94,6 +98,16 @@ export function DeployView() {
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(
     new Set([setup.primaryAgent || "claude"]),
   );
+  // Per-agent home-library status for the currently-queued item. Maps
+  // agentId → "is the queued skill/stack already in this agent's global
+  // dir?". Drives the ✓ pip on each agent row and disables the "Send
+  // globally" button for agents that already have it.
+  const [agentGlobalStatus, setAgentGlobalStatus] = useState<
+    Record<string, boolean>
+  >({});
+  /** True while a global send is mid-flight — disables the button so a
+   *  hammered click doesn't fire N parallel writes. */
+  const [sendingGlobal, setSendingGlobal] = useState(false);
   const [selectedProjects, setSelectedProjects] = useState<Set<string>>(
     new Set(),
   );
@@ -130,6 +144,109 @@ export function DeployView() {
   useEffect(() => {
     setDeployMode(settings.default_deploy_mode);
   }, [settings.default_deploy_mode]);
+
+  // Refresh per-agent home-library status whenever the queued item
+  // changes. Best-effort — if the IPC fails we just don't show the
+  // indicator dots, which is harmless. The ledger also gets refreshed
+  // after a global send completes (see sendToCheckedGlobally) so the
+  // ✓ updates without a manual reload.
+  useEffect(() => {
+    if (!deployQueue) {
+      setAgentGlobalStatus({});
+      return;
+    }
+    let cancelled = false;
+    const fetch =
+      deployQueue.type === "skill"
+        ? window.api.getSkillGlobalStatus(deployQueue.id)
+        : window.api.getStackGlobalStatus(deployQueue.id);
+    fetch
+      .then((status) => {
+        if (!cancelled) setAgentGlobalStatus(status);
+      })
+      .catch(() => {
+        if (!cancelled) setAgentGlobalStatus({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [deployQueue]);
+
+  const refreshAgentGlobalStatus = async () => {
+    if (!deployQueue) return;
+    try {
+      const status =
+        deployQueue.type === "skill"
+          ? await window.api.getSkillGlobalStatus(deployQueue.id)
+          : await window.api.getStackGlobalStatus(deployQueue.id);
+      setAgentGlobalStatus(status);
+    } catch {
+      // Best-effort; status stays whatever it was.
+    }
+  };
+
+  const sendToCheckedGlobally = async () => {
+    if (!deployQueue || sendingGlobal) return;
+    const targets = agents.filter(
+      (a) => selectedAgents.has(a.id) && a.skillsDir,
+    );
+    if (targets.length === 0) {
+      setError(
+        "Pick at least one agent with a global skills directory (Cursor and Cline are project-only).",
+        "deploy",
+      );
+      return;
+    }
+    setSendingGlobal(true);
+    const succeeded: string[] = [];
+    const failed: { agentId: string; error: string }[] = [];
+    for (const a of targets) {
+      try {
+        if (deployQueue.type === "skill") {
+          await window.api.deploySkillGlobally(
+            deployQueue.id,
+            a.id,
+            deployMode,
+          );
+        } else {
+          // Stack: backfills the meta-skill into the library and copies/
+          // symlinks into the agent's global dir. Existing deployStack
+          // works against a project; for a global send we use the same
+          // primitive as the skill case — the stack's meta-SKILL.md
+          // lives at <library>/<stackId>/ so this is identical to a
+          // skill-global send pointed at the stack id.
+          await window.api.deploySkillGlobally(
+            deployQueue.id,
+            a.id,
+            deployMode,
+          );
+        }
+        succeeded.push(a.displayName);
+      } catch (err) {
+        failed.push({
+          agentId: a.displayName,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    await refreshAgentGlobalStatus();
+    setSendingGlobal(false);
+    openModal({
+      type: "deployResult",
+      itemKind: deployQueue.type,
+      itemId: deployQueue.id,
+      messages: [
+        ...succeeded.map((a) => ({
+          level: "success" as const,
+          text: `→ ${a} (global, ${deployMode})`,
+        })),
+        ...failed.map((f) => ({
+          level: "error" as const,
+          text: `✗ ${f.agentId}: ${f.error}`,
+        })),
+      ],
+    });
+  };
 
   // Pre-select last-used project when a queue lands and there's no current
   // selection. Keeps the "Send to Deploy from Library → click Deploy" path
@@ -481,9 +598,33 @@ export function DeployView() {
         <Column
           title="Agents"
           rightSlot={
-            <span style={{ fontSize: 11, color: "var(--ink-faint)" }}>
-              {selectedAgents.size} selected
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 11, color: "var(--ink-faint)" }}>
+                {selectedAgents.size} selected
+              </span>
+              {deployQueue && (
+                <button
+                  type="button"
+                  className="sk-btn sm"
+                  disabled={sendingGlobal || selectedAgents.size === 0}
+                  onClick={sendToCheckedGlobally}
+                  title={
+                    selectedAgents.size === 0
+                      ? "Tick one or more agents first"
+                      : "Copy/symlink the current skill or stack into the global skills dir of each checked agent — no project needed"
+                  }
+                  style={{
+                    background: "var(--accent)",
+                    color: "var(--on-accent)",
+                    borderColor: "var(--accent)",
+                    opacity:
+                      sendingGlobal || selectedAgents.size === 0 ? 0.5 : 1,
+                  }}
+                >
+                  {sendingGlobal ? "Sending…" : "Send to checked globally"}
+                </button>
+              )}
+            </div>
           }
         >
           {agents.length === 0 ? (
@@ -518,6 +659,16 @@ export function DeployView() {
                 .map((a) => {
                 const checked = selectedAgents.has(a.id);
                 const isPrimary = a.id === setup.primaryAgent;
+                // Three home-library states:
+                //   - inLibrary === true  → ✓, queued item is already in this
+                //     agent's global dir
+                //   - inLibrary === false → ·, agent has a global dir but the
+                //     queued item isn't there yet
+                //   - !a.skillsDir        → —, agent has no global concept
+                //     (cursor, cline) — global-send is N/A
+                const inLibrary = deployQueue
+                  ? agentGlobalStatus[a.id] === true
+                  : null;
                 return (
                   <label
                     key={a.id}
@@ -572,6 +723,51 @@ export function DeployView() {
                         </div>
                       )}
                     </span>
+                    {/* Home-library indicator: ✓ when the queued item is
+                        already in this agent's global dir, · when it isn't
+                        yet, — when the agent has no global concept. The
+                        title tooltip explains the state to keyboard users. */}
+                    {a.skillsDir ? (
+                      <span
+                        title={
+                          !deployQueue
+                            ? "Pick a skill or stack to see global-library status"
+                            : inLibrary
+                              ? `Already in ${a.displayName}'s global skills dir`
+                              : `Not in ${a.displayName}'s global skills dir yet — use "Send to checked globally"`
+                        }
+                        aria-label={
+                          inLibrary
+                            ? `${a.displayName}: in global library`
+                            : `${a.displayName}: not in global library`
+                        }
+                        style={{
+                          fontFamily: "var(--mono)",
+                          fontSize: 12,
+                          width: 16,
+                          textAlign: "center",
+                          color: inLibrary
+                            ? "var(--good)"
+                            : "var(--ink-faint)",
+                          fontWeight: inLibrary ? 700 : 400,
+                        }}
+                      >
+                        {inLibrary === true ? "✓" : inLibrary === false ? "·" : ""}
+                      </span>
+                    ) : (
+                      <span
+                        title={`${a.displayName} has no global skills dir — deploy to a project instead`}
+                        style={{
+                          fontFamily: "var(--mono)",
+                          fontSize: 11,
+                          color: "var(--ink-faint)",
+                          width: 16,
+                          textAlign: "center",
+                        }}
+                      >
+                        —
+                      </span>
+                    )}
                   </label>
                 );
               })}
@@ -840,6 +1036,22 @@ export function DeployView() {
           onChange={setDeployMode}
           defaultMode={settings.default_deploy_mode}
         />
+        {deployMode === "symlink" && (
+          <span
+            title="Symlinked deployments resolve back to the library copy. Edits in the project tree write to the library and propagate to every other project (and every agent) that symlinks the same skill."
+            style={{
+              fontFamily: "var(--read)",
+              fontSize: 11,
+              color: "var(--warn)",
+              border: "1px dashed var(--warn)",
+              padding: "3px 8px",
+              borderRadius: 12,
+              whiteSpace: "nowrap",
+            }}
+          >
+            ⚠ edits sync everywhere
+          </span>
+        )}
         <div style={{ flex: 1 }}>
           {deployQueue ? (
             <span
