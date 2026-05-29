@@ -6,21 +6,16 @@ import {
   parseSkillJson,
   parseSkillList,
 } from "./exportImport";
-import { DEFAULT_SETUP, type SkillManagerConfig } from "./types";
+import {
+  DEFAULT_SETTINGS,
+  DEFAULT_SETUP,
+  type SkillManagerConfig,
+} from "./types";
 
 const baseConfig: SkillManagerConfig = {
   last_project: "",
   skills: {},
-  settings: {
-    auto_check_updates: false,
-    cascade_updates: true,
-    confirm_before_remove: true,
-    show_resource_only: false,
-    default_layout: "cards",
-    update_history_retention: 2,
-    theme: "light",
-    default_deploy_mode: "copy",
-  } as const,
+  settings: { ...DEFAULT_SETTINGS },
   stacks: [],
   stackDeployments: [],
   setup: DEFAULT_SETUP,

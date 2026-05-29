@@ -343,6 +343,10 @@ export async function installLocalSkill(
     await saveConfig(config);
   });
 
+  // Same auto-wire as the URL install path — a locally-imported skill
+  // should also land in the primary agent's global dir by default.
+  await autoWireToPrimary(name);
+
   const skills = await listSkillsFromDisk();
   const me = skills.find((s) => s.name === name);
   return {
@@ -414,6 +418,10 @@ async function runInstall(
     };
     await saveConfig(config);
   });
+
+  // Wire the new skill into the primary agent's global dir so it's
+  // immediately usable — not stranded in the library. Best-effort.
+  await autoWireToPrimary(repoName, onLog);
 
   // Detect bundle-ness for the modal preview
   const skills = await listSkillsFromDisk();
@@ -746,6 +754,37 @@ export async function deploySkillGlobally(
     await fs.cp(src, dest, { recursive: true, verbatimSymlinks: false });
   }
   return { agentId, destPath: dest, warning, deployMode: actualMode };
+}
+
+/**
+ * Auto-wire a freshly-installed skill into the primary agent's global
+ * skills dir. Best-effort: any failure is logged + surfaced via onLog but
+ * never fails the install (the skill is in the library regardless). No-op
+ * when the setting is off, the primary agent has no global dir
+ * (cursor/cline), or the library already IS that dir (claude-default
+ * layout — the skill is already discoverable there).
+ */
+async function autoWireToPrimary(
+  name: string,
+  onLog?: LogHandler,
+): Promise<void> {
+  const config = await loadConfig();
+  if (config.settings.auto_deploy_new_to_primary === false) return;
+  const primary = config.setup.primaryAgent;
+  if (!primary) return;
+  const { getAgentSkillsDir } = await import("./services/agents");
+  const dir = getAgentSkillsDir(primary);
+  if (!dir) return; // primary has no global concept
+  if (dir === getLibraryPath()) return; // library IS the agent dir already
+  const mode = config.settings.default_deploy_mode;
+  try {
+    const r = await deploySkillGlobally(name, primary, mode);
+    onLog?.(`Wired into ${primary} (${r.deployMode}) → ${r.destPath}`);
+  } catch (err) {
+    onLog?.(
+      `Note: couldn't auto-wire into ${primary}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 }
 
 export async function removeSkillFromAgentGlobal(

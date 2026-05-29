@@ -277,6 +277,12 @@ export function SettingsView() {
         onChange={(v) => updateSettings({ auto_check_updates: v })}
       />
       <ToggleRow
+        label="Auto-deploy new skills to primary agent"
+        hint="wire into primary agent's global dir on install"
+        value={settings.auto_deploy_new_to_primary}
+        onChange={(v) => updateSettings({ auto_deploy_new_to_primary: v })}
+      />
+      <ToggleRow
         label="Cascade updates to projects"
         hint="re-copy on update"
         value={settings.cascade_updates}

@@ -187,25 +187,20 @@ export function DeployView() {
 
   const sendToCheckedGlobally = async () => {
     if (!deployQueue || sendingGlobal) return;
+    // Only act on checked agents that (a) have a global skills dir and
+    // (b) don't already have this skill/stack. Already-present agents (✓)
+    // are skipped entirely — re-sending there is a no-op, so the button
+    // never offers it. (The checkbox itself stays live because it's shared
+    // with the project-deploy flow on the right.)
     const targets = agents.filter(
-      (a) => selectedAgents.has(a.id) && a.skillsDir,
+      (a) =>
+        selectedAgents.has(a.id) &&
+        a.skillsDir &&
+        agentGlobalStatus[a.id] !== true,
     );
-    if (targets.length === 0) {
-      setError(
-        "Pick at least one agent with a global skills directory (Cursor and Cline are project-only).",
-        "deploy",
-      );
-      return;
-    }
+    if (targets.length === 0) return; // button is disabled in this state
     setSendingGlobal(true);
-    // Snapshot which agents already had it BEFORE we send, so the result
-    // modal can honestly distinguish "linked (new)" from "already present
-    // — refreshed". The skill/stack global send is idempotent (it rm's and
-    // recreates the same symlink/copy), so re-sending an already-present
-    // agent is harmless — but the user deserves to know it was a no-op.
-    const preStatus = { ...agentGlobalStatus };
     const deployed: string[] = [];
-    const refreshed: string[] = [];
     const failed: { agentId: string; error: string }[] = [];
     for (const a of targets) {
       try {
@@ -213,8 +208,7 @@ export function DeployView() {
         // meta-SKILL.md lives at <library>/<stackId>/ so the same global
         // send primitive works for both.
         await window.api.deploySkillGlobally(deployQueue.id, a.id, deployMode);
-        if (preStatus[a.id] === true) refreshed.push(a.displayName);
-        else deployed.push(a.displayName);
+        deployed.push(a.displayName);
       } catch (err) {
         failed.push({
           agentId: a.displayName,
@@ -232,10 +226,6 @@ export function DeployView() {
         ...deployed.map((a) => ({
           level: "success" as const,
           text: `→ ${a} — linked (${deployMode})`,
-        })),
-        ...refreshed.map((a) => ({
-          level: "info" as const,
-          text: `↻ ${a} — already present, re-${deployMode === "symlink" ? "linked" : "copied"}`,
         })),
         ...failed.map((f) => ({
           level: "error" as const,
@@ -785,33 +775,58 @@ export function DeployView() {
               every checked agent's global skills dir (no project
               required). Sits below the checkboxes so the column title
               text isn't crowded. */}
-          {deployQueue && (
-            <button
-              type="button"
-              className="sk-btn"
-              disabled={sendingGlobal || selectedAgents.size === 0}
-              onClick={sendToCheckedGlobally}
-              title={
-                selectedAgents.size === 0
-                  ? "Tick one or more agents first"
-                  : "Copy/symlink the current skill or stack into the global skills dir of each checked agent — no project needed"
-              }
-              style={{
-                marginTop: 8,
-                width: "100%",
-                background: "var(--accent)",
-                color: "var(--on-accent)",
-                borderColor: "var(--accent)",
-                fontWeight: 600,
-                opacity:
-                  sendingGlobal || selectedAgents.size === 0 ? 0.5 : 1,
-              }}
-            >
-              {sendingGlobal
+          {deployQueue &&
+            (() => {
+              // Actionable = checked agents that have a global dir AND don't
+              // already have it. Already-present (✓) and project-only (—)
+              // agents are excluded, so the button never offers a no-op
+              // send. The label/disabled state reflect that count exactly.
+              const actionable = agents.filter(
+                (a) =>
+                  selectedAgents.has(a.id) &&
+                  a.skillsDir &&
+                  agentGlobalStatus[a.id] !== true,
+              );
+              const checkedWithGlobal = agents.filter(
+                (a) => selectedAgents.has(a.id) && a.skillsDir,
+              );
+              const allAlreadyHaveIt =
+                checkedWithGlobal.length > 0 && actionable.length === 0;
+              const disabled = sendingGlobal || actionable.length === 0;
+              const label = sendingGlobal
                 ? "Sending…"
-                : `Send to ${selectedAgents.size} checked agent${selectedAgents.size === 1 ? "" : "s"} globally`}
-            </button>
-          )}
+                : actionable.length > 0
+                  ? `Send to ${actionable.length} agent${actionable.length === 1 ? "" : "s"} globally`
+                  : allAlreadyHaveIt
+                    ? "✓ All checked agents already have it"
+                    : "Tick an agent that doesn't have it yet";
+              return (
+                <button
+                  type="button"
+                  className="sk-btn"
+                  disabled={disabled}
+                  onClick={sendToCheckedGlobally}
+                  title={
+                    actionable.length === 0
+                      ? allAlreadyHaveIt
+                        ? "Every checked agent already has this in its global skills dir — nothing to send"
+                        : "Tick one or more agents that don't already have it (Cursor and Cline are project-only)"
+                      : `Link the current skill or stack into the global skills dir of: ${actionable.map((a) => a.displayName).join(", ")}`
+                  }
+                  style={{
+                    marginTop: 8,
+                    width: "100%",
+                    background: "var(--accent)",
+                    color: "var(--on-accent)",
+                    borderColor: "var(--accent)",
+                    fontWeight: 600,
+                    opacity: disabled ? 0.5 : 1,
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })()}
 
           {/* Path preview — shows exactly where files will land for each
               selected agent. Uses the queued item's id as the {name}

@@ -58,6 +58,13 @@ export interface AppSettings {
    *  target project; "symlink" points the target at the library copy so
    *  edits/updates are picked up without a re-cascade. */
   default_deploy_mode: DeployMode;
+  /** When true (default), a freshly-installed skill is immediately wired
+   *  into the primary agent's GLOBAL skills dir using default_deploy_mode.
+   *  Without this, install drops the skill in the library but the primary
+   *  agent can't see it until the user manually deploys — a confusing
+   *  default. No-op when the library IS the primary agent's dir, or when
+   *  the primary agent has no global concept (cursor/cline). */
+  auto_deploy_new_to_primary: boolean;
 }
 
 // Single source of truth for default settings. Imported by both the main
@@ -73,6 +80,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   update_history_retention: 2,
   theme: "light",
   default_deploy_mode: "copy",
+  auto_deploy_new_to_primary: true,
 };
 
 /** Where the library + history live. `claude` keeps the legacy
