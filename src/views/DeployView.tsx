@@ -198,30 +198,23 @@ export function DeployView() {
       return;
     }
     setSendingGlobal(true);
-    const succeeded: string[] = [];
+    // Snapshot which agents already had it BEFORE we send, so the result
+    // modal can honestly distinguish "linked (new)" from "already present
+    // — refreshed". The skill/stack global send is idempotent (it rm's and
+    // recreates the same symlink/copy), so re-sending an already-present
+    // agent is harmless — but the user deserves to know it was a no-op.
+    const preStatus = { ...agentGlobalStatus };
+    const deployed: string[] = [];
+    const refreshed: string[] = [];
     const failed: { agentId: string; error: string }[] = [];
     for (const a of targets) {
       try {
-        if (deployQueue.type === "skill") {
-          await window.api.deploySkillGlobally(
-            deployQueue.id,
-            a.id,
-            deployMode,
-          );
-        } else {
-          // Stack: backfills the meta-skill into the library and copies/
-          // symlinks into the agent's global dir. Existing deployStack
-          // works against a project; for a global send we use the same
-          // primitive as the skill case — the stack's meta-SKILL.md
-          // lives at <library>/<stackId>/ so this is identical to a
-          // skill-global send pointed at the stack id.
-          await window.api.deploySkillGlobally(
-            deployQueue.id,
-            a.id,
-            deployMode,
-          );
-        }
-        succeeded.push(a.displayName);
+        // Both skill and stack land at <agentSkillsDir>/<id>/ — the stack's
+        // meta-SKILL.md lives at <library>/<stackId>/ so the same global
+        // send primitive works for both.
+        await window.api.deploySkillGlobally(deployQueue.id, a.id, deployMode);
+        if (preStatus[a.id] === true) refreshed.push(a.displayName);
+        else deployed.push(a.displayName);
       } catch (err) {
         failed.push({
           agentId: a.displayName,
@@ -236,9 +229,13 @@ export function DeployView() {
       itemKind: deployQueue.type,
       itemId: deployQueue.id,
       messages: [
-        ...succeeded.map((a) => ({
+        ...deployed.map((a) => ({
           level: "success" as const,
-          text: `→ ${a} (global, ${deployMode})`,
+          text: `→ ${a} — linked (${deployMode})`,
+        })),
+        ...refreshed.map((a) => ({
+          level: "info" as const,
+          text: `↻ ${a} — already present, re-${deployMode === "symlink" ? "linked" : "copied"}`,
         })),
         ...failed.map((f) => ({
           level: "error" as const,
@@ -598,33 +595,9 @@ export function DeployView() {
         <Column
           title="Agents"
           rightSlot={
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 11, color: "var(--ink-faint)" }}>
-                {selectedAgents.size} selected
-              </span>
-              {deployQueue && (
-                <button
-                  type="button"
-                  className="sk-btn sm"
-                  disabled={sendingGlobal || selectedAgents.size === 0}
-                  onClick={sendToCheckedGlobally}
-                  title={
-                    selectedAgents.size === 0
-                      ? "Tick one or more agents first"
-                      : "Copy/symlink the current skill or stack into the global skills dir of each checked agent — no project needed"
-                  }
-                  style={{
-                    background: "var(--accent)",
-                    color: "var(--on-accent)",
-                    borderColor: "var(--accent)",
-                    opacity:
-                      sendingGlobal || selectedAgents.size === 0 ? 0.5 : 1,
-                  }}
-                >
-                  {sendingGlobal ? "Sending…" : "Send to checked globally"}
-                </button>
-              )}
-            </div>
+            <span style={{ fontSize: 11, color: "var(--ink-faint)" }}>
+              {selectedAgents.size} selected
+            </span>
           }
         >
           {agents.length === 0 ? (
@@ -669,6 +642,14 @@ export function DeployView() {
                 const inLibrary = deployQueue
                   ? agentGlobalStatus[a.id] === true
                   : null;
+                // Exact path the existence check ran against. Surfaced in
+                // the tooltip so users can see at a glance why Claude
+                // shows · while Codex shows ✓ — it's whichever agent dirs
+                // physically contain the skill/stack id on disk.
+                const checkedPath =
+                  a.skillsDir && deployQueue
+                    ? `${a.skillsDir}/${deployQueue.id}`
+                    : null;
                 return (
                   <label
                     key={a.id}
@@ -733,8 +714,8 @@ export function DeployView() {
                           !deployQueue
                             ? "Pick a skill or stack to see global-library status"
                             : inLibrary
-                              ? `Already in ${a.displayName}'s global skills dir`
-                              : `Not in ${a.displayName}'s global skills dir yet — use "Send to checked globally"`
+                              ? `Found: ${checkedPath}`
+                              : `Missing: ${checkedPath} — use "Send to ${selectedAgents.size} checked agent${selectedAgents.size === 1 ? "" : "s"} globally" below`
                         }
                         aria-label={
                           inLibrary
@@ -773,6 +754,65 @@ export function DeployView() {
               })}
             </div>
           )}
+          {/* Status legend — explains the ✓ / · / — column so it isn't a
+              mystery. Only shown once an item is queued (the pips only
+              mean anything then). */}
+          {deployQueue && (
+            <div
+              style={{
+                marginTop: 6,
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 10,
+                fontFamily: "var(--read)",
+                fontSize: 10,
+                color: "var(--ink-faint)",
+              }}
+            >
+              <span>
+                <b style={{ color: "var(--good)" }}>✓</b> in global library
+              </span>
+              <span>
+                <b>·</b> not yet
+              </span>
+              <span>
+                <b>—</b> project-only agent (no global dir)
+              </span>
+            </div>
+          )}
+
+          {/* Global-send button — promotes the queued skill/stack into
+              every checked agent's global skills dir (no project
+              required). Sits below the checkboxes so the column title
+              text isn't crowded. */}
+          {deployQueue && (
+            <button
+              type="button"
+              className="sk-btn"
+              disabled={sendingGlobal || selectedAgents.size === 0}
+              onClick={sendToCheckedGlobally}
+              title={
+                selectedAgents.size === 0
+                  ? "Tick one or more agents first"
+                  : "Copy/symlink the current skill or stack into the global skills dir of each checked agent — no project needed"
+              }
+              style={{
+                marginTop: 8,
+                width: "100%",
+                background: "var(--accent)",
+                color: "var(--on-accent)",
+                borderColor: "var(--accent)",
+                fontWeight: 600,
+                opacity:
+                  sendingGlobal || selectedAgents.size === 0 ? 0.5 : 1,
+              }}
+            >
+              {sendingGlobal
+                ? "Sending…"
+                : `Send to ${selectedAgents.size} checked agent${selectedAgents.size === 1 ? "" : "s"} globally`}
+            </button>
+          )}
+
           {/* Path preview — shows exactly where files will land for each
               selected agent. Uses the queued item's id as the {name}
               substitution; falls back to {skill-name} placeholder when
