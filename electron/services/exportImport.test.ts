@@ -341,6 +341,22 @@ describe("parseFlexibleImport", () => {
     expect(result.skipped).toBe(0);
   });
 
+  it("parses the legacy { installed_skills: [...] } app config/preset", () => {
+    // The original Python app stored skills under `installed_skills`. Loading
+    // such a preset used to throw "Unrecognised JSON shape".
+    const result = parseFlexibleImport(
+      JSON.stringify({
+        installed_skills: [
+          { name: "alpha", url: "https://github.com/x/alpha" },
+          { name: "beta", url: "https://github.com/x/beta" },
+        ],
+      }),
+    );
+    expect(result.detectedFormat).toBe("skills-array");
+    expect(result.skills).toHaveLength(2);
+    expect(result.skills[0].url).toBe("https://github.com/x/alpha");
+  });
+
   it("parses a bare array of {name, url} entries", () => {
     const result = parseFlexibleImport(
       JSON.stringify([

@@ -168,6 +168,7 @@ export function parseSkillList(
 const SUPPORTED_FORMATS_HELP = [
   "supported import shapes:",
   "  • native: { version: 1, skills: [{ name, url }, ...] }",
+  "  • legacy app config: { installed_skills: [{ name, url }, ...] }",
   "  • bare array: [{ name, url }, ...]",
   "  • codex config: { skills: { config: [{ path, enabled }, ...] } }",
   "  • skills array w/ metadata: { skills: [{ name, url, description, agent, tags }, ...] }",
@@ -345,6 +346,21 @@ export function parseFlexibleImport(raw: string): ImportParseResult {
           else skipped += 1;
         }
         return { skills, skipped, detectedFormat: "native" };
+      }
+
+      // Legacy Python-app config / preset: { installed_skills: [{name, url}] }.
+      // loadConfig migrates this shape on read, but the importer used to
+      // reject it as "unrecognised", which is exactly the error users hit
+      // when re-loading an old preset exported by the original app.
+      if (Array.isArray(parsed.installed_skills)) {
+        const skills: ImportedSkill[] = [];
+        let skipped = 0;
+        for (const item of parsed.installed_skills) {
+          const entry = fromGenericSkillEntry(item);
+          if (entry) skills.push(entry);
+          else skipped += 1;
+        }
+        return { skills, skipped, detectedFormat: "skills-array" };
       }
 
       // Codex skill config: { skills: { config: [{ path, enabled }] } }

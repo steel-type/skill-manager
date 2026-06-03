@@ -23,6 +23,8 @@ import {
   listSkills,
   installFromUrl,
   installLocalSkill,
+  importLocalSkill,
+  relinkSkillUrl,
   checkUpdates,
   updateSkill,
   deploySkill,
@@ -567,6 +569,17 @@ ipcMain.handle(
     installLocalSkill(args.name, args.sourcePath),
 );
 
+ipcMain.handle(
+  "import-local-skill",
+  (_e, args: { sourcePath: string }) => importLocalSkill(args.sourcePath),
+);
+
+ipcMain.handle(
+  "relink-skill-url",
+  (_e, args: { name: string; url: string }) =>
+    relinkSkillUrl(args.name, args.url),
+);
+
 ipcMain.handle("check-updates", () => checkUpdates());
 
 ipcMain.handle(
@@ -756,6 +769,27 @@ ipcMain.handle("pick-folder", async () => {
   if (!mainWindow) return null;
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ["openDirectory"],
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});
+
+// Pick a local skill source: a folder OR a .zip/.skill archive. macOS allows
+// a single dialog to accept both files and directories; other platforms
+// can't mix the two, so there we fall back to file-only (with the archive
+// filter) and the UI's separate "folder" button covers directory picks.
+ipcMain.handle("pick-skill-source", async () => {
+  if (!mainWindow) return null;
+  const properties: Array<"openFile" | "openDirectory"> =
+    process.platform === "darwin"
+      ? ["openFile", "openDirectory"]
+      : ["openFile"];
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties,
+    filters: [
+      { name: "Skill archive", extensions: ["zip", "skill"] },
+      { name: "All files", extensions: ["*"] },
+    ],
   });
   if (result.canceled || result.filePaths.length === 0) return null;
   return result.filePaths[0];

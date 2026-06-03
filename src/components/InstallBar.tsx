@@ -23,7 +23,10 @@ function urlError(value: string): string | null {
 export function InstallBar() {
   const [url, setUrl] = useState("");
   const [touched, setTouched] = useState(false);
+  const [importing, setImporting] = useState(false);
   const openModal = useAppStore((s) => s.openModal);
+  const refreshSkills = useAppStore((s) => s.refreshSkills);
+  const setError = useAppStore((s) => s.setError);
 
   const error = useMemo(() => urlError(url), [url]);
   const showError = touched && !!error;
@@ -35,6 +38,27 @@ export function InstallBar() {
     openModal({ type: "install", prefillUrl: trimmed });
     setUrl("");
     setTouched(false);
+  };
+
+  // Import a skill the user already has on disk — a folder, .zip, or .skill
+  // file. The backend extracts archives, finds the SKILL.md root, and names
+  // the skill; we just refresh the library on success.
+  const importLocal = async () => {
+    if (importing) return;
+    const picked = await window.api.pickSkillSource();
+    if (!picked) return;
+    setImporting(true);
+    try {
+      const result = await window.api.importLocalSkill(picked);
+      await refreshSkills();
+      setError(`Imported “${result.name}” into your library.`, "generic");
+    } catch (err) {
+      setError(
+        `Import failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setImporting(false);
+    }
   };
 
   return (
@@ -65,6 +89,14 @@ export function InstallBar() {
           disabled={!url.trim() || !!error}
         >
           Install
+        </button>
+        <button
+          className="sk-btn"
+          onClick={importLocal}
+          disabled={importing}
+          title="Import a skill from a local folder, .zip, or .skill file"
+        >
+          {importing ? "Importing…" : "Import local…"}
         </button>
       </div>
       {showError && (

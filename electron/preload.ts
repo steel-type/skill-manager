@@ -159,6 +159,19 @@ const api = {
   installLocalSkill: (name: string, sourcePath: string): Promise<InstallResult> =>
     ipcRenderer.invoke("install-local-skill", { name, sourcePath }),
 
+  /** Import a skill from a local folder, .zip, or .skill file. The backend
+   *  extracts archives, finds the SKILL.md root, and derives a valid name. */
+  importLocalSkill: (sourcePath: string): Promise<InstallResult> =>
+    ipcRenderer.invoke("import-local-skill", { sourcePath }),
+
+  /** Attach/correct a GitHub source URL on a library skill (recovery + makes
+   *  a local skill updatable). */
+  relinkSkillUrl: (
+    name: string,
+    url: string,
+  ): Promise<{ name: string; url: string; commit: string | null }> =>
+    ipcRenderer.invoke("relink-skill-url", { name, url }),
+
   checkUpdates: () =>
     ipcRenderer.invoke("check-updates") as Promise<Record<string, UpdateInfo>>,
 
@@ -323,6 +336,10 @@ const api = {
 
   pickFolder: () =>
     ipcRenderer.invoke("pick-folder") as Promise<string | null>,
+
+  /** Pick a local skill source — a folder or a .zip/.skill archive. */
+  pickSkillSource: () =>
+    ipcRenderer.invoke("pick-skill-source") as Promise<string | null>,
 
   writeClipboard: (text: string) =>
     ipcRenderer.invoke("write-clipboard", text) as Promise<void>,

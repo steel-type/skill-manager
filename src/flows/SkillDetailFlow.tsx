@@ -68,6 +68,14 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
   const openModal = useAppStore((s) => s.openModal);
   const queueSkillForDeploy = useAppStore((s) => s.queueSkillForDeploy);
   const setError = useAppStore((s) => s.setError);
+  const refreshSkills = useAppStore((s) => s.refreshSkills);
+
+  // Inline "re-link to GitHub" editor state — lets a local skill (or one
+  // whose source URL was lost) get a source attached so it becomes
+  // updatable again.
+  const [showRelink, setShowRelink] = useState(false);
+  const [relinkUrl, setRelinkUrl] = useState("");
+  const [relinking, setRelinking] = useState(false);
 
   const goBack = () => setScreen({ kind: "main" });
 
@@ -140,6 +148,24 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
     if (skill.url) window.api.openExternal(skill.url);
   };
 
+  const handleRelink = async () => {
+    const url = relinkUrl.trim();
+    if (!url || relinking) return;
+    setRelinking(true);
+    try {
+      await window.api.relinkSkillUrl(skill.name, url);
+      await refreshSkills();
+      setShowRelink(false);
+      setRelinkUrl("");
+    } catch (err) {
+      setError(
+        `Re-link failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setRelinking(false);
+    }
+  };
+
   const handleDeploy = () => {
     queueSkillForDeploy(skill.name);
   };
@@ -152,14 +178,53 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
     openModal({ type: "rollback", name: skill.name });
   };
 
-  const footer = (
+  const footer = showRelink ? (
+    // Inline re-link editor — paste the GitHub repo URL the skill came from.
+    <>
+      <input
+        className="sk-input"
+        autoFocus
+        placeholder="https://github.com/owner/repo"
+        value={relinkUrl}
+        onChange={(e) => setRelinkUrl(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") void handleRelink();
+          if (e.key === "Escape") setShowRelink(false);
+        }}
+        style={{ flex: 1, fontFamily: "var(--mono)", fontSize: 12 }}
+      />
+      <button
+        className="sk-btn primary"
+        onClick={handleRelink}
+        disabled={!relinkUrl.trim() || relinking}
+      >
+        {relinking ? "Linking…" : "Save source"}
+      </button>
+      <button
+        className="sk-btn"
+        onClick={() => setShowRelink(false)}
+        disabled={relinking}
+      >
+        Cancel
+      </button>
+    </>
+  ) : (
     <>
       <button className="sk-btn ghost" onClick={handleBrowse}>
         Browse files
       </button>
-      {!skill.isLocal && (
+      {skill.url && (
+        <button className="sk-btn ghost" onClick={handleSource}>
+          View on GitHub ↗
+        </button>
+      )}
+      {!skill.isLocal ? (
         <button className="sk-btn ghost" onClick={handleUpdate}>
           Update from GitHub
+        </button>
+      ) : (
+        <button className="sk-btn ghost" onClick={() => setShowRelink(true)}>
+          Re-link to GitHub
         </button>
       )}
       <div style={{ flex: 1 }} />
@@ -303,9 +368,21 @@ export function SkillDetailFlow({ name }: SkillDetailFlowProps) {
                 {skill.url}
               </button>
             ) : (
-              <span style={{ fontSize: 12, color: "var(--ink-faint)" }}>
-                local — not from a remote
-              </span>
+              <button
+                onClick={() => setShowRelink(true)}
+                style={{
+                  fontSize: 12,
+                  color: "var(--ink-faint)",
+                  textAlign: "left",
+                  background: "transparent",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                }}
+                title="Attach the GitHub repo this came from to make it updatable"
+              >
+                local — <span style={{ color: "var(--accent)", textDecoration: "underline" }}>re-link to GitHub</span>
+              </button>
             )}
           </Field>
           <Field label="Installed">

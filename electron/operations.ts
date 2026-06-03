@@ -357,6 +357,123 @@ export async function installLocalSkill(
   };
 }
 
+/**
+ * Coerce an arbitrary folder/archive base name into a valid skill name per
+ * the agentskills.io contract ([a-z0-9-], no leading/trailing/consecutive
+ * hyphens). Spaces, underscores, and capitals are the common offenders — a
+ * folder called "Entity Identity Resolution" becomes
+ * "entity-identity-resolution" rather than being rejected outright.
+ */
+function sanitizeSkillName(raw: string): string {
+  const slug = raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+  return slug;
+}
+
+/**
+ * Install a skill from a local folder, `.zip`, or `.skill` file the user
+ * already has on disk. Archives (`.zip`/`.skill`) are extracted to a temp
+ * dir first; either way we locate the directory that actually contains
+ * SKILL.md (handling the common "wrapped in one top-level folder" case), pick
+ * a valid name (SKILL.md frontmatter `name` if present and valid, else a
+ * sanitized base name), and hand off to installLocalSkill.
+ *
+ * Returns the resolved name so the renderer can surface it in a toast.
+ */
+export async function importLocalSkill(
+  rawSourcePath: string,
+): Promise<InstallResult> {
+  const sourcePath = validateProjectPath(rawSourcePath);
+
+  const {
+    isArchivePath,
+    extractArchive,
+    cleanupExtraction,
+    findSkillRoot,
+    nameFromArchivePath,
+  } = await import("./services/skillArchive");
+  const { getSkillInfo } = await import("./services/skills");
+
+  let searchRoot = sourcePath;
+  let tempDir: string | null = null;
+  try {
+    if (isArchivePath(sourcePath)) {
+      tempDir = await extractArchive(sourcePath);
+      searchRoot = tempDir;
+    }
+
+    // Locate the SKILL.md-bearing directory. Folders the user points at
+    // directly usually ARE the root, but we still search so picking a parent
+    // (or an archive with a single wrapping folder) just works.
+    const skillRoot = await findSkillRoot(searchRoot);
+    if (!skillRoot) {
+      throw new Error(
+        "No SKILL.md found in the selected folder or archive. A skill must contain a SKILL.md at its root.",
+      );
+    }
+
+    // Prefer the frontmatter name; fall back to the source base name. Either
+    // way, sanitize to the kebab-case contract so a folder with spaces/caps
+    // doesn't get rejected downstream.
+    const frontmatter = await getSkillInfo(skillRoot);
+    const candidate =
+      frontmatter.name?.trim() || nameFromArchivePath(sourcePath);
+    const name = sanitizeSkillName(candidate);
+    if (!name) {
+      throw new Error(
+        `Could not derive a valid skill name from "${candidate}". Rename the folder to lowercase letters, digits, and hyphens.`,
+      );
+    }
+
+    return await installLocalSkill(name, skillRoot);
+  } finally {
+    if (tempDir) await cleanupExtraction(tempDir).catch(() => undefined);
+  }
+}
+
+/**
+ * Attach (or correct) a GitHub source URL on a skill that currently has none
+ * — the recovery path for skills whose `url` was lost, and the way to make a
+ * hand-made local skill updatable. Validates the URL, records it, and best-
+ * effort fetches the current remote HEAD so the skill immediately reads as
+ * "has updates available / up to date" rather than committing nothing.
+ */
+export async function relinkSkillUrl(
+  rawName: string,
+  rawUrl: string,
+): Promise<{ name: string; url: string; commit: string | null }> {
+  const name = validateSkillName(rawName);
+  const url = validateUrl(rawUrl);
+
+  // Best-effort remote HEAD — never block the relink on network.
+  let commit: string | null = null;
+  try {
+    commit = await checkRemoteSha(url);
+  } catch {
+    commit = null;
+  }
+
+  await withConfigLock(async () => {
+    const config = await loadConfig();
+    const existing = config.skills[name];
+    if (!existing) {
+      throw new Error(`Skill '${name}' is not in the library`);
+    }
+    existing.url = url;
+    // Only overwrite commit if we actually fetched one; keep any prior value
+    // otherwise so we don't blank a known SHA on an offline relink.
+    if (commit) existing.commit = commit;
+    config.skills[name] = existing;
+    await saveConfig(config);
+  });
+
+  return { name, url, commit };
+}
+
 export async function installFromUrl(
   rawUrl: string,
   options: OpOptions = {},

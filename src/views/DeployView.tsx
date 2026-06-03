@@ -108,6 +108,10 @@ export function DeployView() {
   /** True while a global send is mid-flight — disables the button so a
    *  hammered click doesn't fire N parallel writes. */
   const [sendingGlobal, setSendingGlobal] = useState(false);
+  /** Agent id whose per-row "Deploy to library" chip is mid-flight, or null.
+   *  Drives the inline spinner and prevents double-fire on that one row while
+   *  leaving the other rows live. */
+  const [deployingAgent, setDeployingAgent] = useState<string | null>(null);
   const [selectedProjects, setSelectedProjects] = useState<Set<string>>(
     new Set(),
   );
@@ -233,6 +237,35 @@ export function DeployView() {
         })),
       ],
     });
+  };
+
+  /** Deploy the queued skill/stack into ONE agent's global skills dir,
+   *  independent of that agent's checkbox. Backs the per-row "+ Deploy to
+   *  library" chip — the discoverable replacement for the old "·" pip +
+   *  batch button, which users couldn't find. Uses the current deployMode
+   *  toggle (Symlink/Copy). */
+  const deployOneGlobally = async (agentId: string) => {
+    if (!deployQueue || deployingAgent) return;
+    setDeployingAgent(agentId);
+    try {
+      await window.api.deploySkillGlobally(deployQueue.id, agentId, deployMode);
+      await refreshAgentGlobalStatus();
+    } catch (err) {
+      const agent = agents.find((a) => a.id === agentId);
+      openModal({
+        type: "deployResult",
+        itemKind: deployQueue.type,
+        itemId: deployQueue.id,
+        messages: [
+          {
+            level: "error",
+            text: `✗ ${agent?.displayName ?? agentId}: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        ],
+      });
+    } finally {
+      setDeployingAgent(null);
+    }
   };
 
   // Pre-select last-used project when a queue lands and there's no current
@@ -694,37 +727,68 @@ export function DeployView() {
                         </div>
                       )}
                     </span>
-                    {/* Home-library indicator: ✓ when the queued item is
-                        already in this agent's global dir, · when it isn't
-                        yet, — when the agent has no global concept. The
-                        title tooltip explains the state to keyboard users. */}
+                    {/* Per-agent global-library affordance:
+                        - in library  → dimmed "✓ in library" pill (no-op)
+                        - not yet      → clickable "+ Deploy to library" chip
+                          that links the queued item straight into THIS agent's
+                          global dir (independent of the checkbox)
+                        - no global dir (cursor/cline) → "—" project-only.
+                        The chip lives inside the row's <label>, so its click
+                        handler must stop the event from toggling the
+                        checkbox. */}
                     {a.skillsDir ? (
-                      <span
-                        title={
-                          !deployQueue
-                            ? "Pick a skill or stack to see global-library status"
-                            : inLibrary
-                              ? `Found: ${checkedPath}`
-                              : `Missing: ${checkedPath} — use "Send to ${selectedAgents.size} checked agent${selectedAgents.size === 1 ? "" : "s"} globally" below`
-                        }
-                        aria-label={
-                          inLibrary
-                            ? `${a.displayName}: in global library`
-                            : `${a.displayName}: not in global library`
-                        }
-                        style={{
-                          fontFamily: "var(--mono)",
-                          fontSize: 12,
-                          width: 16,
-                          textAlign: "center",
-                          color: inLibrary
-                            ? "var(--good)"
-                            : "var(--ink-faint)",
-                          fontWeight: inLibrary ? 700 : 400,
-                        }}
-                      >
-                        {inLibrary === true ? "✓" : inLibrary === false ? "·" : ""}
-                      </span>
+                      inLibrary === true ? (
+                        <span
+                          title={`Found: ${checkedPath}`}
+                          aria-label={`${a.displayName}: in global library`}
+                          style={{
+                            fontFamily: "var(--mono)",
+                            fontSize: 10,
+                            padding: "2px 8px",
+                            borderRadius: 10,
+                            border: "1px solid var(--line)",
+                            color: "var(--good)",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          ✓ in library
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={!deployQueue || deployingAgent !== null}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void deployOneGlobally(a.id);
+                          }}
+                          title={
+                            !deployQueue
+                              ? "Pick a skill or stack first"
+                              : `Deploy into ${checkedPath} (${deployMode})`
+                          }
+                          aria-label={`Deploy ${a.displayName} to global library`}
+                          style={{
+                            fontFamily: "var(--mono)",
+                            fontSize: 10,
+                            padding: "2px 8px",
+                            borderRadius: 10,
+                            border: "1px dashed var(--accent)",
+                            background: "transparent",
+                            color: "var(--accent)",
+                            cursor:
+                              !deployQueue || deployingAgent !== null
+                                ? "default"
+                                : "pointer",
+                            opacity: deployingAgent === a.id ? 0.6 : 1,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {deployingAgent === a.id
+                            ? "Deploying…"
+                            : "+ Deploy to library"}
+                        </button>
+                      )
                     ) : (
                       <span
                         title={`${a.displayName} has no global skills dir — deploy to a project instead`}
@@ -760,10 +824,12 @@ export function DeployView() {
               }}
             >
               <span>
-                <b style={{ color: "var(--good)" }}>✓</b> in global library
+                <b style={{ color: "var(--good)" }}>✓ in library</b> already
+                deployed
               </span>
               <span>
-                <b>·</b> not yet
+                <b style={{ color: "var(--accent)" }}>+ Deploy to library</b>{" "}
+                click to deploy into that agent
               </span>
               <span>
                 <b>—</b> project-only agent (no global dir)
