@@ -41,6 +41,17 @@ function tildify(p: string): string {
   return p.replace(/^\/Users\/[^/]+/, "~");
 }
 
+/** Trim a long description to a card-friendly length. Cuts on a word
+ *  boundary near the limit so we don't slice mid-word, and appends an
+ *  ellipsis. The full text is exposed via the element's title attribute. */
+function truncate(text: string, limit = 150): string {
+  if (text.length <= limit) return text;
+  const slice = text.slice(0, limit);
+  const lastSpace = slice.lastIndexOf(" ");
+  const cut = lastSpace > limit - 30 ? slice.slice(0, lastSpace) : slice;
+  return `${cut.trimEnd()}…`;
+}
+
 function relativeTime(iso: string | null | undefined): string {
   if (!iso) return "never";
   const safe = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
@@ -700,15 +711,26 @@ export function DeployView() {
                           display: "flex",
                           alignItems: "center",
                           gap: 6,
+                          minWidth: 0,
                         }}
                       >
-                        {a.displayName}
+                        <span
+                          style={{
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            minWidth: 0,
+                          }}
+                        >
+                          {a.displayName}
+                        </span>
                         {isPrimary && (
                           <span
                             style={{
                               fontFamily: "var(--mono)",
                               fontSize: 9,
                               color: "var(--ink-faint)",
+                              flexShrink: 0,
                             }}
                           >
                             · primary
@@ -749,6 +771,7 @@ export function DeployView() {
                             border: "1px solid var(--line)",
                             color: "var(--good)",
                             whiteSpace: "nowrap",
+                            flexShrink: 0,
                           }}
                         >
                           ✓ in library
@@ -782,11 +805,10 @@ export function DeployView() {
                                 : "pointer",
                             opacity: deployingAgent === a.id ? 0.6 : 1,
                             whiteSpace: "nowrap",
+                            flexShrink: 0,
                           }}
                         >
-                          {deployingAgent === a.id
-                            ? "Deploying…"
-                            : "+ Deploy to library"}
+                          {deployingAgent === a.id ? "Deploying…" : "+ Library"}
                         </button>
                       )
                     ) : (
@@ -798,6 +820,7 @@ export function DeployView() {
                           color: "var(--ink-faint)",
                           width: 16,
                           textAlign: "center",
+                          flexShrink: 0,
                         }}
                       >
                         —
@@ -828,8 +851,8 @@ export function DeployView() {
                 deployed
               </span>
               <span>
-                <b style={{ color: "var(--accent)" }}>+ Deploy to library</b>{" "}
-                click to deploy into that agent
+                <b style={{ color: "var(--accent)" }}>+ Library</b> click to
+                deploy into that agent&apos;s global library
               </span>
               <span>
                 <b>—</b> project-only agent (no global dir)
@@ -1357,13 +1380,14 @@ function QueuedItemCard({
       )}
       {queue.type === "skill" && skill?.description && (
         <div
+          title={skill.description}
           style={{
             fontFamily: "var(--read)",
             fontSize: 11,
             color: "var(--ink-soft)",
           }}
         >
-          {skill.description}
+          {truncate(skill.description)}
         </div>
       )}
     </div>
