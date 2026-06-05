@@ -44,3 +44,8 @@ assets/icon.iconset/
 .continue/skills/
 .cursor/rules/
 .cline/skills/
+
+# Agent tooling scratch — local-only worktrees and superpowers brainstorm
+# state created by Claude Code during dev. Never part of the app.
+.claude/worktrees/
+.superpowers/

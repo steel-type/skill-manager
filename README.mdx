@@ -12,7 +12,7 @@ A real GUI on top of the `SKILL.md` / `AGENTS.md` ecosystem. Install skills from
 
 ## What you get
 
-- **Stacks** — Name a bundle of skills, write a description, pick members. Skill Manager writes a generated meta-`SKILL.md` to your library and deploys members + meta as a unit. Update composition once and the change cascades to every project the stack lives in.
+- **Stacks** — Name a bundle of skills, write a description, pick members. Skillbase writes a generated meta-`SKILL.md` to your library and deploys members + meta as a unit. Update composition once and the change cascades to every project the stack lives in.
 - **Multi-agent deploy** — One Library, six target agents. Each deploy resolves to the agent's expected location and entry-file shape (e.g. `~/.claude/skills/<name>/SKILL.md`, `.cursor/rules/<name>.mdc`, `.cline/skills/<name>/SKILL.md`) — no per-agent copy-paste.
 - **Safety net** — Snapshot retention (configurable, default 2) on every update; one-click rollback; cascade-on-update so a library update propagates to every project the skill is deployed to.
 
@@ -47,10 +47,26 @@ npm run dist     # build a fresh DMG → release/
 1. **First launch — Setup.** SetupFlow walks you through:
    - Pick a **primary agent** (Claude Code, Codex, Gemini, or Continue — these are the ones with a global skills dir; Cursor and Cline are project-only and can't be primary).
    - Pick a **library location** — keep your primary agent's default dir, move to a centralized `~/.skill-stack/skills`, or browse to a custom path.
-   - **Reconcile existing skills** — Skill Manager scans the agent's default location for `SKILL.md` / `AGENTS.md` folders and lets you import each one (keep agent-side, keep library-side, or skip).
-2. **Install a skill.** Paste any GitHub URL into the Library tab's install bar. Skill Manager runs a shallow clone, captures the commit SHA, and detects bundles (repos with multiple `SKILL.md` files).
+   - **Reconcile existing skills** — Skillbase scans the agent's default location for `SKILL.md` / `AGENTS.md` folders and lets you import each one (keep agent-side, keep library-side, or skip).
+2. **Install a skill.** Paste any GitHub URL into the Library tab's install bar — Skillbase runs a shallow clone, captures the commit SHA, and detects bundles (repos with multiple `SKILL.md` files). Or click **Import local…** to add a skill you already have on disk: a folder, a `.zip`, or a `.skill` archive. Skillbase extracts the archive, locates the `SKILL.md` root, and files it into your library — no GitHub required.
 3. **Build a stack.** Stacks tab → **New Stack** → pick members, write a description. The meta-skill is staged in your library at `<library>/<stack-id>/SKILL.md` so it deploys uniformly with regular skills.
 4. **Deploy.** Pick a project, pick a target agent, pick copy or symlink. The Deploy tab tracks every (skill or stack, project, agent) row.
+
+---
+
+## Why this exists
+
+Agent skills are the unit of reuse that finally stuck — small, version-controlled folders of instructions, examples, and supporting files that any modern coding agent can pick up. But managing them by hand gets old fast:
+
+- You clone a skill into one project, then later want it in three more.
+- Upstream pushes a fix and you have no idea which of your projects are stale.
+- Cursor wants `.mdc` files, Claude wants `SKILL.md`, Codex wants `AGENTS.md`.
+- A "small refactor" of a shared skill breaks a downstream project at 11pm.
+- You want to roll back, but the only history is `git log` on someone else's repo.
+
+Skillbase handles all of this from a single window: install from a GitHub URL (or import a local folder/archive), track every place a skill is deployed, check for upstream changes in parallel, cascade updates everywhere it's used, and roll back to a snapshot when something breaks.
+
+**Who it's for:** engineers running multiple coding agents who don't want to hand-sync the same skill across Claude, Cursor, and Codex; teams sharing internal skills who need to push a fix once and have it propagate everywhere; and anyone past ~5 skills, where the bookkeeping starts to matter and command-line workflows get error-prone.
 
 ---
 
@@ -67,7 +83,7 @@ npm run dist     # build a fresh DMG → release/
 
 ## Library + agents
 
-Your **library** lives at one path you pick during Setup — your primary agent's default skills dir, the centralized `~/.skill-stack/skills`, or a custom path. From there, Skill Manager deploys per-project to each agent's expected location:
+Your **library** lives at one path you pick during Setup — your primary agent's default skills dir, the centralized `~/.skill-stack/skills`, or a custom path. From there, Skillbase deploys per-project to each agent's expected location:
 
 | Agent | Project deploy path | Entry file | Single-file alt |
 |---|---|---|---|
@@ -87,6 +103,7 @@ Cursor and Cline are project-only — they have no global skills concept, so the
 ### Library
 
 - Install any skill from a GitHub URL (shallow clone, captures commit SHA).
+- **Import local skills** — add a folder, `.zip`, or `.skill` archive you already have on disk. Archives are extracted, the `SKILL.md` root is located (single-wrapping-folder case handled), and the name is normalised to the kebab-case contract.
 - `SKILL.md` *and* `AGENTS.md` are first-class skill identifiers.
 - Bundles (repos with multiple skills) are auto-detected and expandable.
 - Track every skill's source URL, install/update timestamps, and which projects + agents it lives in.
@@ -107,7 +124,7 @@ Cursor and Cline are project-only — they have no global skills concept, so the
 - Per-row ledger: skill or stack × project × agent × mode × timestamp.
 - Copy or symlink, per deploy. Symlink lets library updates flow into the project automatically; copy gives you a frozen snapshot.
   - **Symlinks are bidirectional.** Editing a symlinked deployment in your IDE writes to the canonical library copy, so every project that symlinks the same skill (and every agent target — Claude, Cursor, Codex, …) sees the edit. Use **copy** when you want a project-local fork; use **symlink** when you want one source of truth.
-- Cursor and other single-file agents are handled transparently — Skill Manager writes `<name>.mdc` instead of a directory.
+- Cursor and other single-file agents are handled transparently — Skillbase writes `<name>.mdc` instead of a directory.
 - Remove a deployment with optional file cleanup (and, for stacks, optional cascade-remove of member files).
 
 ### Safety
