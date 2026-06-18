@@ -1,6 +1,6 @@
 {
   "name": "skillbase",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "description": "Skillbase — macOS desktop app for installing, stacking, and deploying skills across every AI coding agent.",
   "main": "dist-electron/main.js",
   "type": "module",
