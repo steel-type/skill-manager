@@ -28,6 +28,7 @@ export interface DeployResultMessage {
 export type ModalState =
   | null
   | { type: "install"; prefillUrl?: string }
+  | { type: "scanDownloads" }
   | { type: "removeSkill"; name: string }
   | { type: "removeProject"; path: string }
   | { type: "rollback"; name: string }

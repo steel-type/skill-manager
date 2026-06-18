@@ -8,6 +8,7 @@ import { SettingsView } from "./views/SettingsView";
 import { PlaceholderView } from "./views/PlaceholderView";
 import { StacksView } from "./views/StacksView";
 import { InstallFlow } from "./flows/InstallFlow";
+import { ScanDownloadsFlow } from "./flows/ScanDownloadsFlow";
 import { UpdateFlow } from "./flows/UpdateFlow";
 import { ImportFlow } from "./flows/ImportFlow";
 import { RemoveSkillFlow } from "./flows/RemoveSkillFlow";
@@ -233,6 +234,7 @@ export default function App() {
       {modal?.type === "install" && (
         <InstallFlow prefillUrl={modal.prefillUrl} />
       )}
+      {modal?.type === "scanDownloads" && <ScanDownloadsFlow />}
       {modal?.type === "removeSkill" && (
         <RemoveSkillFlow name={modal.name} />
       )}

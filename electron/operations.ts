@@ -436,6 +436,95 @@ export async function importLocalSkill(
 }
 
 /**
+ * Scan a folder (default ~/Downloads) and return every plausible skill
+ * candidate — folders containing a SKILL.md and `.skill`/`.zip` archives.
+ * Read-only: nothing is copied into the library here. The renderer presents
+ * the list, the user picks, and importLocalSkillsBatch does the actual work.
+ *
+ * Validates the path the same way importLocalSkill does so a renderer bug
+ * (or future XSS) can't trick the scanner into walking ~/.ssh or /etc.
+ */
+export async function scanFolderForSkills(
+  rawDir: string,
+): Promise<import("./services/scanFolder").SkillCandidate[]> {
+  const dir = validateProjectPath(rawDir);
+  rejectIfSensitiveSource(dir);
+  const { scanFolderForSkills: scan } = await import("./services/scanFolder");
+  return scan(dir);
+}
+
+/** The folder the scan defaults to when the renderer doesn't pass one. */
+export async function getDefaultScanFolder(): Promise<string> {
+  const { defaultScanFolder } = await import("./services/scanFolder");
+  return defaultScanFolder();
+}
+
+export interface BatchImportItem {
+  /** Original source path the user asked to import. */
+  sourcePath: string;
+  /** Resolved skill name on success, null on failure. */
+  name: string | null;
+  /** Error message on failure, null on success. */
+  error: string | null;
+}
+
+export interface BatchImportResult {
+  items: BatchImportItem[];
+  /** Count of items that landed in the library. */
+  imported: number;
+  /** Count of items that failed (validation, missing SKILL.md, etc.). */
+  failed: number;
+}
+
+/**
+ * Run importLocalSkill across an array of paths from a scan result. Each
+ * item is independent — one bad archive doesn't block the rest — and the
+ * caller gets a per-item report for the UI summary screen.
+ *
+ * The same path validators run inside importLocalSkill itself, but we
+ * still cap the batch size here as a belt-and-braces guard against a
+ * runaway batch from a future bug.
+ */
+export async function importLocalSkillsBatch(
+  rawPaths: unknown,
+): Promise<BatchImportResult> {
+  if (!Array.isArray(rawPaths)) {
+    throw new Error("importLocalSkillsBatch expects an array of paths");
+  }
+  if (rawPaths.length > 100) {
+    throw new Error("Batch too large (max 100 skills per scan)");
+  }
+
+  const items: BatchImportItem[] = [];
+  let imported = 0;
+  let failed = 0;
+  for (const raw of rawPaths) {
+    if (typeof raw !== "string") {
+      items.push({
+        sourcePath: String(raw),
+        name: null,
+        error: "Path is not a string",
+      });
+      failed++;
+      continue;
+    }
+    try {
+      const result = await importLocalSkill(raw);
+      items.push({ sourcePath: raw, name: result.name, error: null });
+      imported++;
+    } catch (err) {
+      items.push({
+        sourcePath: raw,
+        name: null,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      failed++;
+    }
+  }
+  return { items, imported, failed };
+}
+
+/**
  * Attach (or correct) a GitHub source URL on a skill that currently has none
  * — the recovery path for skills whose `url` was lost, and the way to make a
  * hand-made local skill updatable. Validates the URL, records it, and best-
