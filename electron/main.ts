@@ -24,6 +24,9 @@ import {
   installFromUrl,
   installLocalSkill,
   importLocalSkill,
+  scanFolderForSkills,
+  getDefaultScanFolder,
+  importLocalSkillsBatch,
   relinkSkillUrl,
   checkUpdates,
   updateSkill,
@@ -572,6 +575,18 @@ ipcMain.handle(
 ipcMain.handle(
   "import-local-skill",
   (_e, args: { sourcePath: string }) => importLocalSkill(args.sourcePath),
+);
+
+ipcMain.handle(
+  "scan-folder-for-skills",
+  (_e, args: { dir: string }) => scanFolderForSkills(args.dir),
+);
+
+ipcMain.handle("default-scan-folder", () => getDefaultScanFolder());
+
+ipcMain.handle(
+  "import-local-skills-batch",
+  (_e, args: { paths: string[] }) => importLocalSkillsBatch(args.paths),
 );
 
 ipcMain.handle(

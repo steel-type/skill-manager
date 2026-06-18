@@ -98,6 +98,14 @@ export function InstallBar() {
         >
           {importing ? "Importing…" : "Import local…"}
         </button>
+        <button
+          className="sk-btn"
+          onClick={() => openModal({ type: "scanDownloads" })}
+          disabled={importing}
+          title="Scan ~/Downloads (or another folder) for skill folders and .skill/.zip archives"
+        >
+          Scan downloads…
+        </button>
       </div>
       {showError && (
         <div

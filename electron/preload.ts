@@ -164,6 +164,25 @@ const api = {
   importLocalSkill: (sourcePath: string): Promise<InstallResult> =>
     ipcRenderer.invoke("import-local-skill", { sourcePath }),
 
+  /** Default folder the scanner walks when the renderer doesn't pass one
+   *  (~/Downloads). Renderer surfaces this so the picker can default to it. */
+  defaultScanFolder: (): Promise<string> =>
+    ipcRenderer.invoke("default-scan-folder"),
+
+  /** Walk a folder for skill candidates — folders with SKILL.md, plus
+   *  .skill/.zip archives. Read-only; nothing is copied. */
+  scanFolderForSkills: (
+    dir: string,
+  ): Promise<import("./services/scanFolder").SkillCandidate[]> =>
+    ipcRenderer.invoke("scan-folder-for-skills", { dir }),
+
+  /** Batch-import a list of paths returned by scanFolderForSkills. Each item
+   *  succeeds or fails independently; the result reports per-item outcomes. */
+  importLocalSkillsBatch: (
+    paths: string[],
+  ): Promise<import("./operations").BatchImportResult> =>
+    ipcRenderer.invoke("import-local-skills-batch", { paths }),
+
   /** Attach/correct a GitHub source URL on a library skill (recovery + makes
    *  a local skill updatable). */
   relinkSkillUrl: (
