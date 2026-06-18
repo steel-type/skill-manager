@@ -1,6 +1,7 @@
-// Local-skill archive handling: extract a `.zip` or `.skill` (a renamed zip —
-// Skillbase's own convention; NOT part of the agentskills.io or Anthropic
-// spec, both of which treat a skill as a plain folder) into a temp directory,
+// Local-skill archive handling: extract a `.zip` or `.skill` (a zipped skill
+// folder — the de facto distribution format used by Claude downloads and
+// most agent-skill marketplaces, even though the agentskills.io spec defines
+// a skill as the unzipped folder containing SKILL.md) into a temp directory,
 // then locate the folder that actually contains SKILL.md so the caller can
 // install it with the same primitive used for folder imports.
 //

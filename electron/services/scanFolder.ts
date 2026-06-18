@@ -5,10 +5,10 @@
 //   1. `folder` — a directory containing a SKILL.md at its root (or one level
 //      down inside a single wrapping subdirectory, which is the shape most
 //      downloads land in).
-//   2. `archive` — a `.skill` or `.zip` file. `.skill` is Skillbase's folk
-//      convention for a zipped skill folder; the spec itself defines a skill
-//      as a plain directory, but archives are how users actually move them
-//      around.
+//   2. `archive` — a `.skill` or `.zip` file. `.skill` is the de facto
+//      distribution format used by Claude downloads and most agent-skill
+//      marketplaces (the spec itself defines a skill as the unzipped folder,
+//      but `.skill` is what actually lands in ~/Downloads).
 //
 // The scan is intentionally cheap: it walks one level into the target dir,
 // looks at filenames and (for folders) the existence of SKILL.md. Archives
