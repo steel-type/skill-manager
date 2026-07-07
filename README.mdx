@@ -31,7 +31,7 @@ xattr -dr com.apple.quarantine "/Applications/Skillbase.app"
 Or run from source / build your own:
 
 ```bash
-git clone https://github.com/Steel-Type/skill-manager.git
+git clone https://github.com/steel-type/skill-manager.git
 cd skill-manager
 npm install
 npm run dev      # boot Vite + Electron with hot reload
@@ -48,7 +48,10 @@ npm run dist     # build a fresh DMG → release/
    - Pick a **primary agent** (Claude Code, Codex, Gemini, or Continue — these are the ones with a global skills dir; Cursor and Cline are project-only and can't be primary).
    - Pick a **library location** — keep your primary agent's default dir, move to a centralized `~/.skill-stack/skills`, or browse to a custom path.
    - **Reconcile existing skills** — Skillbase scans the agent's default location for `SKILL.md` / `AGENTS.md` folders and lets you import each one (keep agent-side, keep library-side, or skip).
-2. **Install a skill.** Paste any GitHub URL into the Library tab's install bar — Skillbase runs a shallow clone, captures the commit SHA, and detects bundles (repos with multiple `SKILL.md` files). Or click **Import local…** to add a skill you already have on disk: a folder, a `.zip`, or a `.skill` archive. Skillbase extracts the archive, locates the `SKILL.md` root, and files it into your library — no GitHub required.
+2. **Install a skill.** Three ways to get a skill into your library:
+   - **From GitHub** — paste any GitHub URL into the Library tab's install bar. Skillbase runs a shallow clone, captures the commit SHA, and detects bundles (repos with multiple `SKILL.md` files).
+   - **From a local folder or archive** — click **Import local…** to pick a folder, `.zip`, or `.skill` archive you already have on disk. Skillbase extracts the archive, locates the `SKILL.md` root, and files it into your library.
+   - **Batch-import from a downloads folder** — click **Scan downloads…** to walk `~/Downloads` (or any folder you pick) for every importable skill, then batch-import the ones you want. Handles both `.skill`/`.zip` archives and plain folders containing a `SKILL.md`.
 3. **Build a stack.** Stacks tab → **New Stack** → pick members, write a description. The meta-skill is staged in your library at `<library>/<stack-id>/SKILL.md` so it deploys uniformly with regular skills.
 4. **Deploy.** Pick a project, pick a target agent, pick copy or symlink. The Deploy tab tracks every (skill or stack, project, agent) row.
 
@@ -104,6 +107,7 @@ Cursor and Cline are project-only — they have no global skills concept, so the
 
 - Install any skill from a GitHub URL (shallow clone, captures commit SHA).
 - **Import local skills** — add a folder, `.zip`, or `.skill` archive you already have on disk. Archives are extracted, the `SKILL.md` root is located (single-wrapping-folder case handled), and the name is normalised to the kebab-case contract.
+- **Scan a folder for downloaded skills** — one click walks `~/Downloads` (or any folder you pick) for every importable skill, lists them with checkboxes, and batch-imports the ones you select. `.skill` archives, `.zip` archives, and plain `SKILL.md` folders are all detected; hidden files, `__MACOSX/`, and partial downloads (`.crdownload`, `.part`) are ignored.
 - `SKILL.md` *and* `AGENTS.md` are first-class skill identifiers.
 - Bundles (repos with multiple skills) are auto-detected and expandable.
 - Track every skill's source URL, install/update timestamps, and which projects + agents it lives in.
@@ -265,10 +269,26 @@ The dark theme inherits all radii, shadows, and the wireframe shape language fro
 ## Test
 
 ```bash
-npm test            # vitest
-npm run typecheck   # tsc
-npm run lint:theme  # flag hardcoded colors
+npm test            # vitest — ~300 tests across validators, parsers, services
+npm run typecheck   # tsc — both renderer (src/) and main (electron/) projects
+npm run lint:theme  # scripts/check-theme-tokens.sh — flag hardcoded colors
+npm run build       # runs typecheck + lint:theme + vite build
 ```
+
+The suite focuses on security-critical and parser code: URL / skill-name / project-path / commit validators, YAML frontmatter parsing (including a 5 MB-file stress test), per-agent path resolution across the six agent platforms, archive extraction (`.skill` / `.zip` handling, symlink filtering, path-traversal refusal), markdown export/import round-trip, and the `~/Downloads` scanner. `npm run build` runs the theme-token lint and the type check before bundling, so a failing lint fails the build.
+
+---
+
+## Contributing
+
+Contributions are welcome. The rough shape:
+
+1. Fork or branch from `main`.
+2. Run the pre-checkin checks locally before pushing — `npm test`, `npm run typecheck`, `npm run build` must all pass.
+3. Open a pull request on GitHub with a description of what changed and why. Keep unrelated changes out of the same PR.
+4. Every merged change lands as a versioned commit on `main`; formal releases are cut with a matching `v*` tag and a `.dmg` attached to the GitHub Release page.
+
+For anything larger than a bug fix, open an issue first so we can talk through the shape before you invest time.
 
 ---
 
@@ -276,9 +296,14 @@ npm run lint:theme  # flag hardcoded colors
 
 - **Filter toggle for the command palette** — opt-in honour of the active FilterRail selection.
 - **Type-scale rationalization** — pin SetupFlow + detail screens to a modular scale.
-- **Scanner depth/breadth caps** — protect against pathological monorepos imported as skills.
 - **Cursor + package-tier deploy** — synthesize a stub `SKILL.md` (or refuse cleanly) when a packaging-tier entry deploys to a single-file agent.
 - **MigrationFlow back-button hardening** — verify the back-button is fully disabled mid-run.
+- **Auto-refresh scan results** when new files land in the watched folder while the modal is open.
+- **Windows / Linux support** — currently macOS-only because of the frameless titlebar controls.
+
+Recently shipped:
+
+- ✅ **Scan a downloads folder for skills** (v0.2.11) — batch-import from `~/Downloads` or any chosen folder.
 
 ---
 
